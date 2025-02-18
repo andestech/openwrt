@@ -1,0 +1,39 @@
+From cf039fc035242ec3cf9307f32a45a5e0a468c2a3 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Thu, 18 Jul 2024 10:23:36 +0800
+Subject: [PATCH 37/53] riscv: Add some AIA CSR definitions and MIE_MEIE
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+---
+ arch/riscv/include/asm/csr.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/riscv/include/asm/csr.h b/arch/riscv/include/asm/csr.h
+index 0301f114cad4..b5fec0e76a85 100644
+--- a/arch/riscv/include/asm/csr.h
++++ b/arch/riscv/include/asm/csr.h
+@@ -93,6 +93,7 @@
+ 
+ /* SIE (Interrupt Enable) and SIP (Interrupt Pending) flags */
+ #define MIE_MSIE		(_AC(0x1, UL) << IRQ_M_SOFT)
++#define MIE_MEIE		(_AC(0x1, UL) << IRQ_M_EXT)
+ #define SIE_SSIE		(_AC(0x1, UL) << IRQ_S_SOFT)
+ #define SIE_STIE		(_AC(0x1, UL) << IRQ_S_TIMER)
+ #define SIE_SEIE		(_AC(0x1, UL) << IRQ_S_EXT)
+@@ -159,6 +160,13 @@
+ #define CSR_MARCHID		0xf12
+ #define CSR_MHARTID		0xf14
+ 
++/* Machine-Level Indirectly Accessed Registers (AIA) */
++#define CSR_MISELECT		0x350
++#define CSR_MIREG		0x351
++
++/* Machine-Level Interrupts (AIA) */
++#define CSR_MTOPEI		0x35c
++
+ #ifndef __ASSEMBLY__
+ 
+ #define csr_swap(csr, val)					\
+-- 
+2.34.1
+

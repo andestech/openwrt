@@ -1,0 +1,39 @@
+From ecc0c45246e3d4a26b851d383d284da0d3ff36cc Mon Sep 17 00:00:00 2001
+From: "alex749@andestech.com" <alex749@andestech.com>
+Date: Wed, 8 Jan 2025 13:20:41 +0800
+Subject: [PATCH 148/168] arch: riscv: Makefile: add new flags to reduce
+ linking-time (#232)
+
+Add new flags in arch/riscv/Makefile .
+With these flags, the link-time can be reduced when building linux image.
+Note: The corresponding tool-chain version should be ast-540 official or later.
+
+Signed-off-by: Alex Chun-Ru Lin <alex749@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/232
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: alex749@andestech.com <alex749@andestech.com>
+Co-committed-by: alex749@andestech.com <alex749@andestech.com>
+---
+ arch/riscv/Makefile | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/riscv/Makefile b/arch/riscv/Makefile
+index 4df5822b8d21..16e20a20efab 100644
+--- a/arch/riscv/Makefile
++++ b/arch/riscv/Makefile
+@@ -43,6 +43,12 @@ else
+ 	KBUILD_LDFLAGS += -melf32lriscv
+ endif
+ 
++ifeq ($(CONFIG_ARCH_ANDES),y)
++	KBUILD_CFLAGS += -Wa,-mno-btb-align
++	KBUILD_AFLAGS += -Wa,-mno-btb-align
++	KBUILD_LDFLAGS += --mno-relax-align --mno-relax-call --mno-target-aligned --mno-avoid-btb-miss
++endif
++
+ ifeq ($(CONFIG_LD_IS_LLD),y)
+ ifeq ($(call test-lt, $(CONFIG_LLD_VERSION), 150000),y)
+ 	KBUILD_CFLAGS += -mno-relax
+-- 
+2.34.1
+

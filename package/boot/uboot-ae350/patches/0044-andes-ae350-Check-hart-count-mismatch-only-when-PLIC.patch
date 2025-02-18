@@ -1,0 +1,96 @@
+From e28b107ffdc0d110398100acbba5ae4f991f0389 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 2 Jan 2025 16:08:19 +0800
+Subject: [PATCH 44/53] andes: ae350: Check hart count mismatch only when
+ PLICSW exists
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ board/andestech/ae350/ae350.c | 47 ++++++++++++++++++++++++-----------
+ 1 file changed, 32 insertions(+), 15 deletions(-)
+
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index 66cfd64dcbd5..16169ba598df 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -195,25 +195,22 @@ int hvm_check(void)
+ 	return 0;
+ }
+ 
+-int spl_board_init_f(void)
++static int hart_count_mismatch(void)
+ {
+ 	u32 board_hart_count = 0, dts_hart_count = 0;
+-	u32 num_irq_target = 0;
++	u32 num_irq_target = -1;
+ 	struct udevice *dev = 0;
+ 	int ret = 0;
+ 
+-#ifdef ANDES_SWDTB_MERGER
+-	ret = swdtb_merger_show_console_record();
+-	if (ret < 0)
+-		return ret;
+-#endif
+-
++#ifdef CONFIG_ANDES_PLICSW
+ 	// 31---------------16-15--------------------- 0
+ 	// |   target count   | interrupt source count |
+ 	//  -------------------------------------------
+-
+ 	num_irq_target = readl(IRQ_TARGET_NUM_REG(gd->arch.plicsw));
+ 	board_hart_count = num_irq_target >> 16;
++#endif
++	if (num_irq_target == -1)
++		return -ENODEV;
+ 
+ 	ret = uclass_find_first_device(UCLASS_CPU, &dev);
+ 	if (ret)
+@@ -233,12 +230,6 @@ int spl_board_init_f(void)
+ 		return -EINVAL;
+ 	}
+ 
+-	if (IS_ENABLED(CONFIG_ANDES_HVM_CHECK)) {
+-		ret = hvm_check();
+-		if (ret)
+-			return ret;
+-	}
+-
+ 	return 0;
+ }
+ 
+@@ -251,6 +242,32 @@ void spl_board_init(void)
+ }
+ #endif
+ 
++
++int spl_board_init_f(void)
++{
++	int ret = 0;
++
++#ifdef ANDES_SWDTB_MERGER
++	ret = swdtb_merger_show_console_record();
++	if (ret < 0)
++		return ret;
++#endif
++
++	if (IS_ENABLED(CONFIG_ANDES_PLICSW)) {
++		ret = hart_count_mismatch();
++		if (ret)
++			return ret;
++	}
++
++	if (IS_ENABLED(CONFIG_ANDES_HVM_CHECK)) {
++		ret = hvm_check();
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
+ int smc_init(void)
+ {
+ 	int node = -1;
+-- 
+2.34.1
+

@@ -1,0 +1,57 @@
+From 72c3cadbe0b4c3057d754f6ac4fef5e2affb69b6 Mon Sep 17 00:00:00 2001
+From: Che-Wei Chuang <cnoize@andestech.com>
+Date: Mon, 30 Dec 2024 13:23:17 +0800
+Subject: [PATCH 168/172] libs: revert default baud rate value to 115200 (#127)
+
+Remove the use of CONFIG_PLATFORM_ANDES_AE350, which sets DEFAULT_UART_BAUD to 38400.
+The baud rate will now use the value from the DTB.
+If the `current-speed` attribute is not set in the DTB,
+OpenSBI will default to using DEFAULT_UART_BAUD at 115200, consistent with other platforms.
+
+This reverts commit 15835ee4916  ("lib: utils: fdt: Support serial node backward compatibility")
+
+Signed-off-by: Che-Wei Chuang <cnoize@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/opensbi/pulls/127
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Che-Wei Chuang <cnoize@andestech.com>
+Co-committed-by: Che-Wei Chuang <cnoize@andestech.com>
+---
+ docs/platform/andes-ae350.md | 2 +-
+ lib/utils/fdt/fdt_helper.c   | 4 ----
+ 2 files changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/docs/platform/andes-ae350.md b/docs/platform/andes-ae350.md
+index 8fc8ec6a91f7..cd261b85c74f 100644
+--- a/docs/platform/andes-ae350.md
++++ b/docs/platform/andes-ae350.md
+@@ -192,7 +192,7 @@ DTS Example: (Quad-core AX45MP)
+ 			interrupts = <9 4>;
+ 			interrupt-parent = <&plic0>;
+ 			clock-frequency = <19660800>;
+-			current-speed = <38400>;
++			current-speed = <115200>;
+ 			reg-shift = <2>;
+ 			reg-offset = <32>;
+ 			reg-io-width = <4>;
+diff --git a/lib/utils/fdt/fdt_helper.c b/lib/utils/fdt/fdt_helper.c
+index 143e29f55c7e..9a945af4213e 100644
+--- a/lib/utils/fdt/fdt_helper.c
++++ b/lib/utils/fdt/fdt_helper.c
+@@ -19,11 +19,7 @@
+ #include <sbi_utils/irqchip/plic.h>
+ 
+ #define DEFAULT_UART_FREQ		0
+-#ifdef CONFIG_PLATFORM_ANDES_AE350
+-#define DEFAULT_UART_BAUD		38400
+-#else
+ #define DEFAULT_UART_BAUD		115200
+-#endif
+ #define DEFAULT_UART_REG_SHIFT		0
+ #define DEFAULT_UART_REG_IO_WIDTH	1
+ #define DEFAULT_UART_REG_OFFSET		0
+-- 
+2.34.1
+

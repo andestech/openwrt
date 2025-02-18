@@ -1,0 +1,366 @@
+From 167f5d6b01243e541576f2d88f6210fe55547c58 Mon Sep 17 00:00:00 2001
+From: Locus Wei-Han Chen <locus84@andestech.com>
+Date: Mon, 6 Jan 2025 14:11:03 +0800
+Subject: [PATCH 169/172] platform: generic: andes: support remoteproc on SMP
+ system (#128)
+
+The patch supports remoteproc on SMP systems.
+Currently, the patch is disabled by default because it is intended for the OpenAMP demo.
+
+When enabling remoteproc, it will keep hart3 in WFI and prevent it from
+entering the kernel, as hart3 is the SP(slave processor).
+
+Signed-off-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/opensbi/pulls/128
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-committed-by: Locus Wei-Han Chen <locus84@andestech.com>
+---
+ lib/utils/ipi/andes_plicsw.c                |  15 ++
+ platform/generic/andes/Kconfig              |   4 +
+ platform/generic/andes/ae350.c              |   4 +
+ platform/generic/andes/andes_sbi.c          |   9 ++
+ platform/generic/andes/objects.mk           |   1 +
+ platform/generic/andes/remoteproc.c         | 155 ++++++++++++++++++++
+ platform/generic/include/andes/remoteproc.h |  39 +++++
+ 7 files changed, 227 insertions(+)
+ create mode 100644 platform/generic/andes/remoteproc.c
+ create mode 100644 platform/generic/include/andes/remoteproc.h
+
+diff --git a/lib/utils/ipi/andes_plicsw.c b/lib/utils/ipi/andes_plicsw.c
+index 413ac20e491a..b9a185a8541a 100644
+--- a/lib/utils/ipi/andes_plicsw.c
++++ b/lib/utils/ipi/andes_plicsw.c
+@@ -15,6 +15,7 @@
+ #include <sbi/sbi_domain.h>
+ #include <sbi/sbi_ipi.h>
+ #include <sbi_utils/ipi/andes_plicsw.h>
++#include <andes/remoteproc.h>
+ 
+ struct plicsw_data plicsw;
+ 
+@@ -53,6 +54,13 @@ static void plicsw_ipi_clear(u32 hart_index)
+ 	/* Claim */
+ 	u32 source = readl((void *)reg);
+ 
++#ifdef CONFIG_ANDES_REMOTEPROC
++	if (remoteproc_sp_enable) {
++		u32 hartid = current_hartid();
++		remoteproc_notify_mp_ipi(hartid, source);
++	}
++#endif
++
+ 	/* A successful claim will clear mip.MSIP */
+ 
+ 	/* Complete */
+@@ -97,7 +105,14 @@ int plicsw_cold_ipi_init(struct plicsw_data *plicsw)
+ 		enable_bit   = interrupt_id % 32;
+ 		enable_reg   = plicsw->addr + PLICSW_ENABLE_BASE +
+ 			       PLICSW_ENABLE_STRIDE * i + 4 * word_index;
++#ifdef CONFIG_ANDES_REMOTEPROC
++		if (i == remoteproc_mp_hartid)
++			writel(BIT(enable_bit) | (1 << SP_SEND_IPI_TO_MP), (void *)enable_reg);
++		else
++			writel(BIT(enable_bit), (void *)enable_reg);
++#else
+ 		writel(BIT(enable_bit), (void *)enable_reg);
++#endif
+ 	}
+ 
+ 	/* Add PLICSW region to the root domain */
+diff --git a/platform/generic/andes/Kconfig b/platform/generic/andes/Kconfig
+index b37b2179dffe..1ce7623e5043 100644
+--- a/platform/generic/andes/Kconfig
++++ b/platform/generic/andes/Kconfig
+@@ -8,6 +8,10 @@ config ANDES_TRIGGER
+ 	bool "Andes Trigger support"
+ 	default n
+ 
++config ANDES_REMOTEPROC
++	bool "Andes Remoteproc support"
++	default n
++
+ config ANDES_SBI
+ 	bool "Andes SBI support"
+ 	select ANDES_TRIGGER
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index 9158ffc14adf..3991f6a51077 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -27,6 +27,7 @@
+ #include <andes/andes_sbi.h>
+ #include <andes/andes.h>
+ #include <andes/andes_pma.h>
++#include <andes/remoteproc.h>
+ #include <andes/trigger.h>
+ 
+ static struct smu_data smu = { 0 };
+@@ -359,10 +360,13 @@ static int ae350_final_init(bool cold_boot, const struct fdt_match *match)
+ static int ae350_early_init(bool cold_boot, const struct fdt_match *match)
+ {
+ 	if (cold_boot) {
++		remoteproc_init(cold_boot);
+ 		ae350_smu_device_init();
+ 		return fdt_cache_init();
+ 	}
+ 
++	remoteproc_init(cold_boot);
++
+ 	if (save_regs_off)
+ 		ae350_suspend_non_ret_restore(sbi_scratch_thishart_ptr(), false);
+ 
+diff --git a/platform/generic/andes/andes_sbi.c b/platform/generic/andes/andes_sbi.c
+index f80cb8c2ed27..ec2bc5ea126b 100644
+--- a/platform/generic/andes/andes_sbi.c
++++ b/platform/generic/andes/andes_sbi.c
+@@ -11,6 +11,7 @@
+ #include <sbi/sbi_bitops.h>
+ #include <sbi/sbi_console.h>
+ #include <sbi/sbi_types.h>
++#include <andes/remoteproc.h>
+ #include <andes/andes_pma.h>
+ #include <andes/trigger.h>
+ #include <sbi_utils/cache/cache.h>
+@@ -25,6 +26,8 @@ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_PMA_FREE,
+ 	SBI_EXT_ANDES_PMA_PROBE,
+ 	SBI_EXT_ANDES_DCACHE_EN,
++	SBI_EXT_ANDES_REMOTEPROC_EN,
++	SBI_EXT_ANDES_REMOTEPROC_SEND_IPI,
+ };
+ 
+ static bool andes_cache_controllable(void)
+@@ -104,6 +107,12 @@ int andes_sbi_vendor_ext_provider(long funcid,
+ 	case SBI_EXT_ANDES_DCACHE_EN:
+ 		mcall_dcache_op(regs->a0);
+ 		break;
++	case SBI_EXT_ANDES_REMOTEPROC_EN:
++		remoteproc_ipi_enable(regs->a0);
++		break;
++	case SBI_EXT_ANDES_REMOTEPROC_SEND_IPI:
++		sbi_ipi_raw_send(regs->a0);
++		break;
+ 
+ 	default:
+ 		sbi_panic("%s(): funcid: %#lx is not supported\n", __func__, funcid);
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index 6ea27b7c1fdf..048e88f00d0f 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -18,3 +18,4 @@ platform-objs-$(CONFIG_ANDES_PMA) += andes/andes_pma.o
+ platform-objs-$(CONFIG_ANDES_SBI) += andes/andes_sbi.o
+ platform-objs-$(CONFIG_ANDES_PMU) += andes/andes_pmu.o
+ platform-objs-$(CONFIG_ANDES_TRIGGER) += andes/trigger.o
++platform-objs-$(CONFIG_ANDES_REMOTEPROC) += andes/remoteproc.o
+diff --git a/platform/generic/andes/remoteproc.c b/platform/generic/andes/remoteproc.c
+new file mode 100644
+index 000000000000..7e60cc5b63c0
+--- /dev/null
++++ b/platform/generic/andes/remoteproc.c
+@@ -0,0 +1,155 @@
++#include <libfdt.h>
++#include <sbi/sbi_console.h>
++#include <sbi/sbi_platform.h>
++#include <sbi/sbi_system.h>
++#include <sbi/sbi_trap.h>
++#include <sbi_utils/fdt/fdt_helper.h>
++#include <sbi_utils/fdt/fdt_fixup.h>
++#include <sbi_utils/ipi/andes_plicsw.h>
++#include <andes/remoteproc.h>
++
++u8		remoteproc_sp_enable;
++u32		remoteproc_sp_hartid;
++u32		remoteproc_mp_hartid;
++u64		remoteproc_swmbox;
++u64		rmem_base, rmem_size;
++extern struct	plicsw_data plicsw;
++
++void remoteproc_notify_mp_ipi(u32 target_hart, u32 source)
++{
++	if (target_hart == remoteproc_mp_hartid && source == SP_SEND_IPI_TO_MP) {
++		if (!remoteproc_swmbox) {
++			sbi_printf("%s get IPI event from SP core, but no swmbox\n",
++				    ANDES_REMOTEPROC);
++			return;
++		}
++		writel(1, (unsigned int *)(remoteproc_swmbox +
++					   offsetof(struct swmsg_box, opensbi_mbox)));
++
++		sbi_ipi_send_smode((1 << remoteproc_mp_hartid), 0x0);
++	}
++}
++
++void remoteproc_ipi_enable(unsigned int enable)
++{
++	if (enable) {
++		plicsw.hart_count += 1;
++		remoteproc_sp_enable = 1;
++	} else {
++		plicsw.hart_count -= 1;
++		remoteproc_sp_enable = 0;
++	}
++}
++
++static int fdt_andes_swmbox(void *fdt)
++{
++	uint64_t reg_addr, reg_size;
++	int parent;
++	int subnode;
++	const char *swmbox = "andes_swmbox";
++
++	if (!fdt)
++		goto warning;
++
++	parent = fdt_path_offset(fdt, "/reserved-memory");
++	if (parent < 0)
++		return parent;
++
++	fdt_for_each_subnode(subnode, fdt, parent) {
++		if (subnode < 0)
++			goto warning;
++
++		fdt_get_node_addr_size(fdt, subnode, 0, &reg_addr, &reg_size);
++
++		const char *name = fdt_get_name(fdt, subnode, NULL);
++
++		if(strncmp(swmbox, name, sizeof(swmbox)) == 0) {
++			sbi_printf("%s %s Addr:0x%lx Size:0x%lx\n", ANDES_REMOTEPROC,
++				    swmbox, reg_addr, reg_size);
++			remoteproc_swmbox = reg_addr;
++			return 0;
++		}
++	}
++
++warning:
++	sbi_printf("reserved-memory parameter missing\n");
++	return SBI_EINVAL;
++}
++
++static int fdt_andes_remoteproc(void *fdt)
++{
++	uint64_t reg_addr, reg_size;
++	int parent;
++	int len;
++	u64 val64;
++	const fdt32_t *val;
++
++	if (!fdt)
++		goto warning;
++
++	parent = fdt_path_offset(fdt, "/andes_remoteproc_smp");
++	if (parent < 0)
++		goto warning;
++
++	val = 0;
++	val = fdt_getprop(fdt, parent, "mp_hartid", &len);
++	if (val < 0)
++		goto warning;
++
++	remoteproc_mp_hartid = fdt32_to_cpu(*val);
++	sbi_printf("%s mp hartid: %x\n", ANDES_REMOTEPROC, remoteproc_mp_hartid);
++
++	val = 0;
++	val = fdt_getprop(fdt, parent, "sp_hartid", &len);
++	if (val < 0)
++		goto warning;
++
++	remoteproc_sp_hartid = fdt32_to_cpu(*val);
++	sbi_printf("%s sp hartid: %x\n", ANDES_REMOTEPROC, remoteproc_sp_hartid);
++
++	/* Read "rmem_base" DT property */
++	val = fdt_getprop(fdt, parent, "rmem_base", &len);
++	if (!val && len >= 8)
++		return SBI_EINVAL;
++	val64 = fdt32_to_cpu(val[0]);
++	val64 = (val64 << 32) | fdt32_to_cpu(val[1]);
++	reg_addr = val64;
++	rmem_base = reg_addr;
++
++	/* Read "rmem_size" DT property */
++	val = fdt_getprop(fdt, parent, "rmem_size", &len);
++	if (!val && len >= 8)
++		return SBI_EINVAL;
++	val64 = fdt32_to_cpu(val[0]);
++	val64 = (val64 << 32) | fdt32_to_cpu(val[1]);
++	reg_size = val64;
++	rmem_size = reg_size;
++
++	fdt_andes_swmbox(fdt);
++
++	sbi_printf("%s Reserved Memory Addr:0x%lx Size:0x%lx\n",
++		    ANDES_REMOTEPROC, reg_addr, reg_size);
++
++	return 0;
++
++warning:
++	sbi_printf("andes_remoteproc_smp parameter missing\n");
++	return SBI_EINVAL;
++}
++
++void remoteproc_init(bool cold_boot)
++{
++	void *fdt;
++	u32 hartid;
++
++	hartid = current_hartid();
++	if (cold_boot) {
++		fdt = fdt_get_address();
++		fdt_andes_remoteproc(fdt);
++	} else {
++		if (hartid == remoteproc_sp_hartid) {
++			while(1)
++				wfi();
++		}
++	}
++}
+diff --git a/platform/generic/include/andes/remoteproc.h b/platform/generic/include/andes/remoteproc.h
+new file mode 100644
+index 000000000000..c770f88a30c7
+--- /dev/null
++++ b/platform/generic/include/andes/remoteproc.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2025 Andes Technology Corporation
++ */
++
++#ifndef _REMOTEPROC_H_
++#define _REMOTEPROC_H_
++
++#include <sbi/riscv_asm.h>
++#include <sbi/riscv_io.h>
++#include <sbi/sbi_ipi.h>
++
++#define ANDES_REMOTEPROC	"Andes Remote Processor"
++#define SP_SEND_IPI_TO_MP	0x5
++
++extern u32	remoteproc_mp_hartid;
++extern u32	remoteproc_sp_hartid;
++extern u64	remoteproc_swmbox;
++extern u8	remoteproc_sp_enable;
++
++/* SW definition message box for sp and for opensbi */
++struct swmsg_box {
++	u32 sp_mbox;
++	u32 opensbi_mbox;
++	u32 mp_status;
++	u32 sp_status;
++};
++
++#ifdef CONFIG_ANDES_REMOTEPROC
++void remoteproc_notify_mp_ipi(u32 target_hart, u32 source);
++void remoteproc_init(bool cold_boot);
++void remoteproc_ipi_enable(unsigned int enable);
++#else
++inline void remoteproc_notify_mp_ipi(u32 target_hart, u32 source) {}
++inline void remoteproc_init(bool cold_boot) {}
++inline void remoteproc_ipi_enable(unsigned int enable) {}
++#endif
++
++#endif /* _REMOTEPROC_H_ */
+-- 
+2.34.1
+

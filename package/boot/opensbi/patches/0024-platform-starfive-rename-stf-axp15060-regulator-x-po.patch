@@ -1,0 +1,38 @@
+From 80ae0464c157cc7a769c2bb1140424409ee4fc1a Mon Sep 17 00:00:00 2001
+From: Nam Cao <namcao@linutronix.de>
+Date: Thu, 22 Feb 2024 09:16:17 +0100
+Subject: [PATCH 024/172] platform: starfive: rename "stf,axp15060-regulator"
+ -> "x-powers,axp15060"
+
+OpenSBI uses the device tree compatible string "stf,axp15060-regulator"
+for the regulator node. However, the string used by U-Boot (and Linux)
+is actually "x-powers,axp15060". As OpenSBI gets the device tree from
+U-Boot, this causes the regulator device to be undetected, and OpenSBI
+does not use this device to perform board reset/shutdown.
+
+Rename this device tree compatible string to match U-Boot (and Linux).
+
+Signed-off-by: Nam Cao <namcao@linutronix.de>
+Acked-by: Minda Chen <minda.chen@starfivetech.com>
+Tested-by: Minda Chen <minda.chen@starfivetech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/starfive/jh7110.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/generic/starfive/jh7110.c b/platform/generic/starfive/jh7110.c
+index 0e37d5642985..16b94eaea0fb 100644
+--- a/platform/generic/starfive/jh7110.c
++++ b/platform/generic/starfive/jh7110.c
+@@ -217,7 +217,7 @@ static int pm_reset_init(void *fdt, int nodeoff,
+ }
+ 
+ static const struct fdt_match pm_reset_match[] = {
+-	{ .compatible = "stf,axp15060-regulator", .data = (void *)true },
++	{ .compatible = "x-powers,axp15060", .data = (void *)true },
+ 	{ },
+ };
+ 
+-- 
+2.34.1
+

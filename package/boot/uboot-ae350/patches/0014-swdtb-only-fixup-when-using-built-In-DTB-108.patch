@@ -1,0 +1,292 @@
+From bf65e93198af2773d42fc8444555588f034d055e Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:53:49 +0800
+Subject: [PATCH 14/53] swdtb: only fixup when using built-In DTB (#108)
+
+swdtb: only fixup when using built-In DTB
+
+When the DTB is sourced from the built-in DTB, the swdtb merger will
+modify it accordingly. If the DTB is not a built-in DTB
+(e.g., a user-provided DTB), only a warning message will be shown.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/108
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ board/andestech/ae350/ae350.c                 |  9 +++-
+ .../common/swdtb_merger/swdtb_merger.c        | 29 ++++++++----
+ .../common/swdtb_merger/swdtb_merger.h        |  4 +-
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 46 +++++++++++++++++++
+ .../common/swdtb_merger/swdtb_tool.c          | 14 ++++++
+ .../common/swdtb_merger/swdtb_tool.h          |  8 ++++
+ 6 files changed, 97 insertions(+), 13 deletions(-)
+
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index 1d98dc181a4a..cedae72d85bf 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -104,6 +104,13 @@ void *ae350_find_fdt_blob(void)
+ 	return NULL;
+ }
+ 
++#ifdef ANDES_SWDTB_MERGER
++int is_builtin_dtb(void **fdt_blob)
++{
++	return (*fdt_blob == (void *)ANDES_HW_DTB_ADDRESS);
++}
++#endif
++
+ void *board_fdt_blob_setup(int *err)
+ {
+ 	void *fdt_blob = ae350_find_fdt_blob();
+@@ -113,7 +120,7 @@ void *board_fdt_blob_setup(int *err)
+ 	} else {
+ 		*err = 0;
+ #ifdef ANDES_SWDTB_MERGER
+-		swdtb_merger_hook_fdtblob(&fdt_blob);
++		swdtb_merger_hook_fdtblob(&fdt_blob, is_builtin_dtb(&fdt_blob));
+ #endif
+ 	}
+ 
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index f830d09c864a..be2024ba3db7 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -207,14 +207,28 @@ static int swdtb_find_node(void *fdt)
+ /**
+  * The main entry of swdtb merger
+  * @fdt_blob:	The address for the fdt_blob
++ * @is_hwdtb:	True is using built-in DTB.
+  */
+-void swdtb_merger(void *fdt_blob)
++void swdtb_merger(void *fdt_blob, int is_hwdtb)
+ {
+ 	/* Cosnsole record for printf message before the serial initial */
+ 	console_record_init();
+ 	console_record_reset_enable();
+ 
+-	printf("Using swdtb merger\n");
++	/*
++	 * The SWDTB merger entry is before spl_clear_bss.
++	 * All global variables must be initialized before use.
++	 */
++	swdtb_global_initial();
++
++	printf("Using swdtb merger");
++	if (is_hwdtb) {
++		global_dtb_type = DTB_TYPE_HW_DTB;
++		printf(" for built-in DTB\n");
++	} else {
++		global_dtb_type = DTB_TYPE_USER;
++		printf("\n");
++	}
+ 
+ 	if (fdt_magic((void *)fdt_blob) != FDT_MAGIC) {
+ 		printf("FDT_MAGIC is not match\n");
+@@ -224,25 +238,20 @@ void swdtb_merger(void *fdt_blob)
+ 	/* Increase fdt space */
+ 	fdt_increase_size(fdt_blob, 2048);
+ 
+-	/*
+-	 * The SWDTB merger entry is before spl_clear_bss.
+-	 * All global variables must be initialized before use.
+-	 */
+-	swdtb_global_initial();
+-
+ 	swdtb_find_node(fdt_blob);
+ }
+ 
+ /**
+  * To hook the original fdt_blob, Use SWDTB_FDTBLOB instead.
+  * @fdt_blob:	The pointer to the address of fdt_blob
++ * @is_hwdtb:	True is using built-in DTB.
+  */
+-void swdtb_merger_hook_fdtblob(void **fdt_blob)
++void swdtb_merger_hook_fdtblob(void **fdt_blob, int is_hwdtb)
+ {
+ #if CONFIG_IS_ENABLED(RISCV_MMODE)
+ 	memcpy((void *)SWDTB_FDTBLOB, *fdt_blob, fdt_totalsize(*fdt_blob));
+ 	*fdt_blob = map_sysmem(SWDTB_FDTBLOB, 0);
+-	swdtb_merger((void *)SWDTB_FDTBLOB);
++	swdtb_merger((void *)SWDTB_FDTBLOB, is_hwdtb);
+ #endif
+ }
+ 
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.h b/board/andestech/common/swdtb_merger/swdtb_merger.h
+index 988a9ea32144..3bb988934abe 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.h
+@@ -22,8 +22,8 @@
+ #endif
+ #endif
+ 
+-void swdtb_merger(void *source);
+-void swdtb_merger_hook_fdtblob(void **fdt_blob);
++void swdtb_merger(void *source, int is_hwdtb);
++void swdtb_merger_hook_fdtblob(void **fdt_blob, int is_hwdtb);
+ int swdtb_merger_show_console_record(void);
+ 
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index f26738b8b489..b7a1f3e7cd36 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -153,6 +153,14 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 			old_xv5_idx = 1;
+ 		}
+ 
++		if (global_dtb_type == DTB_TYPE_USER) {
++			if (!new_dsp_idx || old_xv5_idx) {
++				printf("Warning: The %s (%s) needs to be changed\n",
++				       prop_name, old_str);
++			}
++			return RETURN_DONE;
++		}
++
+ 		while (idx < strlen(old_str)) {
+ 			if (!strncmp(&old_str[idx], rv_str, strlen(rv_str))) {
+ 				strncat(new_str, rv_str, strlen(rv_str));
+@@ -340,6 +348,12 @@ int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 		value = fdt_getprop(fdt, node, target_name, NULL);
+ 		if (!value) {
++			if (global_dtb_type == DTB_TYPE_USER) {
++				dtb_info("Warning: The %s node need (%s)\n",
++					 target_node, target_name);
++				return RETURN_DONE;
++			}
++
+ 			show_rawdtb(target_name, target_node);
+ 
+ 			fdt_refer_node = fdt_path_offset(fdt, refer_node);
+@@ -404,6 +418,14 @@ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value)
+ 	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+ 		const u32 *value;
+ 
++		if (global_dtb_type == DTB_TYPE_USER) {
++			/*
++			 * The L2C interrupts does not affect booting process,
++			 * just skip it when not in use with the built-in DTB.
++			 */
++			return RETURN_DONE;
++		}
++
+ 		value = fdt_getprop(fdt, node, target, NULL);
+ 		if (value) {
+ 			/* Find the target in the node skip */
+@@ -496,6 +518,14 @@ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
+ 	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+ 		const u32 *value;
+ 
++		if (global_dtb_type == DTB_TYPE_USER) {
++			/*
++			 * The SPI quad mode does not affect booting process
++			 * just skip it.
++			 */
++			return RETURN_DONE;
++		}
++
+ 		value = fdt_getprop(fdt, node, tx_name, NULL);
+ 		if (!value) {
+ 			show_rawdtb(tx_name, target_node);
+@@ -640,6 +670,14 @@ int insert_inject_node(void *fdt, int node, char *name, char *value)
+ 	u32 phandle;
+ 	u32 rmem_offset;
+ 
++	if (global_dtb_type == DTB_TYPE_USER) {
++		/*
++		 * The inject node does not affect booting process,
++		 * just skip it when not in use with the built-in DTB.
++		 */
++		return RETURN_DONE;
++	}
++
+ 	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
+ 	if (reserved_off > 0) {
+ 		inject_off = fdt_subnode_offset(fdt, reserved_off, node_name);
+@@ -707,6 +745,14 @@ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value)
+ 	u32 phandle;
+ 	u32 rmem_offset;
+ 
++	if (global_dtb_type == DTB_TYPE_USER) {
++		/*
++		 * The dma global pool node does not affect booting process,
++		 * just skip it when not in use with the built-in DTB.
++		 */
++		return RETURN_DONE;
++	}
++
+ 	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
+ 	if (reserved_off > 0) {
+ 		dma_off = fdt_subnode_offset(fdt, reserved_off, node_name);
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 6215a0eb9800..f43137e93cf7 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -13,6 +13,7 @@
+  * All global variables must be initialized before use.
+  */
+ enum dma_type global_dma_type;
++enum dtb_type global_dtb_type;
+ 
+ void swdtb_global_initial(void)
+ {
+@@ -21,6 +22,7 @@ void swdtb_global_initial(void)
+ 	 * Please note the life of these variables.
+ 	 */
+ 	global_dma_type = DMA_TYPE_INIT;
++	global_dtb_type = DTB_TYPE_INIT;
+ }
+ 
+ bool fdt_data_is_one_string(const char *data, int len)
+@@ -43,6 +45,12 @@ int compatible_change(void *fdt, int node, char *name, char *value,
+ 	    (strcmp(value, old_str) == 0)) {
+ 		dtb_info("RAW: %s: %s\n", (char *)name, (char *)value);
+ 
++		if (global_dtb_type == DTB_TYPE_USER) {
++			printf("Warning: The %s (%s) need changed!\n",
++			       prop_name, old_str);
++			return RETURN_DONE;
++		}
++
+ 		ret = fdt_setprop(fdt, node, name, new_str,
+ 				  strlen(new_str) + 1);
+ 		if (ret) {
+@@ -93,6 +101,12 @@ int dma_type_to_node(void *fdt, int node, char *name, const char *target_node)
+ 	show_rawdtb(target_1, target_node);
+ 	show_rawdtb(target_2, target_node);
+ 
++	if (global_dtb_type == DTB_TYPE_USER) {
++		dtb_info("The node %s may need to set %s/%s\n",
++			 target_node, target_1, target_2);
++		return RETURN_DONE;
++	}
++
+ 	/* find global dma type coherent / noncoherent type */
+ 	if (global_dma_type == DMA_TYPE_INIT) {
+ 		const u32 *target_1_idx;
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index cc0200969b8c..9a59c593808a 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -45,6 +45,14 @@ enum dma_type {
+ 	DMA_TYPE_NONCOHERENT = 2,
+ };
+ 
++enum dtb_type {
++	DTB_TYPE_INIT = 0,
++	DTB_TYPE_USER = 1,
++	DTB_TYPE_HW_DTB = 2,
++};
++
++extern enum dtb_type global_dtb_type;
++
+ void swdtb_global_initial(void);
+ 
+ bool fdt_data_is_one_string(const char *data, int len);
+-- 
+2.34.1
+

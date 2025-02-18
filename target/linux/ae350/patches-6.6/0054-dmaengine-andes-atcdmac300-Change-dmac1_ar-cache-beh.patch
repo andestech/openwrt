@@ -1,0 +1,37 @@
+From 842c050c160d696b5f2eac53fe76296e3082d280 Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Wed, 22 May 2024 20:42:42 +0800
+Subject: [PATCH 054/168] dmaengine: andes: atcdmac300: Change dmac1_ar cache
+ behavior from device to write-back, read, and write-allocate
+
+1. Set the dmac1_ar setting to 0xF and the IOCP read behavior change to
+   write-back, read, and write-allocate.
+   For details see T:\RD-VLSI\Product_Signoff\AndesCore\45-series\
+   SO-20240131-ECR-A45MP_AX45MP_V29.0.0\Doc\DS\
+   2024_01_17_17_30-AndesCore_AX45MP_R29_DS252_V1.0.pdf
+
+2. On the AE350 platform, this bug doesn't cause data errors from the DMA
+   engine. This is because the AE350 platform does not provide an IOCP
+   setting for software to configure.
+
+Signed-off-by: CL Wang <cl634@andestech.com>
+---
+ drivers/dma/atcdmac300.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/atcdmac300.c b/drivers/dma/atcdmac300.c
+index 297ee7e9d45a..f42a052265d8 100644
+--- a/drivers/dma/atcdmac300.c
++++ b/drivers/dma/atcdmac300.c
+@@ -1262,7 +1262,7 @@ static int __init v5_dma_probe(struct platform_device *pdev)
+ 	if (v5dma->io_regs) {
+ 		v5_dma_soc_writel(v5dma, CACHE_CTRL, IOCP_CACHE_DMAC0_AW |
+ 			IOCP_CACHE_DMAC0_AR | IOCP_CACHE_DMAC1_AW |
+-			IOCP_CACHE_DMAC1_AW);
++			IOCP_CACHE_DMAC1_AR);
+ 	}
+ 	/*
+ 	 * Do not return an error if the dmac node is not present in order to
+-- 
+2.34.1
+

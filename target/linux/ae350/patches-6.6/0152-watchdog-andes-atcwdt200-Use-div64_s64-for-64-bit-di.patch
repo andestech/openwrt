@@ -1,0 +1,51 @@
+From d50f7ff79bdbb8062806ec42fe6404036f1baf5c Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Fri, 17 Jan 2025 16:49:07 +0800
+Subject: [PATCH 152/168] watchdog: andes: atcwdt200: Use div64_s64 for 64-bit
+ division to avoid link error with 32-bit toolchain (#246)
+
+The following code causes a link error when using a 32-bit toolchain due
+to an undefined reference to __divdi3
+
+rest_time_ms =
+        timeout * 1000LL - ((1000LL << int_index) / drv_data->clk_freq);
+
+This occurs because 64-bit division (/) in a 32-bit environment requires
+the __divdi3 function, which is not available. To resolve this, replace
+the division operation with div64_s64 to handle 64-bit division safely
+in a 32-bit toolchain environment.
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/246
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: CL Wang <cl634@andestech.com>
+Co-committed-by: CL Wang <cl634@andestech.com>
+---
+ drivers/watchdog/atcwdt200_wdt.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/watchdog/atcwdt200_wdt.c b/drivers/watchdog/atcwdt200_wdt.c
+index 7919cc48091b..a24345434a8d 100644
+--- a/drivers/watchdog/atcwdt200_wdt.c
++++ b/drivers/watchdog/atcwdt200_wdt.c
+@@ -13,6 +13,7 @@
+ #include <linux/regmap.h>
+ #include <linux/minmax.h>
+ #include <linux/moduleparam.h>
++#include <linux/math64.h>
+ 
+ #define DRV_NAME	"atcwdt200"
+ 
+@@ -229,7 +230,7 @@ void atcwdt_get_timeout_params(struct atcwdt_drv *drv_data,
+ 
+ 	int_index = atcwdt_get_index(below, drv_data->int_timer_type);
+ 	rest_time_ms = timeout * 1000LL
+-		       - ((1000LL << int_index) / drv_data->clk_freq);
++		       - div64_s64(1000LL << int_index, drv_data->clk_freq);
+ 
+ 	result = atcwdt_get_clock_period(rest_time_ms * drv_data->clk_freq,
+ 					 RST_TIMER,
+-- 
+2.34.1
+

@@ -1,0 +1,43 @@
+From 52dcf351cddf12081acc921c135df265f9d2f243 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Fri, 31 May 2024 13:21:08 +0800
+Subject: [PATCH 124/172] platform: generic: andes: Add support for RV32 to set
+ up PMA
+
+Like PMP, the behaviors to configure PMA will be different from
+RV64 and RV32. RV64 uses two Andes custom CSRs, pmacfg0 and pmacfg2,
+but RV32 uses four Andes custom CSRs, pmacfg0 ~ pmacfg3. This patch
+adds support to PMA for RV32.
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/andes/andes_pma.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/platform/generic/andes/andes_pma.c b/platform/generic/andes/andes_pma.c
+index 321074ace366..9c37720b41fb 100644
+--- a/platform/generic/andes/andes_pma.c
++++ b/platform/generic/andes/andes_pma.c
+@@ -109,10 +109,17 @@ static unsigned long andes_pma_setup(const struct andes_pma_region *pma_region,
+ 	    !(pma_region->flags & ANDES_PMACFG_ETYP_NAPOT))
+ 		return SBI_EINVAL;
+ 
++#if __riscv_xlen == 64
+ 	pma_cfg_addr = CSR_PMACFG0 + ((entry_id / 8) ? 2 : 0);
+ 	pmacfg_val = andes_pma_read_num(pma_cfg_addr);
+ 	pmaxcfg = (char *)&pmacfg_val + (entry_id % 8);
+-	*pmaxcfg = 0;
++#elif __riscv_xlen == 32
++	pma_cfg_addr = CSR_PMACFG0 + (entry_id / 4);
++	pmacfg_val = andes_pma_read_num(pma_cfg_addr);
++	pmaxcfg = (char *)&pmacfg_val + (entry_id % 4);
++#else
++#error "Unexpected __riscv_xlen"
++#endif
+ 	*pmaxcfg = pma_region->flags;
+ 
+ 	andes_pma_write_num(pma_cfg_addr, pmacfg_val);
+-- 
+2.34.1
+

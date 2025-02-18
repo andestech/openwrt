@@ -1,0 +1,33 @@
+From 78942c64dfecfe90e5e913c5673ec6e2feaebc74 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 2 Jan 2025 16:15:59 +0800
+Subject: [PATCH 46/53] riscv: Initialize IPI for others by boot hart only when
+ !IMSIC
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/cpu/cpu.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/arch/riscv/cpu/cpu.c b/arch/riscv/cpu/cpu.c
+index affe70081b5b..077c540c30f6 100644
+--- a/arch/riscv/cpu/cpu.c
++++ b/arch/riscv/cpu/cpu.c
+@@ -154,9 +154,11 @@ int riscv_cpu_setup(void)
+ 	}
+ 
+ #if CONFIG_IS_ENABLED(SMP)
+-	ret = riscv_init_ipi();
+-	if (ret)
+-		return ret;
++	if (!CONFIG_IS_ENABLED(RISCV_IMSIC)) {
++		ret = riscv_init_ipi();
++		if (ret)
++			return ret;
++	}
+ 
+ 	/*
+ 	 * Clear all pending IPIs on secondary harts. We don't do anything on
+-- 
+2.34.1
+

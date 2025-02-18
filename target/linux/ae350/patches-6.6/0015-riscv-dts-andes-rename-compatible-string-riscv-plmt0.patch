@@ -1,0 +1,214 @@
+From bb902fd366c8983d15f920b67d18f5e07b757c7f Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Tue, 28 May 2024 14:00:04 +0800
+Subject: [PATCH 015/168] riscv: dts: andes: rename compatible string
+ "riscv,plmt0" to "andestech,plmt0"
+
+Update the compatible string to clearly indicate that this is
+an Andes proprietary device.
+
+Gitea issues : https://gitea.andestech.com/RD-SW/linux/issues/100
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts    | 2 +-
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts              | 2 +-
+ arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 2 +-
+ arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts    | 2 +-
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts              | 2 +-
+ arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts   | 2 +-
+ arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts          | 2 +-
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts             | 2 +-
+ arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 2 +-
+ arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts   | 2 +-
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts             | 2 +-
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts                   | 2 +-
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts            | 2 +-
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts             | 2 +-
+ 14 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 77ea9ff0ae2e..7b31d642b057 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -95,7 +95,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x01 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index f03f8e0dceec..e11bcfbb5ea9 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -179,7 +179,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index d44f2b6c0a47..6fcac0e87aa3 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -108,7 +108,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index d040b5574a3a..d088b955e6b2 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -95,7 +95,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x01 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 6757222f86bf..ff6cfa24b4c3 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -179,7 +179,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index ada95e2aa3ff..4229f600f98c 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -95,7 +95,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x01 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index 0b85085e1875..733a739a8393 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -105,7 +105,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x0 0xe6000000 0x0 0x100000>;
+ 			interrupts-extended = <0x2 0x7 0x3 0x7>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index caa7526d3da8..a73448e9e497 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -179,7 +179,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 97d8a15a7ec7..0fc13182ae49 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -108,7 +108,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index cf4e89b9c014..978145a0a4e1 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -95,7 +95,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x01 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index c8e3aa1b5968..57d65f0e575c 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -179,7 +179,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index b7c7a357133c..3fc74f5a3a95 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -291,7 +291,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07 0x06 0x07 0x07 0x07 0x08 0x07 0x09 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 41706d2a1d5f..47f70050645e 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -179,7 +179,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07 0x04 0x07 0x05 0x07>;
+ 		};
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index 12b7647a4d08..b1df293b882b 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -126,7 +126,7 @@ interrupt-controller@e6400000 {
+ 		};
+ 
+ 		plmt0@e6000000 {
+-			compatible = "riscv,plmt0";
++			compatible = "andestech,plmt0";
+ 			reg = <0x00 0xe6000000 0x00 0x100000>;
+ 			interrupts-extended = <0x02 0x07 0x03 0x07>;
+ 		};
+-- 
+2.34.1
+

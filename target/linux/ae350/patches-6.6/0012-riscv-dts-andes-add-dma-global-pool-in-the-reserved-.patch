@@ -1,0 +1,176 @@
+From 8da132b9e5916e0c7c9c8ba180cb2d581275f9b1 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Thu, 28 Sep 2023 16:40:20 +0800
+Subject: [PATCH 012/168] riscv: dts: andes: add dma global pool in the
+ reserved memory
+
+In the Andes platform, the PPMA is used to set up noncacheable regions
+for noncoherent devices. Due to the limited number of PPMA entries,
+the number of noncacheable regions that can be set is also limited.
+
+By using a DMA global pool, a large noncacheable region consisting
+of multiple pages can be configured with just one PPMA entry.
+
+The DMA global pool is also suitable for environments that
+use MSB and Svpbmt to set noncacheable regions.
+
+Additionally, the DMA global pool has been added to reserved memory,
+providing a total of 512 pages in size.
+
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ .../dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts    | 13 +++++++++++++
+ .../dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 13 +++++++++++++
+ .../dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts    | 13 +++++++++++++
+ .../dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts   | 13 +++++++++++++
+ .../dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 13 +++++++++++++
+ .../dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts   | 13 +++++++++++++
+ 6 files changed, 78 insertions(+)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index f4d369ba4b4d..7a99528e0c1f 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index e36cd428cb7f..3b3c4d902851 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -67,6 +67,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index fcc9197441f5..9ab171cc8b70 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 2b006d516036..69d7b4db865e 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 79c82647ca58..31709f8a73a8 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -67,6 +67,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 2df101f030d2..04284624c129 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,19 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		dma_global_pool0@3e800000 {
++			compatible = "shared-dma-pool";
++			reg = <0x0 0x3e800000 0x0 0x200000>;
++			no-map;
++			linux,dma-default;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+-- 
+2.34.1
+

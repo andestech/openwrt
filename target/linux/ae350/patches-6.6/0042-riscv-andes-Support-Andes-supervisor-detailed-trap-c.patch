@@ -1,0 +1,89 @@
+From 98a0af342e5025cc6311a38f9404dd863b2ef52b Mon Sep 17 00:00:00 2001
+From: Alan Kao <alankao@andestech.com>
+Date: Thu, 22 Oct 2020 09:53:30 +0800
+Subject: [PATCH 042/168] riscv: andes: Support Andes supervisor detailed trap
+ cause (sdcause)
+
+Reformed from the following patches on RISCV-Linux-5.4:
+- (edf0bb058123) Support sdcause
+- (7ed459de81c9) Fix sdcause read using wrong register
+
+Signed-off-by: Alan Kao <alankao@andestech.com>
+---
+ arch/riscv/include/asm/ptrace.h | 3 +++
+ arch/riscv/kernel/asm-offsets.c | 1 +
+ arch/riscv/kernel/entry.S       | 3 +++
+ arch/riscv/kernel/process.c     | 4 ++--
+ 4 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/arch/riscv/include/asm/ptrace.h b/arch/riscv/include/asm/ptrace.h
+index b5b0adcc85c1..7b9987247c47 100644
+--- a/arch/riscv/include/asm/ptrace.h
++++ b/arch/riscv/include/asm/ptrace.h
+@@ -49,6 +49,9 @@ struct pt_regs {
+ 	unsigned long status;
+ 	unsigned long badaddr;
+ 	unsigned long cause;
++
++	/* Andes supervisor detailed trap cause */
++	unsigned long sdcause;
+ 	/* a0 value before the syscall */
+ 	unsigned long orig_a0;
+ };
+diff --git a/arch/riscv/kernel/asm-offsets.c b/arch/riscv/kernel/asm-offsets.c
+index 9f535d5de33f..ac8f4289ffa5 100644
+--- a/arch/riscv/kernel/asm-offsets.c
++++ b/arch/riscv/kernel/asm-offsets.c
+@@ -115,6 +115,7 @@ void asm_offsets(void)
+ 	OFFSET(PT_STATUS, pt_regs, status);
+ 	OFFSET(PT_BADADDR, pt_regs, badaddr);
+ 	OFFSET(PT_CAUSE, pt_regs, cause);
++	OFFSET(PT_SDCAUSE, pt_regs, sdcause);
+ 
+ 	OFFSET(SUSPEND_CONTEXT_REGS, suspend_context, regs);
+ 
+diff --git a/arch/riscv/kernel/entry.S b/arch/riscv/kernel/entry.S
+index ed7baf2cf7e8..f6618f31726e 100644
+--- a/arch/riscv/kernel/entry.S
++++ b/arch/riscv/kernel/entry.S
+@@ -15,6 +15,7 @@
+ #include <asm/asm-offsets.h>
+ #include <asm/errata_list.h>
+ #include <linux/sizes.h>
++#include <linux/soc/andes/csr.h>
+ 
+ 	.section .irqentry.text, "ax"
+ 
+@@ -63,12 +64,14 @@ _save_context:
+ 	csrr s3, CSR_TVAL
+ 	csrr s4, CSR_CAUSE
+ 	csrr s5, CSR_SCRATCH
++	csrr s6, CSR_SDCAUSE
+ 	REG_S s0, PT_SP(sp)
+ 	REG_S s1, PT_STATUS(sp)
+ 	REG_S s2, PT_EPC(sp)
+ 	REG_S s3, PT_BADADDR(sp)
+ 	REG_S s4, PT_CAUSE(sp)
+ 	REG_S s5, PT_TP(sp)
++	REG_S s6, PT_SDCAUSE(sp)
+ 
+ 	/*
+ 	 * Set the scratch register to 0, so that if a recursive exception
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index 83e223318822..10ae8ba3eb39 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -71,8 +71,8 @@ void __show_regs(struct pt_regs *regs)
+ 	pr_cont(" t5 : " REG_FMT " t6 : " REG_FMT "\n",
+ 		regs->t5, regs->t6);
+ 
+-	pr_cont("status: " REG_FMT " badaddr: " REG_FMT " cause: " REG_FMT "\n",
+-		regs->status, regs->badaddr, regs->cause);
++	pr_cont("status: " REG_FMT " badaddr: " REG_FMT " cause: " REG_FMT " sdcause: " REG_FMT "\n",
++		regs->status, regs->badaddr, regs->cause, regs->sdcause);
+ }
+ void show_regs(struct pt_regs *regs)
+ {
+-- 
+2.34.1
+

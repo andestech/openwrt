@@ -1,0 +1,80 @@
+From 4159ac39a82d869d8578e34dbfea65eff74bc1d7 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 30 Jan 2023 15:55:04 +0800
+Subject: [PATCH 146/172] platform: generic: andes: Add AE350 power brake SBI
+ call
+
+Reformed from the following patches on ast-v5_3_0-branch
+- (6bb0629f8966) platform: Add AE350 power brake SBI call
+- (adc9e201fd2f) andes: andes_sbi: Add a check before accessing the mpft_ctl CSR
+
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ platform/generic/andes/andes_sbi.c     | 18 ++++++++++++++++++
+ platform/generic/include/andes/andes.h |  7 +++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/platform/generic/andes/andes_sbi.c b/platform/generic/andes/andes_sbi.c
+index 385fcacb9e0c..aab4b7f91137 100644
+--- a/platform/generic/andes/andes_sbi.c
++++ b/platform/generic/andes/andes_sbi.c
+@@ -17,6 +17,8 @@ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_FID0 = 0, /* Reserved for future use */
+ 	SBI_EXT_ANDES_IOCP_SW_WORKAROUND,
+ 	SBI_EXT_ANDES_TRIGGER_SET = ANDES_SBI_INTERNAL_FID_START,
++	SBI_EXT_ANDES_POWERBRAKE_READ,
++	SBI_EXT_ANDES_POWERBRAKE_WRITE,
+ };
+ 
+ static bool andes_cache_controllable(void)
+@@ -52,6 +54,22 @@ int andes_sbi_vendor_ext_provider(long funcid,
+ 	case SBI_EXT_ANDES_TRIGGER_SET:
+ 		out->value = mcall_set_trigger(regs->a0, regs->a1, 0, 0, regs->a2);
+ 		break;
++	/*
++	 * Before accessing the mpft_ctl CSR, we need to check if the
++	 * PowerBrake feature is supported or not.
++	 */
++	case SBI_EXT_ANDES_POWERBRAKE_READ:
++		if (andes_powerbrake()) {
++			out->value = csr_read(CSR_MPFT_CTL);
++		} else {
++			out->value = 0;
++		}
++		break;
++	case SBI_EXT_ANDES_POWERBRAKE_WRITE:
++		if (andes_powerbrake()) {
++			csr_write(CSR_MPFT_CTL, regs->a0);
++		}
++		break;
+ 
+ 	default:
+ 		sbi_panic("%s(): funcid: %#lx is not supported\n", __func__, funcid);
+diff --git a/platform/generic/include/andes/andes.h b/platform/generic/include/andes/andes.h
+index 4de668292608..823b27c1edca 100644
+--- a/platform/generic/include/andes/andes.h
++++ b/platform/generic/include/andes/andes.h
+@@ -59,6 +59,7 @@
+ #define CSR_MMSC_CFG		0xfc2
+ #define CSR_MMSC_CFG2		0xfc3
+ #define CSR_MVEC_CFG		0xfc7
++#define CSR_MMSC_CFG_PFT_MASK	(1 << 4)
+ 
+ /* Counter Related Registers */
+ #define CSR_MCOUNTERWEN		0x7ce
+@@ -107,6 +108,12 @@
+ 	  && misa_extension('S')) ? true : false);	\
+ })
+ 
++#define andes_powerbrake()				\
++({							\
++	((csr_read(CSR_MMSC_CFG) &			\
++	  CSR_MMSC_CFG_PFT_MASK) ? true : false);	\
++})
++
+ #endif /* __ASSEMBLER__ */
+ 
+ /*
+-- 
+2.34.1
+

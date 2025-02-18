@@ -1,0 +1,34 @@
+From df3db6a9012916c44bcab221e6d6a264d9621b30 Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Wed, 5 Jun 2024 10:48:46 +0530
+Subject: [PATCH 112/172] lib: utils/fdt: Fix DT property for APLIC delegation
+
+During Linux AIA driver review, the APLIC DT property for interrupt
+delegation was renamed to "riscv,delegation" so let's use the new DT
+property name and fallback to old DT property name if the new DT
+property name is not available.
+
+Fixes: 34612193af92 ("lib: utils/irqchip: Add FDT based driver for APLIC")
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+---
+ lib/utils/fdt/fdt_helper.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/lib/utils/fdt/fdt_helper.c b/lib/utils/fdt/fdt_helper.c
+index a0e93b922666..9a945af4213e 100644
+--- a/lib/utils/fdt/fdt_helper.c
++++ b/lib/utils/fdt/fdt_helper.c
+@@ -720,7 +720,9 @@ aplic_msi_parent_done:
+ 		deleg->child_index = 0;
+ 	}
+ 
+-	del = fdt_getprop(fdt, nodeoff, "riscv,delegate", &len);
++	del = fdt_getprop(fdt, nodeoff, "riscv,delegation", &len);
++	if (!del)
++		del = fdt_getprop(fdt, nodeoff, "riscv,delegate", &len);
+ 	if (!del || len < (3 * sizeof(fdt32_t)))
+ 		goto skip_delegate_parse;
+ 	d = 0;
+-- 
+2.34.1
+

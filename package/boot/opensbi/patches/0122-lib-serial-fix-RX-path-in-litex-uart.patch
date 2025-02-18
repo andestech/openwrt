@@ -1,0 +1,51 @@
+From 7830e987856eb1319c82664702892b6d50a93e7a Mon Sep 17 00:00:00 2001
+From: Gabriel Somlo <gsomlo@gmail.com>
+Date: Fri, 7 Jun 2024 14:23:42 -0400
+Subject: [PATCH 122/172] lib: serial: fix RX path in litex-uart
+
+When used to read characters from the terminal (e.g., when the SBI
+console is used via ecall from linux with `console=hvc0`), we must
+acknowledge receipt of each character to "pop" it off the LiteUART
+hardware queue, and allow the next character to be made available.
+
+Fixes: 52af6e4b ("lib: utils: Add LiteX UART support")
+Suggested-by: Dolu1990 <charles.papon.90@gmail.com>
+Signed-off-by: Gabriel Somlo <gsomlo@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/serial/litex-uart.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/lib/utils/serial/litex-uart.c b/lib/utils/serial/litex-uart.c
+index f843bf3836df..caf869905a81 100644
+--- a/lib/utils/serial/litex-uart.c
++++ b/lib/utils/serial/litex-uart.c
+@@ -20,6 +20,8 @@
+ #define UART_REG_EV_PENDING	4
+ #define UART_REG_EV_ENABLE	5
+ 
++#define UART_EV_RX		0x2
++
+ /* clang-format on */
+ 
+ static volatile u32 *uart_base;
+@@ -42,10 +44,14 @@ static void litex_uart_putc(char ch)
+ 
+ static int litex_uart_getc(void)
+ {
++	int ret;
++
+ 	if (get_reg(UART_REG_RXEMPTY))
+ 		return -1;
+-	else
+-		return get_reg(UART_REG_RXTX);
++
++	ret = get_reg(UART_REG_RXTX);
++	set_reg(UART_REG_EV_PENDING, UART_EV_RX); /* ack. char read */
++	return ret;
+ }
+ 
+ static struct sbi_console_device litex_console = {
+-- 
+2.34.1
+

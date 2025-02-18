@@ -1,0 +1,32 @@
+From 67848314092e24f1941a4a99840a0ba803f9b767 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Thu, 14 Mar 2024 08:55:31 +0800
+Subject: [PATCH 065/168] spi: andes: atcspi200: modify the structure type
+ according to the d534fd9787d592 patch
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ drivers/mtd/spi-nor/macronix.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mtd/spi-nor/macronix.c b/drivers/mtd/spi-nor/macronix.c
+index cad6125f1ca6..59a436f14734 100644
+--- a/drivers/mtd/spi-nor/macronix.c
++++ b/drivers/mtd/spi-nor/macronix.c
+@@ -28,11 +28,12 @@ mx25l25635_post_bfpt_fixups(struct spi_nor *nor,
+ 	return 0;
+ }
+ 
+-static void mx25u1635_late_init(struct spi_nor *nor)
++static int mx25u1635_late_init(struct spi_nor *nor)
+ {
+ 	nor->params->hwcaps.mask |= SNOR_HWCAPS_PP_1_4_4;
+ 	spi_nor_set_pp_settings(&nor->params->page_programs[SNOR_CMD_PP_1_4_4],
+ 				SPINOR_OP_PP_1_4_4, SNOR_PROTO_1_4_4);
++	return 0;
+ }
+ 
+ static const struct spi_nor_fixups mx25u1635_fixups = {
+-- 
+2.34.1
+

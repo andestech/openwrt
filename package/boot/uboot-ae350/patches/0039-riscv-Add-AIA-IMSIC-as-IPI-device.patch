@@ -1,0 +1,248 @@
+From 3be4cc92b91d676be46771505553c8588a3b35f9 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Thu, 18 Jul 2024 10:28:39 +0800
+Subject: [PATCH 39/53] riscv: Add AIA IMSIC as IPI device
+
+AIA introduces new interrupt controller called "IMSIC" to be associated
+with software and external interrupts on RISC-V harts. IMSIC can be used
+as kind of IPI device on AIA enabled platforms with IMSIC.
+
+This commit supports to send and receive IPI via IMSIC. Note that ACLINT
+IPI device is not compatible with IMSIC. Thus, IMSIC is chose by new
+added configurations: RISCV_ISA_SMAIA and RISCV_IMSIC.
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+---
+ arch/riscv/Kconfig              |  18 ++++
+ arch/riscv/cpu/generic/Kconfig  |   6 +-
+ arch/riscv/include/asm/syscon.h |   1 +
+ arch/riscv/lib/Makefile         |   4 +
+ arch/riscv/lib/imsic_ipi.c      | 142 ++++++++++++++++++++++++++++++++
+ 5 files changed, 169 insertions(+), 2 deletions(-)
+ create mode 100644 arch/riscv/lib/imsic_ipi.c
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 2ae48672f7dd..367079ed7f35 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -332,6 +332,24 @@ config DMA_ADDR_T_64BIT
+ 	bool
+ 	default y if 64BIT
+ 
++config RISCV_IMSIC
++	bool
++	depends on RISCV_MMODE && RISCV_ISA_SMAIA
++	select REGMAP
++	select SYSCON
++	help
++	  The RISC-V IMSIC block holds memory-mapped control and status
++	  registers associated with software and external interrupts.
++
++config SPL_RISCV_IMSIC
++	bool
++	depends on SPL_RISCV_MMODE && SPL_RISCV_ISA_SMAIA
++	select SPL_REGMAP
++	select SPL_SYSCON
++	help
++	  The RISC-V IMSIC block holds memory-mapped control and status
++	  registers associated with software and external interrupts.
++
+ config RISCV_ACLINT
+ 	bool
+ 	depends on RISCV_MMODE
+diff --git a/arch/riscv/cpu/generic/Kconfig b/arch/riscv/cpu/generic/Kconfig
+index 2baba2299238..bcdf913d6854 100644
+--- a/arch/riscv/cpu/generic/Kconfig
++++ b/arch/riscv/cpu/generic/Kconfig
+@@ -10,8 +10,10 @@ config GENERIC_RISCV
+ 	imply CPU
+ 	imply CPU_RISCV
+ 	imply RISCV_TIMER if (RISCV_SMODE || SPL_RISCV_SMODE)
+-	imply RISCV_ACLINT if RISCV_MMODE
+-	imply SPL_RISCV_ACLINT if SPL_RISCV_MMODE
++	imply RISCV_ACLINT if (RISCV_MMODE && !RISCV_ISA_SMAIA)
++	imply SPL_RISCV_ACLINT if (SPL_RISCV_MMODE && !SPL_RISCV_ISA_SMAIA)
++	imply RISCV_IMSIC if (RISCV_MMODE && RISCV_ISA_SMAIA)
++	imply SPL_RISCV_IMSIC if (SPL_RISCV_MMODE && SPL_RISCV_ISA_SMAIA)
+ 	imply CMD_CPU
+ 	imply SPL_CPU
+ 	imply SPL_OPENSBI
+diff --git a/arch/riscv/include/asm/syscon.h b/arch/riscv/include/asm/syscon.h
+index 5787702e7467..a318e762cd35 100644
+--- a/arch/riscv/include/asm/syscon.h
++++ b/arch/riscv/include/asm/syscon.h
+@@ -14,6 +14,7 @@ enum {
+ 	RISCV_NONE,
+ 	RISCV_SYSCON_ACLINT,	/* Advanced Core Local Interruptor (ACLINT) */
+ 	RISCV_SYSCON_PLICSW,	/* Andes PLICSW */
++	RISCV_SYSCON_IMSIC,	/* Incoming MSI Controller (IMSIC)  */
+ };
+ 
+ #endif /* _ASM_SYSCON_H */
+diff --git a/arch/riscv/lib/Makefile b/arch/riscv/lib/Makefile
+index 9a05b662fd63..463e4ed0f921 100644
+--- a/arch/riscv/lib/Makefile
++++ b/arch/riscv/lib/Makefile
+@@ -12,7 +12,11 @@ obj-$(CONFIG_CMD_GO) += boot.o
+ obj-y	+= cache.o
+ obj-$(CONFIG_SIFIVE_CACHE) += sifive_cache.o
+ ifeq ($(CONFIG_$(SPL_)RISCV_MMODE),y)
++ifeq ($(CONFIG_$(SPL_)RISCV_ISA_SMAIA),y)
++obj-$(CONFIG_$(SPL_)RISCV_IMSIC) += imsic_ipi.o
++else
+ obj-$(CONFIG_$(SPL_)RISCV_ACLINT) += aclint_ipi.o
++endif
+ obj-$(CONFIG_ANDES_PLICSW) += andes_plicsw.o
+ else
+ obj-$(CONFIG_SBI) += sbi.o
+diff --git a/arch/riscv/lib/imsic_ipi.c b/arch/riscv/lib/imsic_ipi.c
+new file mode 100644
+index 000000000000..e3f2dae65e86
+--- /dev/null
++++ b/arch/riscv/lib/imsic_ipi.c
+@@ -0,0 +1,142 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * Copyright (C) 2024
++ */
++
++#include <asm/csr.h>
++#include <asm/global_data.h>
++#include <asm/io.h>
++#include <asm/syscon.h>
++#include <cpu.h>
++#include <dm.h>
++#include <dm/device-internal.h>
++#include <dm/lists.h>
++#include <dm/uclass-internal.h>
++#include <linux/err.h>
++#include <regmap.h>
++#include <syscon.h>
++
++/* FIXME: Don't use hard-code address */
++#define IMSIC_M_INTR_FILE_BASE		0x24000000
++
++#define IMSIC_INTR_FILE(base, hart)	((ulong)(base) + (0x1000 * (hart)))
++
++#define IMSIC_IPI_ID			1
++
++#define IMSIC_EIDELIVERY		0x70
++#define IMSIC_EITHRESHOLD		0x72
++
++#define IMSIC_EIP0			0x80
++#define IMSIC_EIPx_BITS			32
++
++#define IMSIC_EIE0			0xc0
++
++#define IMSIC_DISABLE_EIDELIVERY	0
++#define IMSIC_ENABLE_EIDELIVERY		1
++#define IMSIC_DISABLE_EITHRESHOLD	1
++#define IMSIC_ENABLE_EITHRESHOLD	0
++
++#define TOPEI_ID_SHIFT			16
++
++static inline void imsic_csr_write(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_MISELECT, reg);
++	csr_write(CSR_MIREG, val);
++}
++
++static inline unsigned long imsic_csr_read(unsigned long reg)
++{
++	csr_write(CSR_MISELECT, reg);
++	return csr_read(CSR_MIREG);
++}
++
++static inline void imsic_csr_set(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_MISELECT, reg);
++	csr_set(CSR_MIREG, val);
++}
++
++static inline void imsic_csr_clear(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_MISELECT, reg);
++	csr_clear(CSR_MIREG, val);
++}
++
++static void imsic_local_eix_update(unsigned long id, bool pend, bool val)
++{
++	unsigned long isel, ireg;
++
++	isel = id / BITS_PER_LONG;
++	isel *= BITS_PER_LONG / IMSIC_EIPx_BITS;
++	isel += pend ? IMSIC_EIP0 : IMSIC_EIE0;
++
++	ireg = BIT(id % BITS_PER_LONG);
++
++	if (val)
++		imsic_csr_set(isel, ireg);
++	else
++		imsic_csr_clear(isel, ireg);
++}
++
++static void imsic_local_delivery_update(bool enable)
++{
++	if (enable) {
++		imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_ENABLE_EITHRESHOLD);
++		imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_ENABLE_EIDELIVERY);
++	} else {
++		imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_DISABLE_EIDELIVERY);
++		imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_DISABLE_EITHRESHOLD);
++	}
++}
++
++int riscv_init_ipi(void)
++{
++	imsic_local_eix_update(IMSIC_IPI_ID, false, true);
++	imsic_local_delivery_update(true);
++
++	return 0;
++}
++
++int riscv_send_ipi(int hart)
++{
++	long *base = (long *)IMSIC_M_INTR_FILE_BASE;
++
++	writel(IMSIC_IPI_ID,
++	       (void __iomem *)IMSIC_INTR_FILE(base, hart));
++
++	return 0;
++}
++
++int riscv_clear_ipi(int hart)
++{
++	unsigned long local_id;
++
++	while ((local_id = csr_swap(CSR_MTOPEI, 0))) {
++		local_id >>= TOPEI_ID_SHIFT;
++	}
++
++	return 0;
++}
++
++int riscv_get_ipi(int hart, int *pending)
++{
++	/*
++	 * The IMSIC does not support reading the IPI status of other harts.
++	 * We always return 0 to indicate that no IPI is pending.
++	 */
++	*pending = 0;
++
++	return 0;
++}
++
++static const struct udevice_id riscv_imsic_ipi_ids[] = {
++	{ .compatible = "riscv,imsics", .data = RISCV_SYSCON_IMSIC },
++	{ }
++};
++
++U_BOOT_DRIVER(imsic_ipi) = {
++	.name		= "riscv_imsic_ipi",
++	.id		= UCLASS_SYSCON,
++	.of_match	= riscv_imsic_ipi_ids,
++	.flags		= DM_FLAG_PRE_RELOC,
++};
+-- 
+2.34.1
+

@@ -1,0 +1,29 @@
+From acd1ba36e689edfbcd3fd080d27ddad057c5729b Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Tue, 6 Jun 2023 15:27:18 +0800
+Subject: [PATCH 003/168] riscv: andes: Kconfig: Disable
+ CONFIG_STRICT_KERNEL_RWX
+
+https://gitea.andestech.com/RD-SW/linux/issues/30
+https://gitea.andestech.com/RD-SW/linux_cicd/issues/10#issuecomment-75180
+
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ arch/riscv/configs/andes_defconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/riscv/configs/andes_defconfig b/arch/riscv/configs/andes_defconfig
+index 9135c4dd196a..6c71f9944910 100644
+--- a/arch/riscv/configs/andes_defconfig
++++ b/arch/riscv/configs/andes_defconfig
+@@ -34,6 +34,7 @@ CONFIG_PM=y
+ CONFIG_CPU_IDLE=y
+ CONFIG_CPU_FREQ=y
+ CONFIG_JUMP_LABEL=y
++# CONFIG_STRICT_KERNEL_RWX is not set
+ CONFIG_MODULES=y
+ CONFIG_MODULE_UNLOAD=y
+ CONFIG_NET=y
+-- 
+2.34.1
+

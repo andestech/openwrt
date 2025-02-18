@@ -1,0 +1,35 @@
+From 0aa1ebf0396ac944984e97617b84eba5275df488 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Fri, 30 Aug 2024 14:42:23 +0800
+Subject: [PATCH 079/168] perf: andes: Remove ARCH_RENESAS for config
+ ANDES_CUSTOM_PMU (#175)
+
+In pmu_sbi_setup_irqs, we use DTS's xandepmu and CONFIG_ANDES_CUSTOM_PMU to enable PMU IRQ.
+We will not enable PMU IRQ because ANDES_CUSTOM_PMU depends on ARCH_RENESAS.
+After removing ARCH_RENESAS, the perf_event_open01 test can pass on the a25/a45 platform.
+
+Co-authored-by: Cynthia Huang <cynthia@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/175
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Cynthia Lan-Ya Huang <cynthia@andestech.com>
+Reviewed-by: Peter Yu-Chien Lin <peterlin@andestech.com>
+---
+ drivers/perf/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/perf/Kconfig b/drivers/perf/Kconfig
+index 8efc053c7421..0158324ed04d 100644
+--- a/drivers/perf/Kconfig
++++ b/drivers/perf/Kconfig
+@@ -88,7 +88,7 @@ config RISCV_PMU_SBI
+ 
+ config ANDES_CUSTOM_PMU
+ 	bool "Andes custom PMU support"
+-	depends on ARCH_RENESAS && RISCV_ALTERNATIVE && RISCV_PMU_SBI
++	depends on ARCH_ANDES && RISCV_ALTERNATIVE && RISCV_PMU_SBI
+ 	default y
+ 	help
+ 	  The Andes cores implement the PMU overflow extension very
+-- 
+2.34.1
+

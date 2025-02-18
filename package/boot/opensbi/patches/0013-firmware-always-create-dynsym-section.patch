@@ -1,0 +1,34 @@
+From 92e8affb31b21ddc5d1193cf754ce644db7b460a Mon Sep 17 00:00:00 2001
+From: "Leon M. Busch-George" <leon@georgemail.eu>
+Date: Fri, 26 Jan 2024 16:21:25 +0100
+Subject: [PATCH 013/172] firmware: always create dynsym section
+
+With a bare-metal linkers (e.g. riscv64-elf-ld), there exists no
+dynsym section. The dynsym section is not used by OpenSBI but
+discarding it makes linkers with dynamic library support unhappy.
+
+Signed-off-by: Leon M. Busch-George <leon@georgemail.eu>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ firmware/fw_base.ldS | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/firmware/fw_base.ldS b/firmware/fw_base.ldS
+index c15ccdbf6612..fb47984878f8 100644
+--- a/firmware/fw_base.ldS
++++ b/firmware/fw_base.ldS
+@@ -38,6 +38,11 @@
+ 		. = ALIGN(8);
+ 	}
+ 
++	.dynsym :
++	{
++		*(.dynsym)
++	}
++
+ 	. = ALIGN(0x1000); /* Ensure next section is page aligned */
+ 
+ 	.rela.dyn : {
+-- 
+2.34.1
+

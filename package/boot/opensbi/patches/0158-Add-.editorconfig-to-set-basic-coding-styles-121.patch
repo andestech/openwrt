@@ -1,0 +1,77 @@
+From 4f6295dd26f7330b2ae9c7c05bbe15f1572a7620 Mon Sep 17 00:00:00 2001
+From: Hui Min Mina Chou <minachou@andestech.com>
+Date: Mon, 16 Sep 2024 11:15:02 +0800
+Subject: [PATCH 158/172] Add .editorconfig to set basic coding styles (#121)
+
+EditorConfig [1] ensures consistent coding styles for developers
+collaborating on the same project across various editors and IDEs.
+By adopting the .editorconfig settings from the Linux project [2] and
+applying them to OpenSBI, it helps users maintain uniform indentation
+across different IDEs and version control systems, promoting more
+efficient software development.
+
+The difference from Linux project is the addition of
+'trim_trailing_whitespace = true', which removes trailing whitespace
+before a newline. Currently, only three OpenSBI files are affected, but
+it improves coding style.
+
+ $ grep -nr "\s$" --include={*.{c,dts,h,lds,ldS,mk,s,S.py},Kconfig,Makefile,Makefile.*} .
+ ./include/sbi_utils/fdt/fdt_fixup.h:4: * Implement platform specific DT fixups on top of libfdt.
+ ./platform/generic/platform.c:79: * The fw_platform_coldboot_harts_init() function is called by fw_platform_init()
+ ./platform/generic/platform.c:81: * according to the DT property "cold-boot-harts" in "/chosen/opensbi-config"
+
+Link: https://editorconfig.org/ [1]
+Link: https://lore.kernel.org/lkml/ZbAbmchIO8Cd5hNd@surfacebook.localdomain/T/ [2]
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/opensbi/pulls/121
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Hui Min Mina Chou <minachou@andestech.com>
+Co-committed-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ .editorconfig | 21 +++++++++++++++++++++
+ .gitignore    |  1 +
+ 2 files changed, 22 insertions(+)
+ create mode 100644 .editorconfig
+
+diff --git a/.editorconfig b/.editorconfig
+new file mode 100644
+index 000000000000..e66b1ca3d6e7
+--- /dev/null
++++ b/.editorconfig
+@@ -0,0 +1,21 @@
++# SPDX-License-Identifier: GPL-2.0-only
++# See here for more information about the format and editor support:
++# https://editorconfig.org/
++
++root = true
++
++[{*.{c,dts,h,lds,ldS,mk,s,S},Kconfig,Makefile,Makefile.*}]
++charset = utf-8
++end_of_line = lf
++trim_trailing_whitespace = true
++insert_final_newline = true
++indent_style = tab
++indent_size = 8
++
++[*.py]
++charset = utf-8
++end_of_line = lf
++trim_trailing_whitespace = true
++insert_final_newline = true
++indent_style = space
++indent_size = 4
+diff --git a/.gitignore b/.gitignore
+index fbba52e1e33a..1828e791b779 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,6 +4,7 @@
+ # exceptions we need even begin with dot
+ !.clang-format
+ !.gitignore
++!.editorconfig
+ 
+ # Object files
+ *.o
+-- 
+2.34.1
+

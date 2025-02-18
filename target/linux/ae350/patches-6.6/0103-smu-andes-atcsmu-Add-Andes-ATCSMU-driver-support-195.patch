@@ -1,0 +1,179 @@
+From b49b2d15283038e53933467f8d2b98cfbb316a78 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 26 Sep 2024 13:34:50 +0800
+Subject: [PATCH 103/168] smu: andes: atcsmu: Add Andes ATCSMU driver support
+ (#195)
+
+Add basic atcsmu driver support for AE350 platform.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/195
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-committed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/configs/andes-support.config |  1 +
+ drivers/soc/andes/Kconfig               |  8 +++
+ drivers/soc/andes/Makefile              |  1 +
+ drivers/soc/andes/atcsmu.c              | 66 +++++++++++++++++++++++++
+ include/linux/soc/andes/smu.h           | 39 +++++++++++++++
+ 5 files changed, 115 insertions(+)
+ create mode 100644 drivers/soc/andes/atcsmu.c
+ create mode 100644 include/linux/soc/andes/smu.h
+
+diff --git a/arch/riscv/configs/andes-support.config b/arch/riscv/configs/andes-support.config
+index a723e4f13a87..cf2aff25bfa9 100644
+--- a/arch/riscv/configs/andes-support.config
++++ b/arch/riscv/configs/andes-support.config
+@@ -20,3 +20,4 @@ CONFIG_I2C_ATCIIC100=y
+ CONFIG_ATCIIC_IRQ=y
+ 
+ CONFIG_GPIO_ATCGPIO100=y
++CONFIG_ANDES_ATCSMU=y
+diff --git a/drivers/soc/andes/Kconfig b/drivers/soc/andes/Kconfig
+index 2dd6443f5a5f..ac67e687de0b 100644
+--- a/drivers/soc/andes/Kconfig
++++ b/drivers/soc/andes/Kconfig
+@@ -11,4 +11,12 @@ config ANDES_PPMA
+ 	  Andes programmable physical memory attributes (PPMA)
+ 	  can map memory as non-cacheable bufferable PMA region.
+ 
++config ANDES_ATCSMU
++	bool "Andes ATCSMU Support"
++	depends on RISCV && ARCH_ANDES
++	help
++	  Enable the driver for Andes System Management
++	  Unit (SMU) to support light/deep sleep and
++	  hotplug utilities.
++
+ endmenu
+diff --git a/drivers/soc/andes/Makefile b/drivers/soc/andes/Makefile
+index 61aeaaf7dcb7..a494f0ee4a7d 100644
+--- a/drivers/soc/andes/Makefile
++++ b/drivers/soc/andes/Makefile
+@@ -5,3 +5,4 @@ obj-y	+= andes_sbi.o
+ obj-y	+= inject_init.o
+ obj-y	+= dcause.o
+ obj-$(CONFIG_ANDES_PPMA)	+= ppma.o
++obj-$(CONFIG_ANDES_ATCSMU)	+= atcsmu.o
+diff --git a/drivers/soc/andes/atcsmu.c b/drivers/soc/andes/atcsmu.c
+new file mode 100644
+index 000000000000..8953fca72c41
+--- /dev/null
++++ b/drivers/soc/andes/atcsmu.c
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2024 Andes Technology Corporation.
++ */
++#define pr_fmt(fmt) "atcsmu: " fmt
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/platform_device.h>
++#include <linux/io.h>
++#include <linux/of.h>
++#include <linux/soc/andes/smu.h>
++
++static struct atcsmu atcsmu = { 0 };
++
++void __iomem *atcsmu_get_address(void)
++{
++	struct atcsmu *smu = &atcsmu;
++	return smu->base;
++}
++
++static int atcsmu_probe(struct platform_device *pdev)
++{
++	struct atcsmu *smu = &atcsmu;
++	unsigned int cpu;
++
++	smu->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(smu->base))
++		return PTR_ERR(smu->base);
++
++	for_each_possible_cpu(cpu)
++		writel(0x0, (void *)(smu->base + PCSm_WE_OFF(cpu)));
++
++	pr_info("ATCSMU driver probed\n");
++
++	return 0;
++}
++
++static int __exit atcsmu_remove(struct platform_device *pdev)
++{
++	pr_info("ATCSMU driver removed\n");
++	return 0;
++}
++
++static const struct of_device_id atcsmu_of_id_table[] = {
++	{ .compatible = "andestech,atcsmu" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, atcsmu_of_id_table);
++
++static struct platform_driver atcsmu_driver = {
++	.probe = atcsmu_probe,
++	.remove = __exit_p(atcsmu_remove),
++	.driver = {
++		.name = "atcsmu",
++		.of_match_table = of_match_ptr(atcsmu_of_id_table),
++	},
++};
++
++static int __init atcsmu_init(void)
++{
++	int ret = platform_driver_register(&atcsmu_driver);
++
++	return ret;
++}
++subsys_initcall(atcsmu_init);
+diff --git a/include/linux/soc/andes/smu.h b/include/linux/soc/andes/smu.h
+new file mode 100644
+index 000000000000..8cdfcc48a039
+--- /dev/null
++++ b/include/linux/soc/andes/smu.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2024 Andes Technology Corporation.
++ */
++
++#ifndef _LINUX_SOC_ANDES_SMU_H
++#define _LINUX_SOC_ANDES_SMU_H
++
++#include <linux/suspend.h>
++
++/*
++ * PCS0 --> Always on power domain, includes the JTAG tap and
++ *          DMI_AHB bus in NCEJDTM200
++ * PCS1 --> Power domain for debug subsystem
++ * PCS2 --> Main power domain, includes the system bus and
++ *          AHB, APB peripheral IPs
++ * PCS3 --> Power domain for Core0 and L2C
++ * PCSm --> Power domain for Core (m-3)
++ */
++
++#define PCS0_SCRATCH_OFF	0x84
++#define PCS0_WE_OFF		0x90
++#define PCS0_CTL_OFF		0x94
++#define PCS0_STATUS_OFF		0x98
++
++#define PCSm_SCRATCH_OFF(n)	((n + 3) * 0x20 + PCS0_SCRATCH_OFF)
++#define PCSm_WE_OFF(n)		((n + 3) * 0x20 + PCS0_WE_OFF)
++#define PCSm_STATUS_OFF(n)	((n + 3) * 0x20 + PCS0_STATUS_OFF)
++#define PCSm_CTL_OFF(n)		((n + 3) * 0x20 + PCS0_CTL_OFF)
++
++struct atcsmu {
++	void __iomem *base;
++};
++
++extern unsigned long *andes_wake_event;
++
++void __iomem *atcsmu_get_address(void);
++
++#endif
+-- 
+2.34.1
+

@@ -1,0 +1,290 @@
+From f5971f084a9d204eff13338949beb6b173a3f2ef Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 19 Feb 2025 15:48:57 +0800
+Subject: [PATCH 49/53] swdtb: baudrate: chosen: support baudrate 115200 [Bug
+ 33409] (#156)
+
+The built-in DTB currently supports a baud rate of 38400. In the ASTv540
+official the linux switch to support 115200.
+
+The Linux kernel log will display garbled text until the Linux shell
+environment is accessed. The complete log is now displayed correctly
+after the modification.
+
+Add 1 additional space to the allocated string length in
+replace_serial_string() to ensure the string displays completely
+when the DTB is reverted to DTS.
+
+Add a conditional preprocessor to check whether USE_TINY_PRINTF is
+enabled or not for the simple_itoa() function.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/156
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Alex Chun-Ju Lin <alex749@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        |   4 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 142 ++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |   2 +
+ .../common/swdtb_merger/swdtb_tool.c          |  47 ++++++
+ .../common/swdtb_merger/swdtb_tool.h          |   9 ++
+ 5 files changed, 204 insertions(+)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 5088ebbd9578..a359e9150c0b 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -61,6 +61,10 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "add dma cell",		dma_cells_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "fix uart baud rate",		uart_baudrate_fixup},
++	{SWDTB_ENABLE,	1,
++	 "fix bootargs baud rate",	bootargs_baudrate_fixup},
++	{SWDTB_ENABLE,	1,
++	 "fix stdout baud rate",	stdout_baudrate_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "add dma spi_tx spi_rx",	spi_dma_rxtx_fixup},
+ 	{SWDTB_ENABLE,	1,
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index fe07233451b6..1d51e02bfa2a 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -983,6 +983,148 @@ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value)
+ 	return RETURN_DONE;
+ }
+ 
++int search_serial_index_size(const char *origin_string, int *index,
++			     const char *baudrate)
++{
++	char *token;
++	char *bootargs_token;
++	const char *split_char = " ";
++	char *serial_str;
++	int replace_length;
++
++	/*
++	 * In this context, strndup calls malloc and strncpy,
++	 * performing a "full copy" of the entire string size.
++	 * This is why we don't use memset for the duplicated string.
++	 */
++	bootargs_token = strdup(origin_string);
++
++	token = strtok(bootargs_token, split_char);
++	while (token) {
++		if (strstr(token, "console") &&
++		    strstr(token, ",")) {
++			break;
++		}
++		token = strtok(NULL, split_char);
++	}
++	/* The first character is "," skip by add 1 */
++	serial_str = strstr(token, ",") + 1;
++
++	replace_length = count_serial_length(serial_str);
++
++	if (replace_length > 0 &&
++	    strncmp(serial_str, baudrate, strlen(baudrate)) == 0) {
++		replace_length = 0;
++		goto out;
++	}
++
++	*index = serial_str - bootargs_token;
++
++out:
++	free(bootargs_token);
++	return replace_length;
++}
++
++int bootargs_baudrate_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *prop_name = "bootargs";
++	const char *config_baudrate = simple_itoa(CONFIG_BAUDRATE);
++	const char *bootargs;
++	int replace_length;
++	int replace_idx;
++	char *new_baudrate;
++	int ret;
++
++	if (strncmp(name, prop_name, strlen(prop_name)) == 0) {
++		bootargs = fdt_getprop(fdt, node, prop_name, NULL);
++		replace_length = search_serial_index_size(bootargs,
++							  &replace_idx,
++							  config_baudrate);
++		if (replace_length == 0)
++			return RETURN_DONE;
++
++		dtb_info("Node: %s, %s: %s\n",
++			 fdt_get_name(fdt, node, NULL),
++			 prop_name, bootargs);
++
++		new_baudrate = replace_serial_string(bootargs,
++						     replace_idx,
++						     replace_length,
++						     config_baudrate,
++						     strlen(config_baudrate));
++		/* The end flag not in the strlen, length +1 is needed */
++		ret = fdt_setprop(fdt, node, prop_name, new_baudrate,
++				  strlen(new_baudrate) + 1);
++		free(new_baudrate);
++		if (ret) {
++			dtb_error("Error on fdt_setprop: %s\n",
++				  fdt_strerror(ret));
++			return ret;
++		}
++
++		show_result(fdt, node, prop_name, RESULT_STRING);
++
++		return RETURN_DONE;
++	}
++
++	return !(RETURN_DONE);
++}
++
++int stdout_baudrate_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *prop_stdout = "stdout-path";
++	const char *config_baudrate = simple_itoa(CONFIG_BAUDRATE);
++	const char *stdout_path;
++	char *stdout_parameter;
++	int replace_length;
++	int replace_idx;
++	char *new_baudrate;
++	int ret;
++
++	if (strncmp(name, prop_stdout, strlen(prop_stdout)) == 0) {
++		/* The stdout-path have already correct */
++		stdout_path = fdt_getprop(fdt, node, prop_stdout, NULL);
++		if (strstr(stdout_path, config_baudrate))
++			return RETURN_DONE;
++
++		/* The stdout-path using full path mode */
++		stdout_parameter = strchr(stdout_path, ':');
++		if (!stdout_parameter)
++			return RETURN_DONE;
++
++		dtb_info("Node: %s, %s: %s\n", fdt_get_name(fdt, node, NULL),
++			 prop_stdout, stdout_path);
++
++		/* The first character is ":" skip by set idx = 1 */
++		stdout_parameter += 1;
++		replace_length = count_serial_length(stdout_parameter);
++
++		replace_idx = stdout_parameter - stdout_path;
++
++		new_baudrate = replace_serial_string(stdout_path,
++						     replace_idx,
++						     replace_length,
++						     config_baudrate,
++						     strlen(config_baudrate));
++
++		/* The end flag not in the strlen, length +1 is needed */
++		ret = fdt_setprop(fdt, node, prop_stdout, new_baudrate,
++				  strlen(new_baudrate) + 1);
++		free(new_baudrate);
++		if (ret) {
++			dtb_error("Error on fdt_setprop: %s\n",
++				  fdt_strerror(ret));
++			return ret;
++		}
++
++		show_result(fdt, node, prop_stdout, RESULT_STRING);
++
++		return RETURN_DONE;
++	}
++
++	return !(RETURN_DONE);
++}
++
+ /**
+  * This fixup will add the dma_names into spi node.
+  * @return 0 if ok, or FDT_ERR... if not.
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 0084ed457dc1..de6749694e9f 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -66,4 +66,6 @@ int spi_dma_dmas_fixup(void *fdt, int node, char *name, char *value);
+ int dma_cells_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value);
++int bootargs_baudrate_fixup(void *fdt, int node, char *name, char *value);
++int stdout_baudrate_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 8dddc13b8c04..ae3b2f544b51 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -356,3 +356,50 @@ int dma_set_dmas_array(void *fdt, int node, struct dmas *arr, int arr_sz)
+ 
+ 	return ret;
+ }
++
++#if defined(CONFIG_SPL_BUILD) && CONFIG_IS_ENABLED(USE_TINY_PRINTF)
++char *simple_itoa(ulong i)
++{
++	static char local_toa[22];
++	/* 21 digits plus null terminator, good for 64-bit or smaller ints */
++	char *p = &local_toa[21];
++
++	*p-- = '\0';
++	do {
++		*p-- = '0' + i % 10;
++		i /= 10;
++	} while (i > 0);
++	return p + 1;
++}
++#endif
++
++int count_serial_length(const char *serial_string)
++{
++	int count = 0;
++
++	while (isdigit(*serial_string++))
++		++count;
++
++	return count;
++}
++
++char *replace_serial_string(const char *origin_string, int replace_start,
++			    int replace_length, char *new_string,
++			    int new_length)
++{
++	int new_size;
++	char *comb_string;
++
++	/* Add 1 space to copy the \0. */
++	new_size = strlen(origin_string) - replace_length + new_length + 1;
++	comb_string = calloc(1, new_size);
++
++	strncpy(comb_string, origin_string, replace_start);
++	strncpy(comb_string + replace_start, new_string, new_length);
++
++	strncpy(comb_string + replace_start + new_length,
++		origin_string + replace_start + replace_length,
++		strlen(origin_string) - replace_start - replace_length + 1);
++
++	return comb_string;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 6e9a25d4f7a0..a610f611879d 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -95,4 +95,13 @@ struct dmas {
+ 	fdt32_t handshake_id;
+ };
+ int dma_set_dmas_array(void *fdt, int node, struct dmas *arr, int arr_sz);
++
++#if defined(CONFIG_SPL_BUILD) && CONFIG_IS_ENABLED(USE_TINY_PRINTF)
++char *simple_itoa(ulong val);
++#endif
++
++int count_serial_length(const char *serial_string);
++char *replace_serial_string(const char *origin_string, int replace_start,
++			    int replace_length, char *new_string,
++			    int new_length);
+ #endif
+-- 
+2.34.1
+

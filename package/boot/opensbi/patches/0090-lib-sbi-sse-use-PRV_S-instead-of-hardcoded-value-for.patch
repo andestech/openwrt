@@ -1,0 +1,36 @@
+From bd007658f8f36e2846ea3f420afe2d0891bd1110 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:07 +0200
+Subject: [PATCH 090/172] lib: sbi: sse: use PRV_S instead of hardcoded value
+ for mode
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Rather then passing 1 to sbi_domain_check_addr_range() for supervisor
+mode, use PRV_S.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index fb327f026567..76fbee457fc1 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -837,8 +837,8 @@ int sbi_sse_attr_check(uint32_t base_attr_id, uint32_t attr_count,
+ 		return SBI_EINVALID_ADDR;
+ 
+ 	if (!sbi_domain_check_addr_range(sbi_domain_thishart_ptr(), phys_lo,
+-					 sizeof(unsigned long) * attr_count, 1,
+-					 access))
++					 sizeof(unsigned long) * attr_count,
++					 PRV_S, access))
+ 		return SBI_EINVALID_ADDR;
+ 
+ 	return SBI_OK;
+-- 
+2.34.1
+

@@ -1,0 +1,588 @@
+From b782f245c20e1dbafce7b0346336da437bdb58d9 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Wed, 28 Aug 2024 17:34:44 +0800
+Subject: [PATCH 077/168] riscv: andes: dsp: add DSP (Digital Signal
+ Processing) support (#173)
+
+The Andes DSP instruction set extension increases the DSP algorithm
+processing capabilities of the Andes CPU IP products.
+
+Reformed from the following patches on RISCV-Linux-5.4:
+-(15a3b9f259) Fix DSP condition during context switch
+-(43d9b4a324) DSP support
+
+DTS follow naming examples like xandespmu.
+Please refer to:
+Documentation/devicetree/bindings/riscv/extensions.yaml
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/173
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: charles <dminus@andestech.com>
+Co-committed-by: charles <dminus@andestech.com>
+---
+ arch/riscv/Kconfig                            |  6 +++
+ arch/riscv/boot/dts/andes/Makefile            |  2 +-
+ .../andes/a25_c1_d_dsp_noncoherent_ae350.dts  |  2 +-
+ .../boot/dts/andes/a25mp_c4_d_dsp_ae350.dts   |  8 ++--
+ .../a27l2_c1_d_dsp_noncoherent_ae350.dts      |  2 +-
+ .../andes/a45_c1_d_dsp_noncoherent_ae350.dts  |  2 +-
+ .../boot/dts/andes/a45mp_c4_d_dsp_ae350.dts   |  8 ++--
+ .../andes/ax25_c1_d_dsp_noncoherent_ae350.dts |  2 +-
+ .../boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts  |  8 ++--
+ .../ax27l2_c1_d_dsp_noncoherent_ae350.dts     |  2 +-
+ .../andes/ax45_c1_d_dsp_noncoherent_ae350.dts |  2 +-
+ .../boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts  |  8 ++--
+ .../boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts |  8 ++--
+ ..._d_dsp_ae350.dts => ax65mp_c2_d_ae350.dts} |  4 +-
+ arch/riscv/include/asm/hwcap.h                |  1 +
+ arch/riscv/include/asm/processor.h            |  1 +
+ arch/riscv/include/asm/switch_to.h            | 32 +++++++++++++
+ arch/riscv/include/uapi/asm/ptrace.h          |  4 ++
+ arch/riscv/include/uapi/asm/sigcontext.h      |  1 +
+ arch/riscv/kernel/cpufeature.c                |  1 +
+ arch/riscv/kernel/process.c                   |  4 ++
+ arch/riscv/kernel/signal.c                    | 45 +++++++++++++++++++
+ 22 files changed, 124 insertions(+), 29 deletions(-)
+ rename arch/riscv/boot/dts/andes/{ax65mp_c2_d_dsp_ae350.dts => ax65mp_c2_d_ae350.dts} (99%)
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index c785a0200573..a20a52276aed 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -606,6 +606,12 @@ config TOOLCHAIN_NEEDS_OLD_ISA_SPEC
+ 	  versions of clang and GCC to be passed to GAS, which has the same result
+ 	  as passing zicsr and zifencei to -march.
+ 
++config ANDES_DSP
++	bool "Andes DSP support"
++	default y
++	help
++	  Say N here if you want to disable Andes DSP support.
++
+ config FPU
+ 	bool "FPU support"
+ 	default y
+diff --git a/arch/riscv/boot/dts/andes/Makefile b/arch/riscv/boot/dts/andes/Makefile
+index c569b6efce76..f04bd2967b7d 100644
+--- a/arch/riscv/boot/dts/andes/Makefile
++++ b/arch/riscv/boot/dts/andes/Makefile
+@@ -17,5 +17,5 @@ dtb-$(CONFIG_ARCH_ANDES) += ax45mpv_c4_d_dsp_ae350.dtb
+ dtb-$(CONFIG_ARCH_ANDES) += ax45mp_c8_ae350.dtb
+ 
+ # FPGA : VU19P
+-dtb-$(CONFIG_ARCH_ANDES) += ax65mp_c2_d_dsp_ae350.dtb
++dtb-$(CONFIG_ARCH_ANDES) += ax65mp_c2_d_ae350.dtb
+ obj-$(CONFIG_BUILTIN_DTB) += $(addsuffix .o, $(dtb-y))
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 9cac0ddfa204..2f6496a877ff 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 69554f22faa3..bbbc3a697fbd 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -52,7 +52,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -78,7 +78,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -104,7 +104,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 8f62087cebeb..3cfe2d444fa8 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index e0c168de0594..2816b5e8e03a 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 956cc149591b..174737e4be18 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -52,7 +52,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -78,7 +78,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -104,7 +104,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv32imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index f85f3cbf80e7..9a8a818b2438 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 584745584384..bb1b071ae03d 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -52,7 +52,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -78,7 +78,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -104,7 +104,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 7b5fa7b289a8..a9245c4a8381 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 85ff2c27d974..80a01c3153a3 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index e85ab977acfa..88a817bbfd63 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -52,7 +52,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -78,7 +78,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -104,7 +104,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdc_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 7d537770e3b4..c220095cdccd 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdcv_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -52,7 +52,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdcv_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -78,7 +78,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdcv_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -104,7 +104,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
++			riscv,isa = "rv64imafdcv_xandes_xandesdsp_xandespmu";
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
+similarity index 99%
+rename from arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+rename to arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
+index b2c1f3bd5882..45b75ae57ef7 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
+@@ -27,7 +27,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
++			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes";
+ 			riscv,cbom-block-size = <0x40>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
++			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes";
+ 			riscv,cbom-block-size = <0x40>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index c52f85f3964b..733f8cd27556 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -59,6 +59,7 @@
+ #define RISCV_ISA_EXT_ZIFENCEI		41
+ #define RISCV_ISA_EXT_ZIHPM		42
+ #define RISCV_ISA_EXT_XANDESPMU		43
++#define RISCV_ISA_EXT_XANDESDSP		63
+ 
+ #define RISCV_ISA_EXT_MAX		64
+ 
+diff --git a/arch/riscv/include/asm/processor.h b/arch/riscv/include/asm/processor.h
+index 4f6af8c6cfa0..a5e4e7ab07f7 100644
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -82,6 +82,7 @@ struct thread_struct {
+ 	unsigned long bad_cause;
+ 	unsigned long vstate_ctrl;
+ 	struct __riscv_v_ext_state vstate;
++	struct __riscv_andesdsp_ext_state andesdsp_state;
+ };
+ 
+ /* Whitelist the fstate from the task_struct for hardened usercopy */
+diff --git a/arch/riscv/include/asm/switch_to.h b/arch/riscv/include/asm/switch_to.h
+index a727be723c56..1e6527249ef4 100644
+--- a/arch/riscv/include/asm/switch_to.h
++++ b/arch/riscv/include/asm/switch_to.h
+@@ -13,6 +13,7 @@
+ #include <asm/processor.h>
+ #include <asm/ptrace.h>
+ #include <asm/csr.h>
++#include <linux/soc/andes/csr.h>
+ 
+ #ifdef CONFIG_FPU
+ extern void __fstate_save(struct task_struct *save_to);
+@@ -70,6 +71,35 @@ static __always_inline bool has_fpu(void) { return false; }
+ #define __switch_to_fpu(__prev, __next) do { } while (0)
+ #endif
+ 
++#ifdef CONFIG_ANDES_DSP
++static inline void andesdsp_state_save(struct task_struct *task)
++{
++	task->thread.andesdsp_state.ucode = csr_read(CSR_UCODE);
++}
++
++static inline void andesdsp_state_restore(struct task_struct *task)
++{
++	csr_write(CSR_UCODE, task->thread.andesdsp_state.ucode);
++}
++
++static inline void __switch_to_andesdsp(struct task_struct *prev,
++					struct task_struct *next)
++{
++	andesdsp_state_save(prev);
++	andesdsp_state_restore(next);
++}
++
++static __always_inline bool has_andesdsp(void)
++{
++	return riscv_has_extension_likely(RISCV_ISA_EXT_XANDESDSP);
++}
++#else
++static __always_inline bool has_andesdsp(void) { return false; }
++#define andesdsp_state_save(task) do { } while (0)
++#define andesdsp_state_restore(task) do { } while (0)
++#define __switch_to_andesdsp(__prev, __next) do { } while (0)
++#endif /* CONFIG_ANDES_DSP */
++
+ extern struct task_struct *__switch_to(struct task_struct *,
+ 				       struct task_struct *);
+ 
+@@ -79,6 +109,8 @@ do {							\
+ 	struct task_struct *__next = (next);		\
+ 	if (has_fpu())					\
+ 		__switch_to_fpu(__prev, __next);	\
++	if (has_andesdsp())				\
++		__switch_to_andesdsp(__prev, __next);	\
+ 	if (has_vector())					\
+ 		__switch_to_vector(__prev, __next);	\
+ 	((last) = __switch_to(__prev, __next));		\
+diff --git a/arch/riscv/include/uapi/asm/ptrace.h b/arch/riscv/include/uapi/asm/ptrace.h
+index a38268b19c3d..512275986b1c 100644
+--- a/arch/riscv/include/uapi/asm/ptrace.h
++++ b/arch/riscv/include/uapi/asm/ptrace.h
+@@ -56,6 +56,10 @@ struct user_regs_struct {
+ 	unsigned long t6;
+ };
+ 
++struct __riscv_andesdsp_ext_state {
++	unsigned long ucode;
++};
++
+ struct __riscv_f_ext_state {
+ 	__u32 f[32];
+ 	__u32 fcsr;
+diff --git a/arch/riscv/include/uapi/asm/sigcontext.h b/arch/riscv/include/uapi/asm/sigcontext.h
+index cd4f175dc837..e27edc93feeb 100644
+--- a/arch/riscv/include/uapi/asm/sigcontext.h
++++ b/arch/riscv/include/uapi/asm/sigcontext.h
+@@ -29,6 +29,7 @@ struct __sc_riscv_v_state {
+  */
+ struct sigcontext {
+ 	struct user_regs_struct sc_regs;
++	struct __riscv_andesdsp_ext_state sc_andesdsp_regs;
+ 	union {
+ 		union __riscv_fp_state sc_fpregs;
+ 		struct __riscv_extra_ext_header sc_extdesc;
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index cc3ceaefcba8..9dcb409911e3 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -183,6 +183,7 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+ 	__RISCV_ISA_EXT_DATA(svnapot, RISCV_ISA_EXT_SVNAPOT),
+ 	__RISCV_ISA_EXT_DATA(svpbmt, RISCV_ISA_EXT_SVPBMT),
+ 	__RISCV_ISA_EXT_DATA(xandespmu, RISCV_ISA_EXT_XANDESPMU),
++	__RISCV_ISA_EXT_DATA(xandesdsp, RISCV_ISA_EXT_XANDESDSP),
+ };
+ 
+ const size_t riscv_isa_ext_count = ARRAY_SIZE(riscv_isa_ext);
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index ba17be0b566d..296bad8078d4 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -153,6 +153,10 @@ void flush_thread(void)
+ 	fstate_off(current, task_pt_regs(current));
+ 	memset(&current->thread.fstate, 0, sizeof(current->thread.fstate));
+ #endif
++#ifdef CONFIG_ANDES_DSP
++	memset(&current->thread.andesdsp_state, 0,
++	       sizeof(current->thread.andesdsp_state));
++#endif
+ #ifdef CONFIG_RISCV_ISA_V
+ 	/* Reset vector state */
+ 	riscv_v_vstate_ctrl_init(current);
+diff --git a/arch/riscv/kernel/signal.c b/arch/riscv/kernel/signal.c
+index 88b6220b2608..e577947b30ee 100644
+--- a/arch/riscv/kernel/signal.c
++++ b/arch/riscv/kernel/signal.c
+@@ -143,6 +143,41 @@ static long __restore_v_state(struct pt_regs *regs, void __user *sc_vec)
+ #define __restore_v_state(task, regs) (0)
+ #endif
+ 
++#ifdef CONFIG_ANDES_DSP
++static long
++restore_andesdsp_state(struct pt_regs *regs,
++		       struct __riscv_andesdsp_ext_state *sc_andesdsp_regs)
++{
++	long err;
++
++	err = __copy_from_user(&current->thread.andesdsp_state.ucode,
++			       &sc_andesdsp_regs->ucode,
++			       sizeof(unsigned long));
++	if (unlikely(err))
++		return err;
++	andesdsp_state_restore(current);
++	return 0;
++}
++
++static long
++save_andesdsp_state(struct pt_regs *regs,
++		    struct __riscv_andesdsp_ext_state *sc_andesdsp_regs)
++{
++	long err;
++
++	andesdsp_state_save(current);
++	err = __copy_to_user(&sc_andesdsp_regs->ucode,
++			     &current->thread.andesdsp_state.ucode,
++			     sizeof(unsigned long));
++	if (unlikely(err))
++		return err;
++	return 0;
++}
++#else
++#define save_andesdsp_state(task, regs) (0)
++#define restore_andesdsp_state(task, regs) (0)
++#endif /* CONFIG_ANDES_DSP */
++
+ static long restore_sigcontext(struct pt_regs *regs,
+ 	struct sigcontext __user *sc)
+ {
+@@ -196,6 +231,13 @@ static long restore_sigcontext(struct pt_regs *regs,
+ 		}
+ 		sc_ext_ptr = (void __user *)head + size;
+ 	}
++
++	if (has_andesdsp()) {
++		err = restore_andesdsp_state(regs, &sc->sc_andesdsp_regs);
++		if (unlikely(err))
++			return err;
++	}
++
+ 	return err;
+ }
+ 
+@@ -282,6 +324,9 @@ static long setup_sigcontext(struct rt_sigframe __user *frame,
+ 	/* Save the vector state. */
+ 	if (has_vector() && riscv_v_vstate_query(regs))
+ 		err |= save_v_state(regs, (void __user **)&sc_ext_ptr);
++	/* Save the ANDES_DSP state. */
++	if (has_andesdsp())
++		err |= save_andesdsp_state(regs, &sc->sc_andesdsp_regs);
+ 	/* Write zero to fp-reserved space and check it on restore_sigcontext */
+ 	err |= __put_user(0, &sc->sc_extdesc.reserved);
+ 	/* And put END __riscv_ctx_hdr at the end. */
+-- 
+2.34.1
+

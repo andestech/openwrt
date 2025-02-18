@@ -1,0 +1,36 @@
+From d528dbfd4ba674dabb0a7b4466112e64c6ada3c6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:05 +0200
+Subject: [PATCH 088/172] lib: sbi: sse: remove superfluous sbi_list_empty()
+ check
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The list loop below that check is actually not looping if the list is
+empty so there was no need for this check.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reported-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index 1b6048d85263..2c7f78d255a1 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -578,9 +578,6 @@ void sbi_sse_process_pending_events(struct sbi_trap_regs *regs)
+ 
+ 	spin_lock(&state->enabled_event_lock);
+ 
+-	if (sbi_list_empty(&state->enabled_event_list))
+-		goto out;
+-
+ 	sbi_list_for_each_entry(e, &state->enabled_event_list, node) {
+ 		ret = sse_event_check_inject(e, regs);
+ 		if (ret)
+-- 
+2.34.1
+

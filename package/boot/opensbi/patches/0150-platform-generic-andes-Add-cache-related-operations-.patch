@@ -1,0 +1,82 @@
+From 0b097762e8c77ee57db1fc546e4af455c79ee905 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Wed, 10 May 2023 10:19:55 +0800
+Subject: [PATCH 150/172] platform: generic: andes: Add cache-related
+ operations SBI Call
+
+This patch adds mcall_dcache_op to enable L1/L2-caches
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+---
+ platform/generic/andes/Kconfig     |  1 +
+ platform/generic/andes/andes_sbi.c | 21 +++++++++++++++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/platform/generic/andes/Kconfig b/platform/generic/andes/Kconfig
+index 94ec35093f22..b37b2179dffe 100644
+--- a/platform/generic/andes/Kconfig
++++ b/platform/generic/andes/Kconfig
+@@ -12,6 +12,7 @@ config ANDES_SBI
+ 	bool "Andes SBI support"
+ 	select ANDES_TRIGGER
+ 	select ANDES_PMA
++	select FDT_CACHE
+ 	default n
+ 
+ config ANDES_PMU
+diff --git a/platform/generic/andes/andes_sbi.c b/platform/generic/andes/andes_sbi.c
+index eb8500508f30..f80cb8c2ed27 100644
+--- a/platform/generic/andes/andes_sbi.c
++++ b/platform/generic/andes/andes_sbi.c
+@@ -13,6 +13,7 @@
+ #include <sbi/sbi_types.h>
+ #include <andes/andes_pma.h>
+ #include <andes/trigger.h>
++#include <sbi_utils/cache/cache.h>
+ 
+ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_FID0 = 0, /* Reserved for future use */
+@@ -23,6 +24,7 @@ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_PMA_SET,
+ 	SBI_EXT_ANDES_PMA_FREE,
+ 	SBI_EXT_ANDES_PMA_PROBE,
++	SBI_EXT_ANDES_DCACHE_EN,
+ };
+ 
+ static bool andes_cache_controllable(void)
+@@ -44,6 +46,22 @@ static bool andes_apply_iocp_sw_workaround(void)
+ 	return andes_cache_controllable() & andes_iocp_disabled();
+ }
+ 
++static __always_inline void mcall_dcache_op(unsigned int enable)
++{
++	int rc;
++
++	if (enable) {
++		csr_set(CSR_MCACHE_CTL, MCACHE_CTL_DC_EN);
++		rc = cache_enable(); /* L2C enable */
++		if (rc && (rc != SBI_ENODEV))
++			sbi_printf("%s: WARN: L2-cache enable failed\n", __func__);
++	} else {
++		sbi_printf(
++			"%s: WARN: The use of 'disable d-cache' is deprecated.\n",
++			__func__);
++	}
++}
++
+ int andes_sbi_vendor_ext_provider(long funcid,
+ 				  struct sbi_trap_regs *regs,
+ 				  struct sbi_ecall_return *out,
+@@ -83,6 +101,9 @@ int andes_sbi_vendor_ext_provider(long funcid,
+ 	case SBI_EXT_ANDES_PMA_PROBE:
+ 		out->value = mcall_probe_pma();
+ 		break;
++	case SBI_EXT_ANDES_DCACHE_EN:
++		mcall_dcache_op(regs->a0);
++		break;
+ 
+ 	default:
+ 		sbi_panic("%s(): funcid: %#lx is not supported\n", __func__, funcid);
+-- 
+2.34.1
+

@@ -1,0 +1,41 @@
+From a64c687b0df1aa8aff84cbb8bac17c949738da7d Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Tue, 23 Apr 2024 11:35:52 +0800
+Subject: [PATCH 007/168] riscv: Kconfig.errata: Drop dependency for
+ ARCH_R9A07G043 in ERRATA_ANDES_CMO
+
+ERRATA_ANDES_CMO supports cache management operations across all
+ANDES architectures, not limited to ARCH_R9A07G043.
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/Kconfig.errata | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/arch/riscv/Kconfig.errata b/arch/riscv/Kconfig.errata
+index e2c731cfed8c..dc604b3876ac 100644
+--- a/arch/riscv/Kconfig.errata
++++ b/arch/riscv/Kconfig.errata
+@@ -1,7 +1,7 @@
+ menu "CPU errata selection"
+ 
+ config ERRATA_ANDES
+-	bool "Andes AX45MP errata"
++	bool "Andes errata"
+ 	depends on RISCV_ALTERNATIVE && RISCV_SBI
+ 	help
+ 	  All Andes errata Kconfig depend on this Kconfig. Disabling
+@@ -12,8 +12,9 @@ config ERRATA_ANDES
+ 
+ config ERRATA_ANDES_CMO
+ 	bool "Apply Andes cache management errata"
+-	depends on ERRATA_ANDES && ARCH_R9A07G043
++	depends on ERRATA_ANDES
+ 	select RISCV_DMA_NONCOHERENT
++	select DMA_GLOBAL_POOL
+ 	default y
+ 	help
+ 	  This will apply the cache management errata to handle the
+-- 
+2.34.1
+

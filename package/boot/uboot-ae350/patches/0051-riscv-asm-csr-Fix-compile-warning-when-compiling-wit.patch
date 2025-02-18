@@ -1,0 +1,61 @@
+From 5c6e9ae2fa8e9e9596072938872ac558f3a33383 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 20 Feb 2025 15:52:09 +0800
+Subject: [PATCH 51/53] riscv: asm: csr: Fix compile warning when compiling
+ with 32-bit toolchain (#159)
+
+We would get compile warning as follows when compiling with 32-bit toolchain.
+```
+In file included from ./arch/riscv/include/asm/arch-andes/csr.h:10,
+                 from arch/riscv/cpu/andes/cpu.c:12:
+arch/riscv/cpu/andes/cpu.c: In function 'harts_early_init':
+include/linux/bitops.h:11:38: warning: left shift count >= width of type [-Wshift-count-overflow]
+   11 | #define BIT(nr)                 (1UL << (nr))
+      |                                      ^~
+./arch/riscv/include/asm/csr.h:105:33: note: in expansion of macro 'BIT'
+  105 | #define SMSTATEEN0_CONTEXT      BIT(57)
+      |                                 ^~~
+arch/riscv/cpu/andes/cpu.c:83:72: note: in expansion of macro 'SMSTATEEN0_CONTEXT'
+   83 |                         mstateen0 |= (SMSTATEEN0_C | SMSTATEEN0_FCSR | SMSTATEEN0_CONTEXT | \
+      |                                                                        ^~~~~~~~~~~~~~~~~~
+
+```
+
+Fixed: 4a5adb43aee ("andes: add Smstateen extension support for AX66 CPU (#137)")
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/159
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+---
+ arch/riscv/include/asm/csr.h | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/riscv/include/asm/csr.h b/arch/riscv/include/asm/csr.h
+index b5fec0e76a85..0e8d5efc0bbe 100644
+--- a/arch/riscv/include/asm/csr.h
++++ b/arch/riscv/include/asm/csr.h
+@@ -102,12 +102,12 @@
+ #define SMSTATEEN0_C		BIT(0)
+ #define SMSTATEEN0_FCSR		BIT(1)
+ #define SMSTATEEN0_JVT		BIT(2)
+-#define SMSTATEEN0_CONTEXT	BIT(57)
+-#define SMSTATEEN0_IMSIC	BIT(58)
+-#define SMSTATEEN0_AIA		BIT(59)
+-#define SMSTATEEN0_CSRIND	BIT(60)
+-#define SMSTATEEN0_ENVCFG	BIT(62)
+-#define SMSTATEEN0_SE0		BIT(63)
++#define SMSTATEEN0_CONTEXT	BIT_ULL(57)
++#define SMSTATEEN0_IMSIC	BIT_ULL(58)
++#define SMSTATEEN0_AIA		BIT_ULL(59)
++#define SMSTATEEN0_CSRIND	BIT_ULL(60)
++#define SMSTATEEN0_ENVCFG	BIT_ULL(62)
++#define SMSTATEEN0_SE0		BIT_ULL(63)
+ 
+ #define CSR_FCSR		0x003
+ #define CSR_CYCLE		0xc00
+-- 
+2.34.1
+

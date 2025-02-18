@@ -1,0 +1,196 @@
+From e65504bef677185b778947d554860e5d7dd883ef Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 23 Aug 2024 14:49:51 +0800
+Subject: [PATCH 22/53] [HVM support] board: ae350: Add Andes high-bandwidth
+ vector memory (HVM) device node check (#89)
+
+Add a check for Andes high-bandwidth vector memory (HVM) device tree node
+to ensure that the content of the HVM configuration-related CSR matches
+the description of the HVM device tree node.
+
+Signed-off-by: charles <dminus@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/89
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: charles <dminus@andestech.com>
+Co-committed-by: charles <dminus@andestech.com>
+---
+ arch/riscv/include/asm/arch-andes/csr.h |  6 ++
+ board/andestech/ae350/Kconfig           |  4 ++
+ board/andestech/ae350/ae350.c           | 74 +++++++++++++++++++++++++
+ include/configs/ae350.h                 | 31 +++++++++++
+ 4 files changed, 115 insertions(+)
+
+diff --git a/arch/riscv/include/asm/arch-andes/csr.h b/arch/riscv/include/asm/arch-andes/csr.h
+index 7d6104a24e58..50c68c19fe28 100644
+--- a/arch/riscv/include/asm/arch-andes/csr.h
++++ b/arch/riscv/include/asm/arch-andes/csr.h
+@@ -34,4 +34,10 @@
+ 
+ #define CCTL_L1D_WBINVAL_ALL 6
+ 
++#ifdef CONFIG_ANDES_HVM_CHECK
++/* Andes High-Bandwidth Vector Memory (HVM) */
++#define CSR_MHVM_CFG	0xfd0
++#define CSR_MHVMB	0xfd1
++#endif /* CONFIG_ANDES_HVM_CHECK */
++
+ #endif /* _ASM_ANDES_CSR_H */
+diff --git a/board/andestech/ae350/Kconfig b/board/andestech/ae350/Kconfig
+index 619363fc3b48..a9aa811a283d 100644
+--- a/board/andestech/ae350/Kconfig
++++ b/board/andestech/ae350/Kconfig
+@@ -41,4 +41,8 @@ config BOARD_SPECIFIC_OPTIONS # dummy
+ 	imply SPL_RAM_DEVICE
+ 	imply OF_HAS_PRIOR_STAGE
+ 
++config ANDES_HVM_CHECK
++	bool "Check the consistency between DTS and hardware of Andes High-bandwidth Vector Memory (HVM)"
++	default n
++
+ endif
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index cedae72d85bf..66cfd64dcbd5 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -29,6 +29,8 @@
+ #include "../common/swdtb_merger/swdtb_merger.h"
+ #endif
+ 
++#include <asm/arch-andes/csr.h>
++
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+ #define IRQ_TARGET_NUM_REG(base)	((base) + 0x1100)
+@@ -127,6 +129,72 @@ void *board_fdt_blob_setup(int *err)
+ 	return fdt_blob;
+ }
+ 
++int hvm_check(void)
++{
++	int node = -1;
++	const char *compat = "andestech,hvm";
++	void *blob = (void *)gd->fdt_blob;
++	fdt_addr_t addr;
++	fdt_size_t size;
++	const fdt32_t *prop;
++	int len;
++	unsigned long mhvmb, mhvm_cfg, hvm_size, hvm_bank, hvm_subp;
++
++	if (!IS_ENABLED(CONFIG_ANDES_HVM_CHECK))
++		return 0;
++
++	mhvmb = csr_read(CSR_MHVMB);
++	mhvm_cfg = csr_read(CSR_MHVM_CFG);
++
++	node = fdt_node_offset_by_compatible(blob, -1, compat);
++	if (node < 0) {
++		printf("%s: DTS no andes_hvm device node\n", __func__);
++		return -FDT_ERR_NOTFOUND;
++	}
++
++	addr = fdtdec_get_addr_size_auto_noparent(blob, node,
++						  "reg", 0, &size, false);
++	if (addr == FDT_ADDR_T_NONE) {
++		printf("%s: andes_hvm no reg addr = 0x%lx\n",
++		       __func__, (unsigned long)addr);
++		return -EINVAL;
++	}
++
++	if (addr != mhvmb) {
++		printf("%s: reg addr 0x%lx and 0x%lx do not match.\n",
++		       __func__, (unsigned long)addr, mhvmb);
++		return -EINVAL;
++	}
++
++	hvm_size = andes_hvm_cfg_get_size(mhvm_cfg);
++	if (hvm_size != size) {
++		printf("%s: reg size 0x%lx and 0x%lx do not match.\n",
++		       __func__, (unsigned long)size, hvm_size);
++		return -EINVAL;
++	}
++
++	prop = fdt_getprop(blob, node, "no-map", 0);
++	if (prop < 0)
++		return -EINVAL;
++
++	hvm_bank = andes_hvm_cfg_get_bank(mhvm_cfg);
++	prop = fdt_getprop(blob, node, "andes,hvm_bank", &len);
++	if (fdt32_to_cpu(*prop) != hvm_bank) {
++		printf("%s: bank 0x%x and 0x%lx do not match.\n",
++		       __func__, fdt32_to_cpu(*prop), hvm_bank);
++		return -EINVAL;
++	}
++
++	hvm_subp = andes_hvm_cfg_get_subp(mhvm_cfg);
++	prop = fdt_getprop(blob, node, "andes,hvm_subp", &len);
++	if (fdt32_to_cpu(*prop) != hvm_subp) {
++		printf("%s: subp 0x%x and 0x%lx do not match.\n",
++		       __func__, fdt32_to_cpu(*prop), hvm_subp);
++		return -EINVAL;
++	}
++	return 0;
++}
++
+ int spl_board_init_f(void)
+ {
+ 	u32 board_hart_count = 0, dts_hart_count = 0;
+@@ -165,6 +233,12 @@ int spl_board_init_f(void)
+ 		return -EINVAL;
+ 	}
+ 
++	if (IS_ENABLED(CONFIG_ANDES_HVM_CHECK)) {
++		ret = hvm_check();
++		if (ret)
++			return ret;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/include/configs/ae350.h b/include/configs/ae350.h
+index 23e4801379de..0d0beacabdc7 100644
+--- a/include/configs/ae350.h
++++ b/include/configs/ae350.h
+@@ -35,6 +35,37 @@
+  */
+ #define CFG_SYS_NS16550_CLK		19660800
+ 
++#ifdef CONFIG_ANDES_HVM_CHECK
++/*
++ * Andes High-Bandwidth Vector Memory (HVM)
++ *
++ * HVM configuration register
++ *
++ * XLEN-1 -----25--24--23---21-20-----16-15----9---8---7--------0
++ * |      0     | SUBP |  0   |  BSEL   |   O  | BANK  |  SIZE  |
++ *  ------------------------------------------------------------
++ *
++ */
++#define ANDES_HVM_SIZE_BIT	0x000000ff
++#define ANDES_HVM_BANK_BIT	0x00000100
++#define ANDES_HVM_SUBP_BIT	0x01000000
++/*
++ * The 'mhvm_cfg' size field defines the HVM region's size,
++ * where a value of 0 indicates 0 KiB.
++ *
++ * Starting from a value of 12, each increment corresponds to
++ * (2 ^ (n - 12)) * 4 KiB, where n ranges from 12 to 32,
++ * leading to sizes from 4 KiB at n = 12 to 4 GiB at = is 32.
++ */
++#define andes_hvm_cfg_get_size(x) (2 << (((x) & ANDES_HVM_SIZE_BIT) - 1))
++#define andes_hvm_cfg_get_bank(x) ((1 + (((x) & ANDES_HVM_BANK_BIT) >> 8)))
++#define andes_hvm_cfg_get_subp(x) (((x) & ANDES_HVM_SUBP_BIT) >> 24)
++#else
++#define andes_hvm_cfg_get_size(x) 0
++#define andes_hvm_cfg_get_bank(x) 0
++#define andes_hvm_cfg_get_subp(x) 0
++#endif /* !CONFIG_ANDES_HVM_CHECK */
++
+ /* Init Stack Pointer */
+ 
+ /* support JEDEC */
+-- 
+2.34.1
+

@@ -1,0 +1,33 @@
+From cddb050bd1872b67afe5cb3581756ea4490a6aa7 Mon Sep 17 00:00:00 2001
+From: Locus Wei-Han Chen <locus84@andestech.com>
+Date: Mon, 3 Mar 2025 16:37:47 +0800
+Subject: [PATCH 164/168] andes: spi: Fixed the bug that mutex is used without
+ init (#259)
+
+Fixed the bug that mutex is used without init.
+
+Signed-off-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/259
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Alex Chun-Ju Lin <alex749@andestech.com>
+Co-authored-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-committed-by: Locus Wei-Han Chen <locus84@andestech.com>
+---
+ drivers/spi/spi-atcspi200.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/spi/spi-atcspi200.c b/drivers/spi/spi-atcspi200.c
+index 32672e2b9a01..66b33ceb97b0 100644
+--- a/drivers/spi/spi-atcspi200.c
++++ b/drivers/spi/spi-atcspi200.c
+@@ -610,6 +610,7 @@ static int atcspi200_spi_probe(struct platform_device *pdev)
+ 		num_cs = NSPI_MAX_CS_NUM;
+ 	}
+ 
++	mutex_init(&spi->mutex_lock);
+ 	/* Define our controller */
+ 	controller->bus_num = pdev->id;
+ 	controller->mode_bits = SPI_CPOL | SPI_CPHA | SPI_RX_QUAD | SPI_TX_QUAD;
+-- 
+2.34.1
+

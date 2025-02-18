@@ -1,0 +1,33 @@
+From 73344d4724d89ab5591311b9badfad875dddbb92 Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Mon, 8 Apr 2024 09:37:32 +0200
+Subject: [PATCH 080/172] lib: utils: check correct value in
+ fdt_node_offset_by_compatible
+
+After calling fdt_node_offset_by_compatible() we must check its return
+value and not an unrelated value.
+
+Addresses-Coverity-ID: 1584993 Logically dead code
+Fixes: 67ce5a763cfb ("platform: generic: Add support for specify coldboot harts in DT")
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/fdt/fdt_fixup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/utils/fdt/fdt_fixup.c b/lib/utils/fdt/fdt_fixup.c
+index 194e55b3a82f..974b1b883eb4 100644
+--- a/lib/utils/fdt/fdt_fixup.c
++++ b/lib/utils/fdt/fdt_fixup.c
+@@ -394,7 +394,7 @@ void fdt_config_fixup(void *fdt)
+ 		return;
+ 
+ 	config_offset = fdt_node_offset_by_compatible(fdt, chosen_offset, "opensbi,config");
+-	if (chosen_offset < 0)
++	if (config_offset < 0)
+ 		return;
+ 
+ 	fdt_nop_node(fdt, config_offset);
+-- 
+2.34.1
+

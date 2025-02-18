@@ -1,0 +1,358 @@
+From 9629ead6b8390dac598e76b2fdccd899004d6a21 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Fri, 6 Dec 2024 16:54:22 +0800
+Subject: [PATCH 166/172] platform: andes: Support L2-cache HPM
+
+This patch is derived from [1]. It implements custom firmware callbacks to
+monitor Andes L2-cache events.
+
+The major difference is how to identify which custom firmware events
+we should inspect. In ASTv530, we used the augmented event index code,
+and the L2-cache events could be monitored like other RISC-V standard
+firmware events. However, as the PMU extension updated[2][3], the event
+index code of the platform specific firmware events is set to 0xFFFF, and
+the event data should contain the event encoding to help identify custom
+firmware events. Now, we encode Andes custom firmware events as below:
+
+	event_data |  Event description
+	-----------------------------------
+	     0     |  Total L2-cache access count
+	     1     |  L2-cache access count
+	     2     |  L2-cache miss count
+
+To count L2-cache miss count, we can use perf raw event descriptor:
+
+	$ perf stat -e rC000000000000002 <cmd>
+
+[1] https://gitea.andestech.com/RD-SW/opensbi/pulls/67
+[2] https://gitea.andestech.com/RD-SW/opensbi/commit/641d2e9f38e085ccee77cfd866cae5c7222830fc
+[3] https://gitea.andestech.com/RD-SW/linux/commit/f0c9363db2ddfb07723c00cb153c84c8179e92d4
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ include/sbi_utils/cache/cache.h            | 18 ++++++
+ lib/utils/cache/cache.c                    | 51 +++++++++++++++
+ lib/utils/cache/fdt_cache_andes_l2c.c      | 75 ++++++++++++++++++++--
+ platform/generic/andes/andes_pmu.c         | 63 +++++++++++++++++-
+ platform/generic/include/andes/andes_pmu.h |  8 +++
+ 5 files changed, 210 insertions(+), 5 deletions(-)
+
+diff --git a/include/sbi_utils/cache/cache.h b/include/sbi_utils/cache/cache.h
+index e4d36150a99a..272d7444c501 100644
+--- a/include/sbi_utils/cache/cache.h
++++ b/include/sbi_utils/cache/cache.h
+@@ -40,6 +40,15 @@ struct cache {
+ 	 * @return NULL if cache does not exist, else return cache base address
+ 	 */
+ 	int (*get_addr)(unsigned long *addr);
++
++	/*
++	 * L2C HPM helpers (Andes-specific)
++	 */
++	int (*read_hpm_ctr)(u64 *);
++	int (*write_hpm_ctr)(u64);
++	int (*start_hpm)(u64);
++	int (*stop_hpm)(void);
++	bool (*hpm_idle)(void);
+ };
+ 
+ /** Register a cache controller */
+@@ -57,6 +66,15 @@ int cache_wbinval_all(void);
+ /** Get the base address of cache */
+ int cache_get_addr(unsigned long *addr);
+ 
++/*
++ * L2C HPM helpers (Andes-specific)
++ */
++int cache_read_hpm_ctr(u64 *);
++int cache_write_hpm_ctr(u64);
++int cache_start_hpm(u64);
++int cache_stop_hpm(void);
++bool cache_hpm_idle(void);
++
+ #endif /* __ASSEMBLER__ */
+ 
+ #endif /* __CACHE_H__ */
+diff --git a/lib/utils/cache/cache.c b/lib/utils/cache/cache.c
+index 70e8318222e9..7c7fe08cef8c 100644
+--- a/lib/utils/cache/cache.c
++++ b/lib/utils/cache/cache.c
+@@ -64,3 +64,54 @@ int cache_get_addr(unsigned long *addr)
+ 
+ 	return cache->get_addr(addr);
+ }
++
++/*
++ * L2C HPM helpers (Andes-specific)
++ */
++int cache_read_hpm_ctr(u64 *out_val)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->read_hpm_ctr)
++		return SBI_ENOSYS;
++
++	return cache->read_hpm_ctr(out_val);
++}
++
++int cache_write_hpm_ctr(u64 val)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->write_hpm_ctr)
++		return SBI_ENOSYS;
++
++	return cache->write_hpm_ctr(val);
++}
++
++int cache_start_hpm(u64 event_data)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->start_hpm)
++		return SBI_ENOSYS;
++
++	return cache->start_hpm(event_data);
++}
++
++int cache_stop_hpm(void)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->stop_hpm)
++		return SBI_ENOSYS;
++
++	return cache->stop_hpm();
++}
++
++bool cache_hpm_idle(void)
++{
++	if (!cache || !cache->hpm_idle)
++		return false;
++
++	return cache->hpm_idle();
++}
+\ No newline at end of file
+diff --git a/lib/utils/cache/fdt_cache_andes_l2c.c b/lib/utils/cache/fdt_cache_andes_l2c.c
+index 7670a11e05e3..e7bcbf3fd8d8 100644
+--- a/lib/utils/cache/fdt_cache_andes_l2c.c
++++ b/lib/utils/cache/fdt_cache_andes_l2c.c
+@@ -17,16 +17,14 @@
+ #include <sbi_utils/cache/fdt_cache.h>
+ #include <sbi_utils/fdt/fdt_helper.h>
+ #include <andes/andes.h>
++#include <andes/andes_pmu.h>
+ 
+ /* clang-format off */
+ 
+ /* L2 cache registers */
+ #define L2C_REG_CFG_OFFSET		0
+ #define L2C_REG_CTL_OFFSET		0x8
+-#define L2C_HPM_C0_CTL_OFFSET		0x10
+-#define L2C_HPM_C1_CTL_OFFSET		0x18
+-#define L2C_HPM_C2_CTL_OFFSET		0x20
+-#define L2C_HPM_C3_CTL_OFFSET		0x28
++#define L2C_REG_HPM_CTL_OFFSET		0x10
+ #define L2C_REG_C0_CMD_OFFSET		0x40
+ #define L2C_REG_C0_ACC_OFFSET		0x48
+ #define L2C_REG_C1_CMD_OFFSET		0x50
+@@ -38,6 +36,10 @@
+ #define L2C_REG_C0_STATUS_OFFSET	0x80
+ #define L2C_REG_C0_HPM_OFFSET		0x200
+ 
++/* L2C HPM event */
++#define L2C_HPM_CTL_SEL0_MSK		0xFF
++#define L2C_HPM_EVT_RESET		0xFF
++
+ /* Per-hart offsets */
+ #define CCTL_CMD_REG(hart)	(L2C_REG_C0_CMD_OFFSET + (hart) * (l2c.cmd_stride))
+ #define CCTL_STATUS_REG(hart)	(L2C_REG_C0_STATUS_OFFSET + (hart) * (l2c.status_stride))
+@@ -136,11 +138,76 @@ static int andes_l2c_disable(void)
+ 	       : SBI_OK;
+ }
+ 
++static int andes_l2c_read_hpm_ctr(u64 *out_val)
++{
++	u32 vall = readl((void *)(l2c.addr + L2C_REG_C0_HPM_OFFSET));
++	u32 valh = readl((void *)(l2c.addr + L2C_REG_C0_HPM_OFFSET + 4));
++	*out_val = ((u64)valh << 32) | vall;
++
++	return 0;
++}
++
++static int andes_l2c_write_hpm_ctr(u64 val)
++{
++	writel((u32)val, (void *)(l2c.addr + L2C_REG_C0_HPM_OFFSET));
++	writel((u32)(val >> 32),
++	       (void *)(l2c.addr + L2C_REG_C0_HPM_OFFSET + 4));
++
++	return 0;
++}
++
++static int andes_l2c_start_hpm(uint64_t event_data)
++{
++	u32 hpm_ctl;
++
++	hpm_ctl = readl((void *)(l2c.addr + L2C_REG_HPM_CTL_OFFSET));
++
++	if (event_data < ANDES_CUSTOM_FW_EVENT_MAX) {
++		hpm_ctl = INSERT_FIELD(hpm_ctl, L2C_HPM_CTL_SEL0_MSK,
++				       event_data);
++		writel(hpm_ctl, (void *)(l2c.addr + L2C_REG_HPM_CTL_OFFSET));
++		return 0;
++	}
++
++	return SBI_EINVAL;
++}
++
++static int andes_l2c_stop_hpm(void)
++{
++	u32 hpm_ctl;
++
++	hpm_ctl = readl((void *)(l2c.addr + L2C_REG_HPM_CTL_OFFSET));
++	hpm_ctl = INSERT_FIELD(hpm_ctl, L2C_HPM_CTL_SEL0_MSK,
++			       L2C_HPM_EVT_RESET);
++	writel(hpm_ctl, (void *)(l2c.addr + L2C_REG_HPM_CTL_OFFSET));
++
++	return 0;
++}
++
++static bool andes_l2c_hpm_idle(void)
++{
++	u32 hpm_ctl;
++
++	hpm_ctl = readl((void *)(l2c.addr + L2C_REG_HPM_CTL_OFFSET));
++
++	return EXTRACT_FIELD(hpm_ctl, L2C_HPM_CTL_SEL0_MSK) ==
++	       L2C_HPM_EVT_RESET;
++}
++
+ static struct cache andes_l2c = {
+ 	.enable	     = andes_l2c_enable,
+ 	.disable     = andes_l2c_disable,
+ 	.wbinval_all = andes_l2c_wbinval_all,
+ 	.get_addr    = andes_l2c_get_addr,
++
++	/*
++	 * L2C HPM helpers (Andes-specific)
++	 */
++	.read_hpm_ctr = andes_l2c_read_hpm_ctr,
++	.write_hpm_ctr = andes_l2c_write_hpm_ctr,
++	.start_hpm    = andes_l2c_start_hpm,
++	.stop_hpm     = andes_l2c_stop_hpm,
++	.hpm_idle     = andes_l2c_hpm_idle,
+ };
+ 
+ static int andes_l2c_init(void *fdt, int nodeoff, const struct fdt_match *match)
+diff --git a/platform/generic/andes/andes_pmu.c b/platform/generic/andes/andes_pmu.c
+index a075e0e5b5d0..c0f8c6bf7460 100644
+--- a/platform/generic/andes/andes_pmu.c
++++ b/platform/generic/andes/andes_pmu.c
+@@ -10,8 +10,63 @@
+ #include <sbi/sbi_bitops.h>
+ #include <sbi/sbi_error.h>
+ #include <sbi/sbi_pmu.h>
++#include <sbi_utils/cache/cache.h>
+ #include <libfdt.h>
+ 
++int andes_fw_event_validate_encoding(uint32_t hartid, uint64_t event_data)
++{
++	/* 25-series doesn't support L2C HPM */
++	if (is_andes(25))
++		return SBI_EINVAL;
++
++	if (!cache_hpm_idle()) {
++		/*
++		 * We only use HPM counter 0, let the match fail if the
++		 * counter is being used.
++		 */
++		return SBI_EINVAL;
++	}
++
++	return (event_data < ANDES_CUSTOM_FW_EVENT_MAX)
++	       ? SBI_PMU_EVENT_TYPE_FW : SBI_EINVAL;
++}
++
++bool andes_fw_counter_match_encoding(uint32_t hartid,
++				     uint32_t counter_index,
++				     uint64_t event_data)
++{
++	/*
++	 * Allow any firmware counter (totally 16) to record
++	 * custom firmware events
++	 */
++	return true;
++}
++
++uint64_t andes_fw_counter_read_value(uint32_t hartid, uint32_t counter_index)
++{
++	uint64_t val = 0;
++	cache_read_hpm_ctr(&val);
++	return val;
++}
++
++void andes_fw_counter_write_value(uint32_t hartid,
++				  uint32_t counter_index,
++				  uint64_t value)
++{
++	cache_write_hpm_ctr(value);
++}
++
++int andes_fw_counter_start(uint32_t hartid, uint32_t counter_index,
++			   uint64_t event_data)
++{
++	return cache_start_hpm(event_data);
++}
++
++int andes_fw_counter_stop(uint32_t hartid, uint32_t counter_index)
++{
++	return cache_stop_hpm();
++}
++
+ static void andes_hw_counter_enable_irq(uint32_t ctr_idx)
+ {
+ 	unsigned long mip_val;
+@@ -46,6 +101,12 @@ static void andes_hw_counter_filter_mode(unsigned long flags, int ctr_idx)
+ 
+ static struct sbi_pmu_device andes_pmu = {
+ 	.name = "andes_pmu",
++	.fw_event_validate_encoding = andes_fw_event_validate_encoding,
++	.fw_counter_match_encoding = andes_fw_counter_match_encoding,
++	.fw_counter_read_value = andes_fw_counter_read_value,
++	.fw_counter_write_value = andes_fw_counter_write_value,
++	.fw_counter_start = andes_fw_counter_start,
++	.fw_counter_stop = andes_fw_counter_stop,
+ 	.hw_counter_enable_irq  = andes_hw_counter_enable_irq,
+ 	.hw_counter_disable_irq = andes_hw_counter_disable_irq,
+ 	/*
+@@ -70,7 +131,7 @@ int andes_pmu_extensions_init(const struct fdt_match *match,
+ 	 * are supported as they serve the same purpose.
+ 	 */
+ 	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SSCOFPMF) ||
+-		sbi_hart_has_extension(scratch, SBI_HART_EXT_SMCNTRPMF))
++	    sbi_hart_has_extension(scratch, SBI_HART_EXT_SMCNTRPMF))
+ 		return SBI_EINVAL;
+ 	sbi_hart_update_extension(scratch, SBI_HART_EXT_XANDESPMU, true);
+ 
+diff --git a/platform/generic/include/andes/andes_pmu.h b/platform/generic/include/andes/andes_pmu.h
+index f3553246f975..fd38a91b4e1c 100644
+--- a/platform/generic/include/andes/andes_pmu.h
++++ b/platform/generic/include/andes/andes_pmu.h
+@@ -13,6 +13,14 @@
+ 
+ #ifdef CONFIG_ANDES_PMU
+ 
++/*
++ * There are 3 Andes firmware events monitored by L2C performance counter now.
++ * 0 : Total L2-cache access count
++ * 1 : L2-cache access count
++ * 2 : L2-cache miss count
++ */
++#define ANDES_CUSTOM_FW_EVENT_MAX	3
++
+ int andes_pmu_init(const struct fdt_match *match);
+ int andes_pmu_extensions_init(const struct fdt_match *match,
+ 			      struct sbi_hart_features *hfeatures);
+-- 
+2.34.1
+

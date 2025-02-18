@@ -1,0 +1,58 @@
+From a0e886338efcc4434e4e6df11a3e9d9ca3ae6c1b Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Thu, 18 Jan 2024 19:46:35 +0800
+Subject: [PATCH 025/168] riscv: andes: remove csr.h unused definitions
+
+RISCV-Linux-6.1 removes U-mode and M-mode cache control functions commits:
+1ef886f7e0 ("remove andes userspace cacheand M-mode control functions")
+4e4da59e14 ("soc: andes: cache: Remove unused l2c functions")
+
+The two previous commits have already removed functions.
+Therefore, remove the definitions specifically dedicated to them.
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ include/linux/soc/andes/csr.h | 27 +--------------------------
+ 1 file changed, 1 insertion(+), 26 deletions(-)
+
+diff --git a/include/linux/soc/andes/csr.h b/include/linux/soc/andes/csr.h
+index ef63ec9bb469..1e302f2c976c 100644
+--- a/include/linux/soc/andes/csr.h
++++ b/include/linux/soc/andes/csr.h
+@@ -43,32 +43,7 @@
+ /* D-cache operation */
+ #define CCTL_L1D_VA_INVAL		0
+ #define CCTL_L1D_VA_WB			1
+-#define CCTL_L1D_VA_WBINVAL		2
+-
+-/* non-blocking & write around */
+-#define MMISC_CTL_NON_BLOCKING_ENABLE	(0x1  << MMISC_CTL_NON_BLOCKING_OFFSET)
+-#define MMISC_CTL_NON_BLOCKING_OFFSET	0x8
+-
+-#define MCACHE_CTL_L1I_PREFETCH_OFFSET  9
+-#define MCACHE_CTL_L1D_PREFETCH_OFFSET  10
+-#define MCACHE_CTL_DC_WAROUND_OFFSET_1	13
+-#define MCACHE_CTL_DC_WAROUND_OFFSET_2	14
+-#define MCACHE_CTL_L1I_PREFETCH_EN	(0x1  << MCACHE_CTL_L1I_PREFETCH_OFFSET)
+-#define MCACHE_CTL_L1D_PREFETCH_EN	(0x1  << MCACHE_CTL_L1D_PREFETCH_OFFSET)
+-#define MCACHE_CTL_DC_WAROUND_1_EN	(0x1  << MCACHE_CTL_DC_WAROUND_OFFSET_1)
+-#define MCACHE_CTL_DC_WAROUND_2_EN	(0x1  << MCACHE_CTL_DC_WAROUND_OFFSET_2)
+-#define WRITE_AROUND_ENABLE		(MCACHE_CTL_L1I_PREFETCH_EN |	\
+-					 MCACHE_CTL_L1D_PREFETCH_EN |	\
+-					 MCACHE_CTL_DC_WAROUND_1_EN)
+-
+-/* L1 I-cache , D-cache */
+-#define CACHE_CTL_offIC_EN		0   /* Enable I-cache */
+-#define CACHE_CTL_offDC_EN		1   /* Enable D-cache */
+-#define CACHE_CTL_mskIC_EN		(0x1  << CACHE_CTL_offIC_EN)
+-#define CACHE_CTL_mskDC_EN		(0x1  << CACHE_CTL_offDC_EN)
+-
+-/* L2 cache */
+-#define L2_CACHE_CTL_mskCEN		1
++
+ /* L2 cache registers */
+ #define L2C_REG_CFG_OFFSET		0
+ #define L2C_REG_CTL_OFFSET		0x8
+-- 
+2.34.1
+

@@ -1,0 +1,49 @@
+From f056939d8a422d8719f185b44d4abed278f3ee8a Mon Sep 17 00:00:00 2001
+From: Inochi Amaoto <inochiama@outlook.com>
+Date: Fri, 23 Feb 2024 16:18:13 +0800
+Subject: [PATCH 028/172] firmware: Add relocatable FW_PAYLOAD_FDT_ADDR
+
+The fw_payload.bin has the same issue as described in previous patch.
+But only FW_PAYLOAD_FDT_ADDR is affected.
+
+Add FW_PAYLOAD_FDT_OFFSET to identify relocatable payload fdt address.
+
+Signed-off-by: Inochi Amaoto <inochiama@outlook.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ firmware/fw_payload.S | 4 ++++
+ firmware/objects.mk   | 3 +++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/firmware/fw_payload.S b/firmware/fw_payload.S
+index c53a3bb030a3..3c8433eafaba 100644
+--- a/firmware/fw_payload.S
++++ b/firmware/fw_payload.S
+@@ -46,6 +46,10 @@ fw_save_info:
+ fw_next_arg1:
+ #ifdef FW_PAYLOAD_FDT_ADDR
+ 	li	a0, FW_PAYLOAD_FDT_ADDR
++#elif defined(FW_PAYLOAD_FDT_OFFSET)
++	lla	a0, _fw_start
++	li	a1, FW_PAYLOAD_FDT_OFFSET
++	add	a0, a0, a1
+ #else
+ 	add	a0, a1, zero
+ #endif
+diff --git a/firmware/objects.mk b/firmware/objects.mk
+index fef090a4318b..3ae0a28f7105 100644
+--- a/firmware/objects.mk
++++ b/firmware/objects.mk
+@@ -65,6 +65,9 @@ ifdef FW_PAYLOAD_ALIGN
+ firmware-genflags-$(FW_PAYLOAD) += -DFW_PAYLOAD_ALIGN=$(FW_PAYLOAD_ALIGN)
+ endif
+ 
++ifdef FW_PAYLOAD_FDT_OFFSET
++firmware-genflags-$(FW_PAYLOAD) += -DFW_PAYLOAD_FDT_OFFSET=$(FW_PAYLOAD_FDT_OFFSET)
++endif
+ ifdef FW_PAYLOAD_FDT_ADDR
+ firmware-genflags-$(FW_PAYLOAD) += -DFW_PAYLOAD_FDT_ADDR=$(FW_PAYLOAD_FDT_ADDR)
+ endif
+-- 
+2.34.1
+

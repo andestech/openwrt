@@ -1,0 +1,194 @@
+From 815ca1d35a7a349636ec8450e41f735e73c95991 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 27 Sep 2024 17:55:04 +0800
+Subject: [PATCH 109/168] riscv: andes: trigger_module: Add Andes trigge
+ moduler support for ptrace single-step (#198)
+
+Signed-off-by: charles <dminus@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/198
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: charles <dminus@andestech.com>
+Co-committed-by: charles <dminus@andestech.com>
+---
+ arch/riscv/include/asm/entry-common.h    | 15 +++++++++++++
+ arch/riscv/include/asm/ptrace.h          |  3 +++
+ arch/riscv/include/asm/thread_info.h     |  2 ++
+ drivers/soc/andes/Makefile               |  1 +
+ drivers/soc/andes/andes_sbi.c            |  8 +++++++
+ drivers/soc/andes/trigger_module.c       | 28 ++++++++++++++++++++++++
+ include/linux/soc/andes/sbi.h            |  9 ++++++++
+ include/linux/soc/andes/trigger_module.h | 19 ++++++++++++++++
+ 8 files changed, 85 insertions(+)
+ create mode 100644 drivers/soc/andes/trigger_module.c
+ create mode 100644 include/linux/soc/andes/trigger_module.h
+
+diff --git a/arch/riscv/include/asm/entry-common.h b/arch/riscv/include/asm/entry-common.h
+index 6e4dee49d84b..bac9c7b26bb6 100644
+--- a/arch/riscv/include/asm/entry-common.h
++++ b/arch/riscv/include/asm/entry-common.h
+@@ -4,8 +4,23 @@
+ #define _ASM_RISCV_ENTRY_COMMON_H
+ 
+ #include <asm/stacktrace.h>
++#include <linux/soc/andes/csr.h>
++#include <linux/soc/andes/trigger_module.h>
+ 
+ void handle_page_fault(struct pt_regs *regs);
+ void handle_break(struct pt_regs *regs);
+ 
++static __always_inline void arch_exit_to_user_mode_work(struct pt_regs *regs,
++							unsigned long ti_work)
++{
++	if (static_branch_unlikely(&trigger_module_single_step_key)) {
++		if (ti_work & _TIF_SINGLESTEP) {
++			sbi_andes_set_trigger(TRIGGER_TYPE_ICOUNT, ICOUNT, 1);
++			csr_write(CSR_SCONTEXT, 1);
++		} else {
++			csr_write(CSR_SCONTEXT, 0);
++		}
++	}
++}
++#define arch_exit_to_user_mode_work arch_exit_to_user_mode_work
+ #endif /* _ASM_RISCV_ENTRY_COMMON_H */
+diff --git a/arch/riscv/include/asm/ptrace.h b/arch/riscv/include/asm/ptrace.h
+index 7b9987247c47..ebf8b09f101f 100644
+--- a/arch/riscv/include/asm/ptrace.h
++++ b/arch/riscv/include/asm/ptrace.h
+@@ -65,6 +65,9 @@ struct pt_regs {
+ #define REG_FMT "%08lx"
+ #endif
+ 
++/* Andes use trigger module to implement the ptrace single step. */
++#define arch_has_single_step() (1)
++
+ #define user_mode(regs) (((regs)->status & SR_PP) == 0)
+ 
+ #define MAX_REG_OFFSET offsetof(struct pt_regs, orig_a0)
+diff --git a/arch/riscv/include/asm/thread_info.h b/arch/riscv/include/asm/thread_info.h
+index d18ce0113ca1..8aaaf34e91c5 100644
+--- a/arch/riscv/include/asm/thread_info.h
++++ b/arch/riscv/include/asm/thread_info.h
+@@ -87,6 +87,7 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+ #define TIF_NEED_RESCHED	3	/* rescheduling necessary */
+ #define TIF_RESTORE_SIGMASK	4	/* restore signal mask in do_signal() */
+ #define TIF_MEMDIE		5	/* is terminating due to OOM killer */
++#define TIF_SINGLESTEP		6	/* Andes trigger module support ptrace single step */
+ #define TIF_NOTIFY_SIGNAL	9	/* signal notifications exist */
+ #define TIF_UPROBE		10	/* uprobe breakpoint or singlestep */
+ #define TIF_32BIT		11	/* compat-mode 32bit process */
+@@ -96,6 +97,7 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+ #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
+ #define _TIF_NOTIFY_SIGNAL	(1 << TIF_NOTIFY_SIGNAL)
+ #define _TIF_UPROBE		(1 << TIF_UPROBE)
++#define _TIF_SINGLESTEP		(1 << TIF_SINGLESTEP)
+ 
+ #define _TIF_WORK_MASK \
+ 	(_TIF_NOTIFY_RESUME | _TIF_SIGPENDING | _TIF_NEED_RESCHED | \
+diff --git a/drivers/soc/andes/Makefile b/drivers/soc/andes/Makefile
+index a494f0ee4a7d..527e9007f285 100644
+--- a/drivers/soc/andes/Makefile
++++ b/drivers/soc/andes/Makefile
+@@ -4,5 +4,6 @@
+ obj-y	+= andes_sbi.o
+ obj-y	+= inject_init.o
+ obj-y	+= dcause.o
++obj-y	+= trigger_module.o
+ obj-$(CONFIG_ANDES_PPMA)	+= ppma.o
+ obj-$(CONFIG_ANDES_ATCSMU)	+= atcsmu.o
+diff --git a/drivers/soc/andes/andes_sbi.c b/drivers/soc/andes/andes_sbi.c
+index d704a3402cf0..fa1a92fe23f7 100644
+--- a/drivers/soc/andes/andes_sbi.c
++++ b/drivers/soc/andes/andes_sbi.c
+@@ -47,3 +47,11 @@ long sbi_andes_read_powerbrake(void)
+ 	return ret.value;
+ }
+ EXPORT_SYMBOL(sbi_andes_read_powerbrake);
++
++/* trigger module support debug application with gdbserver */
++void sbi_andes_set_trigger(unsigned int type, uintptr_t data, int enable)
++{
++	sbi_ecall(ANDES_SBI_EXT_ANDES, SBI_EXT_ANDES_TRIGGER_SET,
++		  type, data, enable, 0, 0, 0);
++}
++EXPORT_SYMBOL(sbi_andes_set_trigger);
+diff --git a/drivers/soc/andes/trigger_module.c b/drivers/soc/andes/trigger_module.c
+new file mode 100644
+index 000000000000..5343b95c358c
+--- /dev/null
++++ b/drivers/soc/andes/trigger_module.c
+@@ -0,0 +1,28 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2024 Andes Technology Corporation.
++ */
++#include <asm/cacheflush.h>
++#include <linux/soc/andes/csr.h>
++#include <linux/soc/andes/trigger_module.h>
++
++DEFINE_STATIC_KEY_FALSE(trigger_module_single_step_key);
++
++void user_enable_single_step(struct task_struct *child)
++{
++	if (static_branch_unlikely(&trigger_module_single_step_key)) {
++		if (!test_tsk_thread_flag(child, TIF_SINGLESTEP))
++			static_branch_disable(&trigger_module_single_step_key);
++	} else {
++		static_branch_enable(&trigger_module_single_step_key);
++	}
++
++	set_tsk_thread_flag(child, TIF_SINGLESTEP);
++}
++
++void user_disable_single_step(struct task_struct *child)
++{
++	if (static_branch_unlikely(&trigger_module_single_step_key) &&
++	    test_tsk_thread_flag(child, TIF_SINGLESTEP))
++		clear_tsk_thread_flag(child, TIF_SINGLESTEP);
++}
+diff --git a/include/linux/soc/andes/sbi.h b/include/linux/soc/andes/sbi.h
+index 68e193474b8e..a486c5ca739d 100644
+--- a/include/linux/soc/andes/sbi.h
++++ b/include/linux/soc/andes/sbi.h
+@@ -50,4 +50,13 @@ long sbi_andes_probe_ppma(void);
+ void sbi_andes_write_powerbrake(unsigned int val);
+ long sbi_andes_read_powerbrake(void);
+ 
++#ifdef CONFIG_ARCH_ANDES
++/* Trigger module support debug application with gdbserver */
++void sbi_andes_set_trigger(unsigned int type, uintptr_t data, int enable);
++#else
++static inline void sbi_andes_set_trigger(unsigned int type,
++					 uintptr_t data,
++					 int enable) {}
++#endif /* !CONFIG_ARCH_ANDES */
++
+ #endif /* !__LINUX_SOC_ANDES_SBI_H */
+diff --git a/include/linux/soc/andes/trigger_module.h b/include/linux/soc/andes/trigger_module.h
+new file mode 100644
+index 000000000000..8e681a8f6e96
+--- /dev/null
++++ b/include/linux/soc/andes/trigger_module.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2023 Andes Technology Corporation.
++ */
++
++#ifndef __LINUX_SOC_ANDES_TRIGGER_MODULE_H
++#define __LINUX_SOC_ANDES_TRIGGER_MODULE_H
++
++#include <linux/soc/andes/sbi.h>
++
++#define TRIGGER_TYPE_ICOUNT 3
++#define ICOUNT 1
++
++DECLARE_STATIC_KEY_FALSE(trigger_module_single_step_key);
++
++void user_enable_single_step(struct task_struct *);
++void user_disable_single_step(struct task_struct *);
++
++#endif /* !__LINUX_SOC_ANDES_TRIGGER_MODULE_H */
+-- 
+2.34.1
+

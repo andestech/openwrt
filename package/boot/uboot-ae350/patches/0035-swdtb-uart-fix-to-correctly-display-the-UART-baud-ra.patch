@@ -1,0 +1,68 @@
+From ca0fd2c1add8f8392e49ba127be36676fce25e47 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 17 Jan 2025 17:47:24 +0800
+Subject: [PATCH 35/53] swdtb: uart: fix to correctly display the UART baud
+ rate in the DTB (#149)
+
+The data values in the DTB are stored in big-endian format.
+The macro fdt32_to_cpu should be used to display the correct values
+Relocate the display function to show DTB information only when
+modifications are required.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/149
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c     | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index a846ff2c0011..309025b39330 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -963,19 +963,22 @@ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value)
+ 			fdt, node_offset, uart_compatible)) >= 0) {
+ 		const u32 *current_speed;
+ 		int len;
++		int speed;
+ 
+ 		/* Check if `current-speed` already exists */
+ 		current_speed = fdt_getprop(fdt, node_offset,
+ 					    current_speed_name, &len);
+ 		if (current_speed) {
+-			dtb_info("Node: %s, Current-speed: %d\n",
+-				 fdt_get_name(fdt, node_offset, NULL),
+-				 *current_speed);
++			speed = fdt32_to_cpu(*current_speed);
+ 
+ 			/* Skip if speed matches config */
+-			if (*current_speed == config_baudrate)
++			if (speed == config_baudrate)
+ 				continue;
+ 
++			dtb_info("Node: %s, Current-speed: %d\n",
++				 fdt_get_name(fdt, node_offset, NULL),
++				 speed);
++
+ 			/* If it exists, update the value */
+ 			ret = fdt_setprop_u32(fdt, node_offset,
+ 					      current_speed_name,
+@@ -997,9 +1000,8 @@ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value)
+ 					  fdt_strerror(ret));
+ 				return ret;
+ 			}
+-			dtb_info("Node: %s, Current-speed: %d\n",
+-				 fdt_get_name(fdt, node_offset, NULL),
+-				 config_baudrate);
++			dtb_info("Node: %s, no current-speed\n",
++				 fdt_get_name(fdt, node_offset, NULL));
+ 		}
+ 
+ 		/* Debug output to show the result */
+-- 
+2.34.1
+

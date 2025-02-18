@@ -1,0 +1,292 @@
+From bf43040614736d5fde3257c17596f469be1c42d5 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 14 Aug 2024 15:21:41 +0800
+Subject: [PATCH 163/172] platform: generic: andes: Implement suspend & resume
+ ae350 (#116)
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ include/sbi_utils/sys/atcsmu.h |  21 +++++
+ lib/utils/sys/atcsmu.c         |  12 +++
+ platform/generic/andes/ae350.c | 144 ++++++++++++++++++++++++++-------
+ 3 files changed, 146 insertions(+), 31 deletions(-)
+
+diff --git a/include/sbi_utils/sys/atcsmu.h b/include/sbi_utils/sys/atcsmu.h
+index 7c5771a87a38..4aa2783e7ef6 100644
+--- a/include/sbi_utils/sys/atcsmu.h
++++ b/include/sbi_utils/sys/atcsmu.h
+@@ -10,6 +10,8 @@
+ #include <sbi/sbi_types.h>
+ 
+ /* clang-format off */
++#define PCS_WAKE_MSIP_OFFSET	29
++
+ #define PCS0_SCRATCH_OFFSET	0x84
+ #define PCSm_SCRATCH_OFFSET(n) ((n + 3) * 0x20 + PCS0_SCRATCH_OFFSET)
+ 
+@@ -26,6 +28,8 @@
+ #define DEEPSLEEP_MODE		1
+ #define LIGHT_SLEEP_CMD		(SLEEP_CMD | (LIGHTSLEEP_MODE << PCS_CTL_PARAM_SHIFT))
+ #define DEEP_SLEEP_CMD		(SLEEP_CMD | (DEEPSLEEP_MODE << PCS_CTL_PARAM_SHIFT))
++#define LIGHT_SLEEP_STATUS	0x0
++#define DEEP_SLEEP_STATUS	0x10
+ 
+ #define PCS0_CFG_OFFSET			0x80
+ #define PCSm_CFG_OFFSET(i)		((i + 3) * 0x20 + PCS0_CFG_OFFSET)
+@@ -44,6 +48,22 @@
+ 			        ((n) < 4 ? 0 : RESET_VEC_8CORE_OFFSET) + \
+ 			        ((n) * 0x4))
+ 
++#define PCS0_STATUS_OFFSET	0x98
++#define PCSm_STATUS_OFFSET(i)	((i + 3) * 0x20 + PCS0_STATUS_OFFSET)
++// PD* mask
++#define PD_TYPE_MASK		0x7
++#define PD_STATUS_MASK		0xf8
++// PCS_STATUS[0:2]: pd_type
++#define ACTIVE			0
++#define RESET			1
++#define SLEEP			2
++// PCS_STATUS[7:3]: pd_status for sleep mode
++#define LIGHT_SLEEP_STATUS	0x0
++#define DEEP_SLEEP_STATUS	0x10
++
++#define GET_PD_TYPE(val)	((val) & PD_TYPE_MASK)
++#define GET_PD_STATUS(val)	(((val) & PD_STATUS_MASK) >> 3)
++
+ #define PCS_MAX_NR  8
+ #define FLASH_BASE  0x80000000ULL
+ 
+@@ -62,5 +82,6 @@ bool smu_support_sleep_mode(struct smu_data *smu, u32 sleep_mode, u32 hartid);
+ int smu_set_command(struct smu_data *smu, u32 pcs_ctl, u32 hartid);
+ int smu_set_reset_vector(struct smu_data *smu, ulong wakeup_addr, u32 hartid);
+ u32 smu_get_sleep_type(struct smu_data *smu, u32 hartid);
++int smu_check_pcs_status(struct smu_data *smu, u32 sleep_status, u32 hartid);
+ 
+ #endif /* _SYS_ATCSMU_H */
+diff --git a/lib/utils/sys/atcsmu.c b/lib/utils/sys/atcsmu.c
+index 2723db02a866..a7d71a73eaff 100644
+--- a/lib/utils/sys/atcsmu.c
++++ b/lib/utils/sys/atcsmu.c
+@@ -97,3 +97,15 @@ inline u32 smu_get_sleep_type(struct smu_data *smu, u32 hartid)
+ 		return SBI_EINVAL;
+ 	return readl((void *)(smu->addr + PCSm_SCRATCH_OFFSET(hartid)));
+ }
++
++int smu_check_pcs_status(struct smu_data *smu, u32 sleep_status, u32 hartid)
++{
++	if (!smu)
++		return SBI_EINVAL;
++
++	void *pcs_status_base = (void *)(smu->addr + PCSm_STATUS_OFFSET(hartid));
++	unsigned long pcs_status_val = readl(pcs_status_base);
++
++	return ((GET_PD_TYPE(pcs_status_val) == SLEEP) &&
++		(GET_PD_STATUS(pcs_status_val) == sleep_status)) ? SBI_OK : SBI_EFAIL;
++}
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index e13296965544..570a22650eb6 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -10,13 +10,16 @@
+ #include <platform_override.h>
+ #include <andes/andes_pmu.h>
+ #include <sbi_utils/cache/fdt_cache.h>
++#include <sbi_utils/cache/cache.h>
+ #include <sbi_utils/fdt/fdt_helper.h>
+ #include <sbi_utils/fdt/fdt_fixup.h>
+ #include <sbi_utils/sys/atcsmu.h>
+ #include <sbi/riscv_asm.h>
++#include <sbi/riscv_io.h>
+ #include <sbi/sbi_bitops.h>
+ #include <sbi/sbi_error.h>
+ #include <sbi/sbi_hsm.h>
++#include <sbi/sbi_platform.h>
+ #include <sbi/sbi_ipi.h>
+ #include <sbi/sbi_init.h>
+ #include <sbi/sbi_system.h>
+@@ -55,17 +58,30 @@ static inline void ae350_enable_coherency_warmboot(void)
+ 	_start_warm();
+ }
+ 
++static inline void wait_until_harts_sleep(u32 this_hart, u32 sleep_type, u32 sleep_status)
++{
++	u32 hart_cnt = sbi_platform_thishart_ptr()->hart_count;
++
++	/* skip main hart */
++	for (int hartid = 0; hartid < hart_cnt; hartid++)
++		if ((hartid != this_hart) && (sleep_type == smu_get_sleep_type(&smu, hartid)))
++			while (smu_check_pcs_status(&smu, sleep_status, hartid) != SBI_OK);
++}
++
+ static int ae350_hart_start(u32 hartid, ulong saddr)
+ {
++	u32 sleep_type = smu_get_sleep_type(&smu, hartid);
+ 	/*
+ 	 * Don't send wakeup command when:
+ 	 * 1) boot-time
+ 	 * 2) the target hart is non-sleepable 25-series hart0
++	 * 3) deep sleep or light sleep
+ 	 */
+-	if (!sbi_init_count(hartid) || (is_andes(25) && hartid == 0))
++	if (!sbi_init_count(hartid) || (is_andes(25) && hartid == 0) ||
++		sleep_type == SBI_SUSP_AE350_LIGHT_SLEEP || sleep_type == SBI_SUSP_AE350_DEEP_SLEEP)
+ 		return sbi_ipi_raw_send(sbi_hartid_to_hartindex(hartid));
+ 
+-	/* Write wakeup command to the sleep hart */
++	/* Write wakeup command to the sleep hart only when resuming from hotplug */
+ 	smu_set_command(&smu, WAKEUP_CMD, hartid);
+ 
+ 	return 0;
+@@ -75,41 +91,68 @@ static int ae350_hart_stop(void)
+ {
+ 	int rc;
+ 	u32 hartid = current_hartid();
++	u32 sleep_type = smu_get_sleep_type(&smu, hartid);
+ 
+-	/**
+-	 * For Andes AX25MP, the hart0 shares power domain with
+-	 * L2-cache, instead of turning it off, it should fall
+-	 * through and jump to warmboot_addr.
+-	 */
+-	if (is_andes(25) && hartid == 0)
+-		return SBI_ENOTSUPP;
++	csr_write(CSR_SIE, 0);
++	csr_write(CSR_MIE, 0);
+ 
+-	if (!smu_support_sleep_mode(&smu, DEEPSLEEP_MODE, hartid))
+-		return SBI_ENOTSUPP;
++	if (sleep_type == SBI_SUSP_AE350_LIGHT_SLEEP) {
+ 
+-	/**
+-	 * disable all events, the current hart will be
+-	 * woken up from reset vector when other hart
+-	 * writes its PCS (power control slot) control
+-	 * register
+-	 */
+-	smu_set_wakeup_events(&smu, 0x0, hartid);
+-	smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
++		csr_write(CSR_MIE, MIP_MSIP);
++		// set wake event (M-mode Software Interrupt only)
++		smu_set_wakeup_events(&smu, 0x1 << PCS_WAKE_MSIP_OFFSET, hartid);
++
++		smu_set_command(&smu, LIGHT_SLEEP_CMD, hartid);
++
++		ae350_disable_coherency();
++
++	} else if (sleep_type == SBI_SUSP_AE350_DEEP_SLEEP) {
++
++		csr_write(CSR_MIE, MIP_MSIP);
++		// set wake event (M-mode Software Interrupt only)
++		smu_set_wakeup_events(&smu, 0x1 << PCS_WAKE_MSIP_OFFSET, hartid);
+ 
+-	rc = smu_set_reset_vector(&smu,
+-				  (ulong)ae350_enable_coherency_warmboot,
+-				  hartid);
+-	if (rc)
+-		goto fail;
++		smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
+ 
+-	ae350_disable_coherency();
++		rc = smu_set_reset_vector(&smu, (ulong)ae350_enable_coherency_warmboot,
++					  hartid);
++		if (rc)
++			sbi_hart_hang();
++
++		ae350_disable_coherency();
++
++	} else {/* Hotplug */
++		/**
++		 * For Andes AX25MP, the hart0 shares power domain with
++		 * L2-cache, instead of turning it off, it should fall
++		 * through and jump to warmboot_addr.
++		 */
++		if (is_andes(25) && hartid == 0)
++			return SBI_ENOTSUPP;
++		/**
++		 * disable all events, the current hart will be
++		 * woken up from reset vector when other hart
++		 * writes its PCS (power control slot) control
++		 * register
++		 */
++		smu_set_wakeup_events(&smu, 0x0, hartid);
++
++		smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
++
++		rc = smu_set_reset_vector(&smu, (ulong)ae350_enable_coherency_warmboot,
++					  hartid);
++		if (rc)
++			sbi_hart_hang();
++
++		ae350_disable_coherency();
++	}
+ 
+ 	wfi();
+ 
+-fail:
+-	/* It should never reach here */
+-	sbi_hart_hang();
+-	return 0;
++	/* light sleep resume */
++	ae350_enable_coherency();
++
++	return SBI_ENOTSUPP;
+ }
+ 
+ static void ae350_hart_resume(void)
+@@ -126,12 +169,51 @@ static const struct sbi_hsm_device andes_smu_hsm = {
+ 
+ static int ae350_system_suspend_check(u32 sleep_type)
+ {
+-	return 0;
++	return ((sleep_type == SBI_SUSP_AE350_LIGHT_SLEEP) ||
++		(sleep_type == SBI_SUSP_AE350_DEEP_SLEEP)  ||
++		(sleep_type == SBI_SUSP_SLEEP_TYPE_SUSPEND)) ? SBI_OK : SBI_EINVAL;
+ }
+ 
+ static int ae350_system_suspend(u32 sleep_type, unsigned long mmode_resume_addr)
+ {
+-	return 0;
++	u32 hartid = current_hartid();
++	int rc;
++
++	csr_write(CSR_SIE, 0);
++	csr_write(CSR_MIE, 0);
++
++	/* Peripheral interrupts are all wired to S-mode external interrupt */
++	csr_set(CSR_SIE, MIP_SEIP);
++
++	if (sleep_type == SBI_SUSP_AE350_LIGHT_SLEEP) {
++
++		smu_set_command(&smu, LIGHT_SLEEP_CMD, hartid);
++
++		wait_until_harts_sleep(hartid, sleep_type, LIGHT_SLEEP_STATUS);
++
++		ae350_disable_coherency();
++
++	} else if (sleep_type == SBI_SUSP_AE350_DEEP_SLEEP) {
++
++		smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
++
++		rc = smu_set_reset_vector(&smu, (ulong)ae350_enable_coherency_warmboot, hartid);
++		if (rc)
++			sbi_hart_hang();
++
++		wait_until_harts_sleep(hartid, sleep_type, DEEP_SLEEP_STATUS);
++
++		ae350_disable_coherency();
++		/* disable L2 cache */
++		cache_disable();
++	}
++
++	wfi();
++
++	/* light sleep resume */
++	ae350_enable_coherency();
++
++	return SBI_OK;
+ }
+ 
+ static struct sbi_system_suspend_device andes_smu_susp = {
+-- 
+2.34.1
+

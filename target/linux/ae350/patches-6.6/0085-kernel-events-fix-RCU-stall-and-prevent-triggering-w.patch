@@ -1,0 +1,62 @@
+From c9585ab9e1c6f218e4e64b79007041dbfcf46485 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Thu, 12 Sep 2024 13:59:40 +0800
+Subject: [PATCH 085/168] kernel: events: fix RCU stall and prevent triggering
+ warning for Perf (#183)
+
+Port two workaround patches for Perf from ast-v5_3_0-branch.
+
+- Commit ad6833cc66 (perf/core: Implement workaround to fix RCU stall issue
+when using perf record) is for RCU stall problem
+- Commit 84c459a831 (perf/core: Implement workaround to add pmu stop before
+unthrottling to prevent WARNING) is to prevent triggering warning
+
+Co-authored-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/183
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-committed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ kernel/events/core.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/events/core.c b/kernel/events/core.c
+index 0f2b5610933d..1d44241d423f 100644
+--- a/kernel/events/core.c
++++ b/kernel/events/core.c
+@@ -4156,6 +4156,12 @@ perf_adjust_freq_unthr_context(struct perf_event_context *ctx, bool unthrottle)
+ 
+ 		if (hwc->interrupts == MAX_INTERRUPTS) {
+ 			hwc->interrupts = 0;
++
++			/*
++			 * NOTE: this is a workaround to prevent triggering
++			 * WARN_ON_ONCE().
++			 */
++			event->pmu->stop(event, 0);
+ 			perf_log_throttle(event, 1);
+ 			event->pmu->start(event, 0);
+ 		}
+@@ -9542,8 +9548,15 @@ __perf_event_account_interrupt(struct perf_event *event, int throttle)
+ 
+ 		hwc->freq_time_stamp = now;
+ 
+-		if (delta > 0 && delta < 2*TICK_NSEC)
+-			perf_adjust_period(event, delta, hwc->last_period, true);
++		/* NOTE: this is a workaround for RCU stall problem */
++		event->pmu->stop(event, PERF_EF_UPDATE);
++		u64 now_count = local64_read(&event->count);
++		s64 delta_count = now_count - hwc->freq_count_stamp;
++		hwc->freq_count_stamp = now_count;
++
++		if ((delta > 0) && (delta < 2 * TICK_NSEC) && (delta_count > 0))
++			perf_adjust_period(event, delta, delta_count, true);
++		event->pmu->start(event, delta_count > 0 ? PERF_EF_RELOAD : 0);
+ 	}
+ 
+ 	return ret;
+-- 
+2.34.1
+

@@ -1,0 +1,255 @@
+From 2e1bd65956225c0e414681995cc47517b9a3cd34 Mon Sep 17 00:00:00 2001
+From: locus84 <locus84@andestech.com>
+Date: Tue, 12 Nov 2024 11:01:56 +0800
+Subject: [PATCH 144/168] andes: spi: add the spi optional configuration
+
+1. Add data merge mode configuration, default is enable.
+2. Add DMA RX configuration, default is enable.
+3. Add DMA TX configuration, default is disable.
+
+Signed-off-by: locus84 <locus84@andestech.com>
+---
+ drivers/spi/Kconfig                     | 37 ++++++++++++++-
+ drivers/spi/spi-atcspi200-dma.c         |  2 +-
+ drivers/spi/spi-atcspi200.c             | 60 +++++++++++++++++++------
+ include/linux/soc/andes/spi-atcspi200.h | 14 +++++-
+ 4 files changed, 96 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/spi/Kconfig b/drivers/spi/Kconfig
+index e9f5fcfad58e..80b60a049f9c 100644
+--- a/drivers/spi/Kconfig
++++ b/drivers/spi/Kconfig
+@@ -1182,13 +1182,48 @@ config SPI_ATCSPI200
+         help
+           This exposes the SPI controller IP from Andes.
+ 
++menu "ATCSPI200 feature support"
++
++config SPI_ATCSPI200_DATA_MERGE
++	tristate "Enable ATCSPI200 data merge mode"
++	depends on SPI_ATCSPI200
++	default y
++	help
++	  This option enables data merge mode for the ATCSPI200 driver.
++	  When enabled, each write to the data register transmits four bytes,
++	  and each read retrieves four bytes as a single word.
++
+ config SPI_ATCSPI200_DMA
+-	tristate "Enable DMA mode"
++	tristate "Enable ATCSPI200 DMA mode"
+ 	depends on SPI_ATCSPI200
+ 	help
+ 	  This option enables Direct Memory Access (DMA) mode
+ 	  for the ATCSPI200 driver, allowing more efficient data transfers
+ 	  by shifting the workload from the CPU to the DMA controller.
++
++menu "ATCSPI200 DMA Options"
++
++config ATCSPI200_DMA_RX
++	bool "Enable ATCSPI200 DMA RX"
++	depends on SPI_ATCSPI200_DMA
++	default y
++	help
++	  This option enables DMA RX mode for the ATCSPI200 driver.
++	  Data is transferred from the FIFO using DMA,
++	  bypassing the CPU and reducing the CPU utilization.
++
++config ATCSPI200_DMA_TX
++	bool "Enable ATCSPI200 DMA TX"
++	depends on SPI_ATCSPI200_DMA
++	default y
++	help
++	  This option enables DMA TX mode for the ATCSPI200 driver.
++	  Data transfers to the FIFO will be handled by DMA,
++	  which reduce the CPU utilization.
++
++endmenu
++endmenu
++
+ #
+ # Add new SPI master controllers in alphabetical order above this line
+ #
+diff --git a/drivers/spi/spi-atcspi200-dma.c b/drivers/spi/spi-atcspi200-dma.c
+index 219b1d6be6cf..7b059aab9a56 100644
+--- a/drivers/spi/spi-atcspi200-dma.c
++++ b/drivers/spi/spi-atcspi200-dma.c
+@@ -182,6 +182,6 @@ static const struct atcspi200_dma_ops atcspi200_dma_ops = {
+ void atcspi200_spi_dma_ops_setup(struct atcspi200_spi *spi)
+ {
+ 	if (IS_ENABLED(CONFIG_SPI_ATCSPI200_DMA) &&
+-	    (IS_ENABLED(CONFIG_DMA_RX_OPTION) || IS_ENABLED(CONFIG_DMA_TX_OPTION)))
++	    (IS_ENABLED(CONFIG_ATCSPI200_DMA_RX) || IS_ENABLED(CONFIG_ATCSPI200_DMA_TX)))
+ 		spi->dma_ops = &atcspi200_dma_ops;
+ }
+diff --git a/drivers/spi/spi-atcspi200.c b/drivers/spi/spi-atcspi200.c
+index 000f89999030..f8e0908005e4 100644
+--- a/drivers/spi/spi-atcspi200.c
++++ b/drivers/spi/spi-atcspi200.c
+@@ -62,7 +62,7 @@ static int spi_nor_setup(struct atcspi200_spi *spi)
+ 	}
+ 
+ 	spi->cmd_len = 0;
+-	format_val = (DATA_LENGTH(8) | ADDR_LENGTH(3) | DATA_MERGE_EN(1));
++	format_val = (DATA_LENGTH(8) | ADDR_LENGTH(3) | DATA_MERGE);
+ 	format_val |= ATCSPI200_TRANSFMT_CPHA_MASK;
+ 	format_val |= ATCSPI200_TRANSFMT_CPOL_MASK;
+ 	atcspi200_spi_write(spi, SPI_TRANSFMT, format_val);
+@@ -146,23 +146,43 @@ static int atcspi200_spi_start(struct atcspi200_spi *spi, struct spi_transfer *t
+ 	return 0;
+ }
+ 
+-static void atcspi200_spi_tx(struct atcspi200_spi *spi, const u32 *dout)
++static void atcspi200_spi_tx(struct atcspi200_spi *spi, const void *dout)
+ {
+-	atcspi200_spi_write(spi, SPI_DATA, *dout);
++#ifdef	CONFIG_SPI_ATCSPI200_DATA_MERGE
++	u32 tmp_data = *(u32 *)dout;
++#else
++	u8 tmp_data = *(u8 *)dout;
++#endif
++	atcspi200_spi_write(spi, SPI_DATA, tmp_data);
+ }
+ 
+-static int atcspi200_spi_rx(struct atcspi200_spi *spi, u32 *din, unsigned int bytes)
++static int atcspi200_spi_rx(struct atcspi200_spi *spi, void *din, unsigned int bytes)
+ {
+-	u32 tmp_data = atcspi200_spi_read(spi, SPI_DATA);
+-	*din = tmp_data;
++#ifdef	CONFIG_SPI_ATCSPI200_DATA_MERGE
++	u32 tmp_data;
++
++	tmp_data = atcspi200_spi_read(spi, SPI_DATA);
++	*(u32 *)din = tmp_data;
++#else
++	u8 tmp_data;
++
++	tmp_data = atcspi200_spi_read(spi, SPI_DATA);
++	*(u8 *)din = tmp_data;
++#endif
+ 	return bytes;
+ }
+ 
+-static int transfer_data(struct atcspi200_spi *spi, u32 *rx_buf, u32 *tx_buf, int num_blks)
++static int transfer_data(struct atcspi200_spi *spi, void *rx_buf, void *tx_buf, int num_blks)
+ {
++#ifdef	CONFIG_SPI_ATCSPI200_DATA_MERGE
++	u32 *dout = (u32 *)tx_buf;
++	u32 *din = (u32 *)rx_buf;
++#else
++	u8 *dout = (u8 *)tx_buf;
++	u8 *din = (u8 *)rx_buf;
++#endif
++
+ 	unsigned int event, rx_bytes;
+-	u32 *dout = tx_buf;
+-	u32 *din = rx_buf;
+ 	int timeout = spi->timeout;
+ 	int tx_count = 0, rx_count = 0;
+ 	int format_val;
+@@ -264,8 +284,8 @@ static int atcspi200_spi_transfer(struct spi_device *atcspi200_spi,
+ 			return 0;
+ 
+ 		spi->data_len = data_len;
+-		spi->dout = (u32 *)t->tx_buf;
+-		spi->din = (u32 *)t->rx_buf;
++		spi->dout = t->tx_buf;
++		spi->din = t->rx_buf;
+ 		break;
+ 	case SPI_XFER_BEGIN | SPI_XFER_END:
+ 		spi->data_len = 0;
+@@ -411,7 +431,7 @@ static int atcspi200_nor_adjust_op_size(struct spi_mem *mem,
+ 	/*
+ 	 * DMA needs to be aligned to 4 byte
+ 	 */
+-	if (op->data.nbytes < MAX_TRANSFER_LEN)
++	if (op->data.nbytes >= DMA_TRANSFER_MIN && op->data.nbytes < MAX_TRANSFER_LEN)
+ 		op->data.nbytes &= ~0x3;
+ 
+ 	return 0;
+@@ -429,6 +449,7 @@ static int atcspi200_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *o
+ 	struct atcspi200_spi *spi = spi_controller_get_devdata(atcspi200_spi->controller);
+ 	unsigned int format_val;
+ 	int ctrl;
++	bool dma_tx, dma_rx;
+ 
+ 	mutex_lock(&spi->mutex_lock);
+ 	ctrl = atcspi200_spi_read(spi, SPI_CTRL);
+@@ -440,9 +461,19 @@ static int atcspi200_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *o
+ 		if (op->data.dir == SPI_MEM_DATA_IN) {
+ 			spi->din = op->data.buf.in;
+ 			spi->dout = 0;
++			dma_tx = false;
++			if (spi->rxchan)
++				dma_rx = true;
++			else
++				dma_rx = false;
+ 		} else {
+ 			spi->dout = op->data.buf.out;
+ 			spi->din = 0;
++			dma_rx = false;
++			if (spi->txchan)
++				dma_tx = true;
++			else
++				dma_tx = false;
+ 		}
+ 	}
+ 	if (op->addr.nbytes) {
+@@ -456,11 +487,12 @@ static int atcspi200_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *o
+ 
+ 	/* set transfer length and data information. */
+ 	ret = atcspi200_spi_setting(spi, op);
+-	if (!op->data.nbytes || op->data.nbytes < 0x100)
++	if (!op->data.nbytes || op->data.nbytes < DMA_TRANSFER_MIN || !(dma_tx || dma_rx))
+ 		atcspi200_spi_write(spi, SPI_CMD, op->cmd.opcode);
+ 	/* Transfer data */
+ 	if (op->data.nbytes) {
+-		if (spi->dma_ops->dma_transfer && op->data.nbytes >= 0x100) {
++		if (spi->dma_ops && spi->dma_ops->dma_transfer &&
++		    op->data.nbytes >= DMA_TRANSFER_MIN && (dma_tx || dma_rx)) {
+ 			ret = spi->dma_ops->dma_setup(spi, op);
+ 			if (ret)
+ 				return ret;
+diff --git a/include/linux/soc/andes/spi-atcspi200.h b/include/linux/soc/andes/spi-atcspi200.h
+index 22db0ddd1d49..d11eb4351427 100644
+--- a/include/linux/soc/andes/spi-atcspi200.h
++++ b/include/linux/soc/andes/spi-atcspi200.h
+@@ -16,6 +16,12 @@
+ #define SPI_XFER_ONCE		(SPI_XFER_BEGIN | SPI_XFER_END)
+ #define SPI_XFER_SHIFT		0
+ 
++#ifdef CONFIG_SPI_ATCSPI200_DATA_MERGE
++#define	DATA_MERGE_EN		1
++#else
++#define	DATA_MERGE_EN		0
++#endif
++
+ #define SPI_NAME		"atcspi200"
+ #define SPI_MAX_HZ		50000000
+ #define MAX_TRANSFER_LEN	512
+@@ -24,7 +30,8 @@
+ #define NSPI_MAX_CS_NUM		1
+ #define DATA_LENGTH(x)		((x - 1) << 8)
+ #define ADDR_LENGTH(x)		((x - 1) << 16)
+-#define DATA_MERGE_EN(x)	(x << 7)
++#define DATA_MERGE		(DATA_MERGE_EN << 7)
++#define DMA_TRANSFER_MIN	0x100
+ 
+ /* SPI Transfer Control Register */
+ #define ATCSPI200_TRANSFMT_OFFSET		24
+@@ -125,8 +132,13 @@ struct atcspi200_spi {
+ 	size_t			cmd_len;
+ 	u32			clk_rate;
+ 	u8			cmd_buf[16];
++#ifdef	CONFIG_SPI_ATCSPI200_DATA_MERGE
+ 	u32			*din;
+ 	u32			*dout;
++#else
++	u8			*din;
++	u8			*dout;
++#endif
+ 	struct ts_buf		*tx_buf;
+ 	struct ts_buf		*rx_buf;
+ 	unsigned int		addr;
+-- 
+2.34.1
+

@@ -1,0 +1,288 @@
+From cabfa9359ea04b41abc30e29236d24232e6b5253 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Tue, 5 Dec 2023 14:23:25 +0800
+Subject: [PATCH 029/168] cache: andes: Register the L2-cache IRQ
+
+Register the L2-cache IRQ. The IRQ will first clear the error status,
+and then print the error messages according to the asynchronous error
+register and the error register.
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ .../boot/dts/andes/a25mp_c4_d_dsp_ae350.dts   |  2 +
+ .../a27l2_c1_d_dsp_noncoherent_ae350.dts      |  2 +
+ .../boot/dts/andes/a45mp_c4_d_dsp_ae350.dts   |  2 +
+ .../dts/andes/ax25mp_amp_c2_64_d_ae350.dts    |  2 +
+ .../boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts  |  2 +
+ .../ax27l2_c1_d_dsp_noncoherent_ae350.dts     |  2 +
+ .../boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts  |  2 +
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts |  2 +
+ .../boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts |  2 +
+ .../boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts  |  2 +
+ drivers/cache/andes_cache.c                   | 83 ++++++++++++++++++-
+ 11 files changed, 100 insertions(+), 3 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 602d578189e6..309374e1b602 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -132,6 +132,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x40000>;
+ 		cache-line-size = <32>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x06>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 0ce346b77448..49167181e839 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x80000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x03>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 9e157c4c6927..3a49389fddb0 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -132,6 +132,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x80000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x06>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index 088bc948ef1a..b3d096a26acf 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -62,6 +62,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x40000>;
+ 		cache-line-size = <32>;
+ 		reg = <0x0 0xe0500000 0x0 0x40000>;
++		interrupts = <0x10 0x4>;
++		interrupt-parent = <0x4>;
+ 		phandle = <0x1>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 46d661592af6..3a27c6739cdb 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -132,6 +132,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x40000>;
+ 		cache-line-size = <32>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x06>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index c320a613206b..4080f76fe7a3 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -54,6 +54,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x80000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x03>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index 97c89bf583be..e0173b0d7ea5 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -132,6 +132,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x80000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x06>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index 082a36589a88..f643757df984 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -236,6 +236,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x40000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x0a>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 327d938de72d..d5088159f985 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -132,6 +132,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x80000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x06>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index fa004da7d7ca..dd6aab13d398 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -83,6 +83,8 @@ l2-cache@e0500000 {
+ 		cache-size = <0x200000>;
+ 		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
++		interrupts = <0x10 0x04>;
++		interrupt-parent = <0x04>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/drivers/cache/andes_cache.c b/drivers/cache/andes_cache.c
+index b068a4990543..8b7b3abf1b33 100644
+--- a/drivers/cache/andes_cache.c
++++ b/drivers/cache/andes_cache.c
+@@ -10,8 +10,11 @@
+ #include <linux/dma-direction.h>
+ #include <linux/of_address.h>
+ #include <linux/of_platform.h>
++#include <linux/of_irq.h>
++#include <linux/interrupt.h>
+ 
+ #include <asm/dma-noncoherent.h>
++#include <linux/soc/andes/csr.h>
+ 
+ /* L2 cache registers */
+ #define ANDES_L2C_REG_CTL_OFFSET		0x8
+@@ -54,6 +57,61 @@ struct andes_priv {
+ 
+ static struct andes_priv andes_priv;
+ 
++/* L2 Cache IRQ handler and print error messages */
++static uint32_t get_l2c_async_err(void)
++{
++	return readl((void *)(andes_priv.l2c_base + L2C_REG_ASYNC_ERR_OFFSET));
++}
++
++static uint32_t get_l2c_err(void)
++{
++	return readl((void *)(andes_priv.l2c_base + L2C_REG_ERR_OFFSET));
++}
++
++static void l2c_print_err(u32 async_err_reg, u32 err_reg)
++{
++	if (async_err_reg) {
++		u32 err_type = err_reg & L2C_ERR_TYPE_MASK;
++		bool more_err = err_reg & L2C_ERR_MORERR_MASK;
++
++		if (more_err)
++			pr_err_ratelimited("More errors occur due to L2 cache. Below is the first error type\n");
++
++		switch (err_type) {
++		case L2C_RAM_ERROR:
++			pr_err_ratelimited("L2C RAM error: CCTL operation encounters uncorrectable RAM errors\n");
++			break;
++		case L2C_RELEASE_ERROR:
++			pr_err_ratelimited("L2C release error: D-cache writes back a line that is not in L2-cache\n");
++			break;
++		case L2C_PROBE_ERROR:
++			pr_err_ratelimited("L2C probe error: CCTL operation probes D-cache when D-cache coherency is disabled\n");
++			break;
++		case L2C_BUS_ERROR:
++			pr_err_ratelimited("L2C bus error: CCTL operation or writing back a line to L3 has bus errors\n");
++			break;
++		default:
++			pr_err_ratelimited("L2C unknown error\n");
++			break;
++		}
++	} else {
++		pr_err_ratelimited("L2C synchronous error\n");
++	}
++}
++
++static irqreturn_t l2c_irq(int irq, void *dev_id)
++{
++	u32 async_err_reg = get_l2c_async_err();
++	u32 err_reg = get_l2c_err();
++
++	/* Clear the error status */
++	writel(0x0, andes_priv.l2c_base + L2C_REG_ASYNC_ERR_OFFSET);
++	writel(0x0, andes_priv.l2c_base + L2C_REG_ERR_OFFSET);
++
++	l2c_print_err(async_err_reg, err_reg);
++	return IRQ_HANDLED;
++}
++
+ /* L2 Cache operations */
+ static inline uint32_t andes_cpu_l2c_get_cctl_status(void)
+ {
+@@ -178,7 +236,8 @@ static int __init andes_cache_init(void)
+ {
+ 	struct device_node *np;
+ 	struct resource res;
+-	int ret;
++	int ret, error;
++	u32 irq;
+ 
+ 	/*
+ 	 * Initialize l2c_base and cache_line_size to provide
+@@ -203,9 +262,24 @@ static int __init andes_cache_init(void)
+ 	if (!of_device_is_available(np))
+ 		return -ENODEV;
+ 
++	/* l2c cache irq */
++	irq = irq_of_parse_and_map(np, 0);
++	if (irq <= 0) {
++		pr_err("Failed to get L2C irq number\n");
++		return irq;
++	}
++
++	error = request_irq(irq, l2c_irq, 0, "L2C", NULL);
++	if (error) {
++		pr_err("Failed to register L2C irq\n");
++		return error;
++	}
++
+ 	ret = of_address_to_resource(np, 0, &res);
+-	if (ret)
++	if (ret) {
++		free_irq(irq, NULL);
+ 		return ret;
++	}
+ 
+ 	/*
+ 	 * If IOCP is present on the Andes ANDES core riscv_cbom_block_size
+@@ -218,12 +292,15 @@ static int __init andes_cache_init(void)
+ 		return 0;
+ 
+ 	andes_priv.l2c_base = ioremap(res.start, resource_size(&res));
+-	if (!andes_priv.l2c_base)
++	if (!andes_priv.l2c_base) {
++		free_irq(irq, NULL);
+ 		return -ENOMEM;
++	}
+ 
+ 	ret = andes_get_l2_line_size(np);
+ 	if (ret) {
+ 		iounmap(andes_priv.l2c_base);
++		free_irq(irq, NULL);
+ 		return ret;
+ 	}
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,227 @@
+From 13ef4cde0393f8d5fc7637cf900f4627db9a02bf Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Fri, 3 Mar 2023 13:38:52 +0800
+Subject: [PATCH 036/168] riscv: andes: support 25-series MSB mechanism
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently, we use (andes_pfn_msb << 1) as _PAGE_NONCACHEABLE.
+
+page table entry:
+                                            |  _PAGE_PFN_SHIFT  |
+ 63_62__61_60____54_53______28_27__29_18__10_9_8_7_6_5_4_3_2_1_0
+|N | PBMT |Reserved|  PPN[2]  |PPN[1]|PPN[0]|RSW|D|A|G|U|X|W|R|V|
+ 1‾‾‾‾2‾‾‾‾‾‾‾7‾‾‾‾‾‾‾‾‾26‾‾‾‾‾‾‾9‾‾‾‾‾‾9‾‾‾‾‾2‾‾1‾1‾1‾1‾1‾1‾1‾1
+                        ^^
+                        ||
+                        | `- (andes_pfn_msb << _PAGE_PFN_SHIFT)
+                         `-- _PAGE_NONCACHEABLE
+
+Because the bit lies in the PPN field, during ioremap_wc(), we need to
+recover it by eliminating the _PAGE_NONCACHEABLE bit.
+
+The RISC-V privileged spec reserves a 2-bit field RSW where can be
+used to encode SW defined information, so we redefine _PAGE_NONCACHEABLE
+to (2 << 8), i.e. pte.RSW: 0x2, to indicate that the page is
+noncachable. (Note: At the moment, no kernel page is using RSW field.)
+
+page table entry:
+                                            |  _PAGE_PFN_SHIFT  |
+ 63_62__61_60____54_53______28_27__29_18__10_9_8_7_6_5_4_3_2_1_0
+|N | PBMT |Reserved|  PPN[2]  |PPN[1]|PPN[0]|RSW|D|A|G|U|X|W|R|V|
+ 1‾‾‾‾2‾‾‾‾‾‾‾7‾‾‾‾‾‾‾‾‾26‾‾‾‾‾‾‾9‾‾‾‾‾‾9‾‾‾‾‾2‾‾1‾1‾1‾1‾1‾1‾1‾1
+                         ^                   ^
+                         |                   `-- _PAGE_NONCACHEABLE
+                          `- (andes_pfn_msb << _PAGE_PFN_SHIFT)
+
+Therefore, we no longer need to recover pte.PPN.
+
+This patch also renames:
+- andes_pa_msb       to andes_pfn_msb
+- _PAGE_NONCACHEABLE to _PAGE_ANDES25_NOCACHE
+to make them self-explanatory.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ arch/riscv/Kconfig.errata            |  1 +
+ arch/riscv/errata/andes/errata.c     | 44 ++++++++++++++++++++++++++--
+ arch/riscv/include/asm/errata_list.h |  3 +-
+ arch/riscv/include/asm/pgtable.h     | 25 +++++++++++++++-
+ include/linux/soc/andes/andes.h      |  1 +
+ 5 files changed, 69 insertions(+), 5 deletions(-)
+
+diff --git a/arch/riscv/Kconfig.errata b/arch/riscv/Kconfig.errata
+index 5b57ebd93f1f..60f44b1a1d29 100644
+--- a/arch/riscv/Kconfig.errata
++++ b/arch/riscv/Kconfig.errata
+@@ -13,6 +13,7 @@ config ERRATA_ANDES
+ config ERRATA_ANDES_CMO
+ 	bool "Apply Andes cache management errata"
+ 	depends on ERRATA_ANDES
++	select RISCV_ALTERNATIVE_EARLY
+ 	select RISCV_DMA_NONCOHERENT
+ 	select DMA_GLOBAL_POOL
+ 	default y
+diff --git a/arch/riscv/errata/andes/errata.c b/arch/riscv/errata/andes/errata.c
+index ae74a7014f2c..779f9a6eefe3 100644
+--- a/arch/riscv/errata/andes/errata.c
++++ b/arch/riscv/errata/andes/errata.c
+@@ -22,6 +22,9 @@
+ #define ANDES_AX45MP_MARCHID		0x8000000000008a45UL
+ #define ANDES_AX45MP_MIMPID		0x500UL
+ 
++phys_addr_t andes_pfn_msb;
++EXPORT_SYMBOL(andes_pfn_msb);
++
+ bool andes_legacy_mmu;
+ EXPORT_SYMBOL(andes_legacy_mmu);
+ 
+@@ -81,6 +84,35 @@ static bool errata_legacy_mmu_check_func(unsigned int stage,
+ 	return andes_legacy_mmu;
+ }
+ 
++static bool errata_support_uncache(unsigned int stage,
++				   unsigned long arch_id,
++				   unsigned long impid)
++{
++	/*
++	 * Check RISCV_ALTERNATIVES_EARLY_BOOT stage ensures
++	 * andes_pfn_msb is modified only once during kernel bootup.
++	 */
++	if (stage != RISCV_ALTERNATIVES_EARLY_BOOT)
++		return false;
++
++	andes_pfn_msb = 0;
++
++	if (!IS_ENABLED(CONFIG_ERRATA_ANDES_CMO))
++		return 0;
++
++	if (riscv_isa_extension_available(NULL, SVPBMT))
++		return true;
++
++	/* Set this just to make core cbo code happy */
++	riscv_cbom_block_size = 1;
++	riscv_noncoherent_supported();
++
++	csr_write(satp, SATP_PPN);
++	andes_pfn_msb = (csr_read(satp) + 1) >> 1;
++
++	return true;
++}
++
+ static struct errata_info_t errata_list[ERRATA_ANDES_NUMBER] = {
+ 	{	.name = "probe_iocp",
+ 		.check_func = errata_probe_iocp
+@@ -89,6 +121,10 @@ static struct errata_info_t errata_list[ERRATA_ANDES_NUMBER] = {
+ 		.name = "legacy_mmu",
+ 		.check_func = errata_legacy_mmu_check_func
+ 	},
++	{
++		.name = "support_uncache",
++		.check_func = errata_support_uncache
++	},
+ };
+ 
+ static u32 __init_or_module andes_errata_probe(unsigned int stage,
+@@ -113,9 +149,11 @@ void __init_or_module andes_errata_patch_func(struct alt_entry *begin, struct al
+ 	u32 cpu_req_errata;
+ 	u32 tmp = 0;
+ 
+-	if (stage == RISCV_ALTERNATIVES_BOOT &&
+-	    IS_ENABLED(CONFIG_ARCH_R9A07G043)) {
+-		errata_probe_iocp(stage, archid, impid);
++	if (stage == RISCV_ALTERNATIVES_EARLY_BOOT) {
++		if (IS_ENABLED(CONFIG_ARCH_R9A07G043))
++			errata_probe_iocp(stage, archid, impid);
++		else
++			errata_support_uncache(stage, archid, impid);
+ 		return;
+ 	}
+ 
+diff --git a/arch/riscv/include/asm/errata_list.h b/arch/riscv/include/asm/errata_list.h
+index a15cd6a0b27d..4ea5ca9cf9ed 100644
+--- a/arch/riscv/include/asm/errata_list.h
++++ b/arch/riscv/include/asm/errata_list.h
+@@ -14,7 +14,8 @@
+ #ifdef CONFIG_ERRATA_ANDES
+ #define ERRATA_ANDES_NO_IOCP 0
+ #define ERRATA_ANDES_LEGACY_MMU 1
+-#define ERRATA_ANDES_NUMBER 2
++#define ERRATA_ANDES_UNCACHE 2
++#define ERRATA_ANDES_NUMBER 3
+ #endif
+ 
+ #ifdef CONFIG_ERRATA_SIFIVE
+diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
+index 9fa70729bbc5..05a53ea04a22 100644
+--- a/arch/riscv/include/asm/pgtable.h
++++ b/arch/riscv/include/asm/pgtable.h
+@@ -171,6 +171,16 @@ struct pt_alloc_ops {
+ extern struct pt_alloc_ops pt_ops __initdata;
+ 
+ #ifdef CONFIG_MMU
++#ifdef CONFIG_ARCH_ANDES
++/*
++ * Noncacheable page prot for 25-series MSB
++ * We use pte.RSW: 0x2 to indicate noncacheable
++ * pages
++ */
++extern phys_addr_t andes_pfn_msb;
++#define _PAGE_ANDES25_NOCACHE      (2 << 8) /* pte.RSW: 0x2 */
++#endif /* CONFIG_ARCH_ANDES */
++
+ /* Number of PGD entries that a user-mode program can use */
+ #define USER_PTRS_PER_PGD   (TASK_SIZE / PGDIR_SIZE)
+ 
+@@ -344,7 +354,14 @@ static inline pte_t pfn_pte(unsigned long pfn, pgprot_t prot)
+ 	unsigned long prot_val = pgprot_val(prot);
+ 
+ 	ALT_THEAD_PMA(prot_val);
+-
++#ifdef CONFIG_ARCH_ANDES
++	/*
++	 * When PPMA is on and activated: andes_pfn_msb == 0
++	 *                     Otherwise: andes_pfn_msb != 0
++	 */
++	if (andes_pfn_msb && (prot_val & _PAGE_ANDES25_NOCACHE))
++		pfn |= andes_pfn_msb;
++#endif /* CONFIG_ARCH_ANDES */
+ 	return __pte((pfn << _PAGE_PFN_SHIFT) | prot_val);
+ }
+ 
+@@ -626,6 +643,9 @@ static inline pgprot_t pgprot_noncached(pgprot_t _prot)
+ 
+ 	prot &= ~_PAGE_MTMASK;
+ 	prot |= _PAGE_IO;
++#ifdef CONFIG_ARCH_ANDES
++	prot |= _PAGE_ANDES25_NOCACHE;
++#endif
+ 
+ 	return __pgprot(prot);
+ }
+@@ -637,6 +657,9 @@ static inline pgprot_t pgprot_writecombine(pgprot_t _prot)
+ 
+ 	prot &= ~_PAGE_MTMASK;
+ 	prot |= _PAGE_NOCACHE;
++#ifdef CONFIG_ARCH_ANDES
++	prot |= _PAGE_ANDES25_NOCACHE;
++#endif
+ 
+ 	return __pgprot(prot);
+ }
+diff --git a/include/linux/soc/andes/andes.h b/include/linux/soc/andes/andes.h
+index ee96bc3befe6..6c927fc391b3 100644
+--- a/include/linux/soc/andes/andes.h
++++ b/include/linux/soc/andes/andes.h
+@@ -7,5 +7,6 @@
+ #define __ANDES_ANDES_H
+ 
+ extern bool andes_legacy_mmu;
++extern phys_addr_t andes_pfn_msb;
+ 
+ #endif /* !__ANDES_ANDES_H */
+-- 
+2.34.1
+

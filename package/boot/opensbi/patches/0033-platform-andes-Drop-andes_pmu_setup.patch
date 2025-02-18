@@ -1,0 +1,73 @@
+From bc366780c2efeb26149774bd17f0afe4ad5c7d62 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Thu, 22 Feb 2024 17:18:38 +0800
+Subject: [PATCH 033/172] platform: andes: Drop andes_pmu_setup()
+
+andes_pmu_setup() [1] was intended to populate event mapping from
+hardcoded arrays, however, this increases firmware size and we should
+just use PMU DT node [2] instead.
+
+Link: https://lists.infradead.org/pipermail/opensbi/2023-November/006032.html [1]
+Link: https://github.com/riscv-software-src/opensbi/blob/v1.4/docs/pmu_support.md#example-3 [2]
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/andes/andes_pmu.c         | 12 ------------
+ platform/generic/include/andes/andes_hpm.h | 12 ------------
+ 2 files changed, 24 deletions(-)
+ delete mode 100644 platform/generic/include/andes/andes_hpm.h
+
+diff --git a/platform/generic/andes/andes_pmu.c b/platform/generic/andes/andes_pmu.c
+index 4b2d45b062e5..479fb9a6cd2b 100644
+--- a/platform/generic/andes/andes_pmu.c
++++ b/platform/generic/andes/andes_pmu.c
+@@ -6,7 +6,6 @@
+  */
+ 
+ #include <andes/andes45.h>
+-#include <andes/andes_hpm.h>
+ #include <andes/andes_pmu.h>
+ #include <sbi/sbi_bitops.h>
+ #include <sbi/sbi_error.h>
+@@ -86,20 +85,9 @@ int andes_pmu_extensions_init(const struct fdt_match *match,
+ int andes_pmu_init(const struct fdt_match *match)
+ {
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+-	void *fdt = fdt_get_address();
+-	int pmu_offset;
+ 
+ 	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_XANDESPMU))
+ 		sbi_pmu_set_device(&andes_pmu);
+ 
+-	/*
+-	 * Populate default mappings if device-tree doesn't
+-	 * provide a valid pmu node.
+-	 */
+-	pmu_offset = fdt_node_offset_by_compatible(fdt, -1, "riscv,pmu");
+-	if (pmu_offset < 0)
+-		return (pmu_offset == -FDT_ERR_NOTFOUND) ? andes_pmu_setup()
+-							 : SBI_EFAIL;
+-
+ 	return 0;
+ }
+diff --git a/platform/generic/include/andes/andes_hpm.h b/platform/generic/include/andes/andes_hpm.h
+deleted file mode 100644
+index b4d71b9dd26b..000000000000
+--- a/platform/generic/include/andes/andes_hpm.h
++++ /dev/null
+@@ -1,12 +0,0 @@
+-/*
+- * SPDX-License-Identifier: BSD-2-Clause
+- *
+- * Copyright (c) 2023 Andes Technology Corporation
+- */
+-
+-#ifndef _ANDES_HPM_H_
+-#define _ANDES_HPM_H_
+-
+-static inline int andes_pmu_setup(void) { return 0; }
+-
+-#endif /* _ANDES_HPM_H_ */
+-- 
+2.34.1
+

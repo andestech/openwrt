@@ -1,0 +1,128 @@
+From c21c99db6acf14fdf420271ce670b6a648fc3a9a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:02 +0200
+Subject: [PATCH 085/172] lib: sbi: sse: fix typos, comments and spacing errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fix some errors spotted by Samuel while reviewing the SSE implementation.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reported-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/sbi_ecall_interface.h | 24 ++++++++++++------------
+ lib/sbi/sbi_sse.c                 | 22 +++++++++++-----------
+ 2 files changed, 23 insertions(+), 23 deletions(-)
+
+diff --git a/include/sbi/sbi_ecall_interface.h b/include/sbi/sbi_ecall_interface.h
+index a511e0b7d12f..2600b662f38c 100644
+--- a/include/sbi/sbi_ecall_interface.h
++++ b/include/sbi/sbi_ecall_interface.h
+@@ -344,36 +344,36 @@ enum sbi_sse_attr_id {
+ #define SBI_SSE_ATTR_INTERRUPTED_FLAGS_HSTATUS_SPVP	BIT(3)
+ 
+ enum sbi_sse_state {
+-	SBI_SSE_STATE_UNUSED     = 0,
+-	SBI_SSE_STATE_REGISTERED = 1,
+-	SBI_SSE_STATE_ENABLED    = 2,
+-	SBI_SSE_STATE_RUNNING    = 3,
++	SBI_SSE_STATE_UNUSED		= 0,
++	SBI_SSE_STATE_REGISTERED	= 1,
++	SBI_SSE_STATE_ENABLED		= 2,
++	SBI_SSE_STATE_RUNNING		= 3,
+ };
+ 
+ /* SBI SSE Event IDs. */
+ #define SBI_SSE_EVENT_LOCAL_RAS			0x00000000
+-#define	SBI_SSE_EVENT_LOCAL_PLAT_0_START	0x00004000
++#define SBI_SSE_EVENT_LOCAL_PLAT_0_START	0x00004000
+ #define SBI_SSE_EVENT_LOCAL_PLAT_0_END		0x00007fff
+ #define SBI_SSE_EVENT_GLOBAL_RAS		0x00008000
+-#define	SBI_SSE_EVENT_GLOBAL_PLAT_0_START	0x00004000
++#define SBI_SSE_EVENT_GLOBAL_PLAT_0_START	0x00004000
+ #define SBI_SSE_EVENT_GLOBAL_PLAT_0_END		0x00007fff
+ 
+ #define SBI_SSE_EVENT_LOCAL_PMU			0x00010000
+-#define	SBI_SSE_EVENT_LOCAL_PLAT_1_START	0x00014000
++#define SBI_SSE_EVENT_LOCAL_PLAT_1_START	0x00014000
+ #define SBI_SSE_EVENT_LOCAL_PLAT_1_END		0x00017fff
+-#define	SBI_SSE_EVENT_GLOBAL_PLAT_1_START	0x0001c000
++#define SBI_SSE_EVENT_GLOBAL_PLAT_1_START	0x0001c000
+ #define SBI_SSE_EVENT_GLOBAL_PLAT_1_END		0x0001ffff
+ 
+-#define	SBI_SSE_EVENT_LOCAL_PLAT_2_START	0x00024000
++#define SBI_SSE_EVENT_LOCAL_PLAT_2_START	0x00024000
+ #define SBI_SSE_EVENT_LOCAL_PLAT_2_END		0x00027fff
+-#define	SBI_SSE_EVENT_GLOBAL_PLAT_2_START	0x0002c000
++#define SBI_SSE_EVENT_GLOBAL_PLAT_2_START	0x0002c000
+ #define SBI_SSE_EVENT_GLOBAL_PLAT_2_END		0x0002ffff
+ 
+ #define SBI_SSE_EVENT_LOCAL_SOFTWARE		0xffff0000
+-#define	SBI_SSE_EVENT_LOCAL_PLAT_3_START	0xffff4000
++#define SBI_SSE_EVENT_LOCAL_PLAT_3_START	0xffff4000
+ #define SBI_SSE_EVENT_LOCAL_PLAT_3_END		0xffff7fff
+ #define SBI_SSE_EVENT_GLOBAL_SOFTWARE		0xffff8000
+-#define	SBI_SSE_EVENT_GLOBAL_PLAT_3_START	0xffffc000
++#define SBI_SSE_EVENT_GLOBAL_PLAT_3_START	0xffffc000
+ #define SBI_SSE_EVENT_GLOBAL_PLAT_3_END		0xffffffff
+ 
+ #define SBI_SSE_EVENT_GLOBAL_BIT		(1 << 15)
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index f0729f944d1b..a5fed3489cf6 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -128,7 +128,7 @@ struct sse_hart_state {
+ 	 *
+ 	 * When an event is in a state >= ENABLED, then it is inserted in the
+ 	 * this enabled_event_list and thus can only be removed from this
+-	 * list upon disable ecall or on complete with ONE_SHOT flag.
++	 * list upon disable ecall or on complete with ONESHOT flag.
+ 	 */
+ 	struct sbi_dlist enabled_event_list;
+ 
+@@ -202,7 +202,7 @@ static struct sse_hart_state *sse_get_hart_state(struct sbi_sse_event *e)
+ 	return sse_get_hart_state_ptr(s);
+ }
+ 
+-static struct sse_global_event *sse_get_global_event(struct sbi_sse_event* e)
++static struct sse_global_event *sse_get_global_event(struct sbi_sse_event *e)
+ {
+ 	return container_of(e, struct sse_global_event, event);
+ }
+@@ -552,11 +552,11 @@ static bool sse_event_check_inject(struct sbi_sse_event *e,
+ 				   struct sbi_trap_regs *regs)
+ {
+ 	/*
+-	* List of event is ordered by priority, stop at first running
+-	* event since all other events after this one are of lower
+-	* priority. This means an event of higher priority is already
+-	* running.
+-	*/
++	 * List of event is ordered by priority, stop at first running
++	 * event since all other events after this one are of lower
++	 * priority. This means an event of higher priority is already
++	 * running.
++	 */
+ 	if (sse_event_state(e) == SBI_SSE_STATE_RUNNING) {
+ 		return true;
+ 	}
+@@ -882,10 +882,10 @@ int sbi_sse_read_attrs(uint32_t event_id, uint32_t base_attr_id,
+ 
+ 	/*
+ 	 * Copy all attributes at once since struct sse_event_attrs is matching
+-	 * the SBI_SSE_ATTR_* attributes. While WRITE_ATTR attribute is not used
+-	 * in s-mode sse handling path, READ_ATTR is used to retrieve the value
+-	 * of registers when interrupted. Rather than doing multiple SBI calls,
+-	 * a single one is done allowing to retrieve them all at once.
++	 * the SBI_SSE_ATTR_* attributes. READ_ATTR is used in SSE handling path
++	 * to retrieve the value of registers when interrupted. Rather than
++	 * doing multiple SBI calls a single one is done allowing to retrieve
++	 * them all at once.
+ 	 */
+ 	e_attrs = (unsigned long *)&e->attrs;
+ 	attrs = (unsigned long *)output_phys_lo;
+-- 
+2.34.1
+

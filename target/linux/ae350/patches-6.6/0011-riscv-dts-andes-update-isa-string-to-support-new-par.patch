@@ -1,0 +1,466 @@
+From 0a05d5f8421342193c9b2107f9933ef20ea5a249 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Mon, 25 Sep 2023 16:58:29 +0800
+Subject: [PATCH 011/168] riscv: dts: andes: update isa string to support new
+ parser
+
+The canonical order of ISA extension names in the ISA string is defined
+in chapter 27 of the unprivileged specification.
+
+Ordinarily, for in-kernel data structures, this order is unimportant but
+isa_ext_arr defines the order of the ISA string in /proc/cpuinfo.
+
+The specification uses vague wording, such as should, when it comes to
+ordering, so for our purposes the following rules apply:
+
+1. All multi-letter extensions must be separated from other extensions by
+   an underscore.
+
+2. Additional standard extensions (starting with 'Z') must be sorted after
+   single-letter extensions and before any higher-privileged extensions.
+
+3. The first letter following the 'Z' conventionally indicates the most
+   closely related alphabetical extension category, IMAFDQLCBKJTPVH.
+   If multiple 'Z' extensions are named, they must be ordered first by
+   category, then alphabetically within a category.
+
+3. Standard supervisor-level extensions (starting with 'S') must be listed
+   after standard unprivileged extensions.  If multiple supervisor-level
+   extensions are listed, they must be ordered alphabetically.
+
+4. Standard machine-level extensions (starting with 'Zxm') must be listed
+   after any lower-privileged, standard extensions.  If multiple
+   machine-level extensions are listed, they must be ordered
+   alphabetically.
+
+5. Non-standard extensions (starting with 'X') must be listed after all
+   standard extensions. If multiple non-standard extensions are listed,
+   they must be ordered alphabetically.
+
+An example string following the order is:
+   rv64imadc_zifoo_zigoo_zafoo_sbar_scar_zxmbaz_xqux_xrux
+
+New entries to this struct should follow the ordering rules
+described above.
+
+commit 4265b0ec5ee7b ("RISC-V: split riscv_fill_hwcap() in 3")
+
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ .../dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts |  2 +-
+ .../boot/dts/andes/a25mp_c4_d_dsp_ae350.dts      |  8 ++++----
+ .../andes/a27l2_c1_d_dsp_noncoherent_ae350.dts   |  2 +-
+ .../dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts |  2 +-
+ .../boot/dts/andes/a45mp_c4_d_dsp_ae350.dts      |  8 ++++----
+ .../andes/ax25_c1_d_dsp_noncoherent_ae350.dts    |  2 +-
+ .../boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts  |  4 ++--
+ .../boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts     |  8 ++++----
+ .../andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts  |  2 +-
+ .../andes/ax45_c1_d_dsp_noncoherent_ae350.dts    |  2 +-
+ .../boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts     |  8 ++++----
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts    | 16 ++++++++--------
+ .../boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts    |  8 ++++----
+ .../boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts     |  4 ++--
+ 14 files changed, 38 insertions(+), 38 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 17478256a800..f4d369ba4b4d 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 2fe95a7242ed..8bea20ef1aa6 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index d71ee10f72b7..e36cd428cb7f 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index a8c47cf2e099..fcc9197441f5 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 2bce9cd2dabf..8456dbe469c4 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv32i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv32imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 8a908c6f2bc4..2b006d516036 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index decfac961da5..fbe4645fcfbd 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -16,7 +16,7 @@ cpu@0 {
+ 			reg = <0x0>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5";
++			riscv,isa = "rv64imafdc_xandes";
+ 			riscv,priv-major = <0x1>;
+ 			riscv,priv-minor = <0xa>;
+ 			mmu-type = "riscv,sv39";
+@@ -39,7 +39,7 @@ cpu@1 {
+ 			reg = <0x1>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5";
++			riscv,isa = "rv64imafdc_xandes";
+ 			riscv,priv-major = <0x1>;
+ 			riscv,priv-minor = <0xa>;
+ 			mmu-type = "riscv,sv39";
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 93435090effa..81b2da15df0e 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 491202c977ba..79c82647ca58 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index fa313c9d572a..2df101f030d2 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index 961fbb1f0b59..be05b256c091 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdc_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index e7b557f8a992..4a0292a55799 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -138,7 +138,7 @@ cpu@4 {
+ 			reg = <0x04>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -166,7 +166,7 @@ cpu@5 {
+ 			reg = <0x05>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -194,7 +194,7 @@ cpu@6 {
+ 			reg = <0x06>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+@@ -222,7 +222,7 @@ cpu@7 {
+ 			reg = <0x07>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0c2p0xv5-1p1";
++			riscv,isa = "rv64imac_xandes";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 463e4d710c9d..bd8d21ed54c2 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -26,7 +26,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0v1p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdcv_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -54,7 +54,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0v1p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdcv_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -82,7 +82,7 @@ cpu@2 {
+ 			reg = <0x02>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0v1p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdcv_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+@@ -110,7 +110,7 @@ cpu@3 {
+ 			reg = <0x03>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64i2p0m2p0a2p0f2p0d2p0c2p0v1p0xv5-1p1xdsp0p0";
++			riscv,isa = "rv64imafdcv_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index 05e986a103cb..aec08e6be36d 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -27,7 +27,7 @@ cpu@0 {
+ 			reg = <0x00>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes";
++			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			riscv,cbom-block-size = <0x40>;
+@@ -56,7 +56,7 @@ cpu@1 {
+ 			reg = <0x01>;
+ 			status = "okay";
+ 			compatible = "riscv";
+-			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes";
++			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
+ 			riscv,priv-major = <0x01>;
+ 			riscv,priv-minor = <0x0a>;
+ 			riscv,cbom-block-size = <0x40>;
+-- 
+2.34.1
+

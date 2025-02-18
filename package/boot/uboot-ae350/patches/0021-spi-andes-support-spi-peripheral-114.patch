@@ -1,0 +1,230 @@
+From 27c25cff635ad597738ddc065985e208d75548bf Mon Sep 17 00:00:00 2001
+From: Locus Wei-Han Chen <locus84@andestech.com>
+Date: Fri, 23 Aug 2024 14:39:50 +0800
+Subject: [PATCH 21/53] spi: andes: support spi peripheral (#114)
+
+1. Previously, the ATCSPI200 driver supported only SPI NOR flash. In
+   Ticket 26269,support for accessing SPI peripherals is requested.
+   The outcome is this commit.
+   The test is performed by sending the Read ID command to the SPI NOR
+   flash as the access pattern to check the function's correctness.
+
+2. Previously, we utilized the NOR flash model in the mx25u1635e.
+   However, in Ticket 26269, the customer's flash model is the
+   mx25u25635f, which differs from ours. To address this discrepancy,
+   we added a fixup hook to enable quad mode.
+
+Signed-off-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/114
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Co-authored-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-committed-by: Locus Wei-Han Chen <locus84@andestech.com>
+---
+ drivers/mtd/spi/spi-nor-core.c | 19 ++++++++++
+ drivers/spi/atcspi200_spi.c    | 63 +++++++++++++++++++---------------
+ 2 files changed, 54 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/mtd/spi/spi-nor-core.c b/drivers/mtd/spi/spi-nor-core.c
+index e6466bcafdc9..bf9c0c017308 100644
+--- a/drivers/mtd/spi/spi-nor-core.c
++++ b/drivers/mtd/spi/spi-nor-core.c
+@@ -3830,6 +3830,23 @@ static void mx25u1635e_post_sfdp_fixup(struct spi_nor *nor,
+ static struct spi_nor_fixups mx25u1635e_fixups = {
+ 	.post_sfdp = mx25u1635e_post_sfdp_fixup,
+ };
++
++static void mx25u25635f_post_sfdp_fixup(struct spi_nor *nor,
++					struct spi_nor_flash_parameter *params)
++{
++	params->hwcaps.mask |= (SNOR_HWCAPS_READ_1_4_4 | SNOR_HWCAPS_PP_1_4_4);
++	spi_nor_set_read_settings(&params->reads[SNOR_CMD_READ_1_4_4],
++				  0, 8, SPINOR_OP_READ_1_4_4,
++				  SNOR_PROTO_1_4_4);
++
++	spi_nor_set_pp_settings(&params->page_programs[SNOR_CMD_PP_1_4_4],
++				SPINOR_OP_PP_1_4_4, SNOR_PROTO_1_4_4);
++}
++
++static struct spi_nor_fixups mx25u25635f_fixups = {
++	.post_sfdp = mx25u25635f_post_sfdp_fixup,
++};
++
+ #endif /* CONFIG_SPI_FLASH_MACRONIX */
+ 
+ /** spi_nor_octal_dtr_enable() - enable Octal DTR I/O if needed
+@@ -4021,6 +4038,8 @@ void spi_nor_set_fixups(struct spi_nor *nor)
+ 	if (CONFIG_IS_ENABLED(SPI_FLASH_MX25U1635E) &&
+ 	    !strncmp(nor->info->name, "mx25u1635e", 10))
+ 		nor->fixups = &mx25u1635e_fixups;
++	else if (!strncmp(nor->info->name, "mx25u25635f", 11))
++		nor->fixups = &mx25u25635f_fixups;
+ 	else
+ 		nor->fixups = &macronix_octal_fixups;
+ #endif /* SPI_FLASH_MACRONIX */
+diff --git a/drivers/spi/atcspi200_spi.c b/drivers/spi/atcspi200_spi.c
+index 56d3fd8cc5e3..154a14646ef7 100644
+--- a/drivers/spi/atcspi200_spi.c
++++ b/drivers/spi/atcspi200_spi.c
+@@ -33,6 +33,8 @@ DECLARE_GLOBAL_DATA_PTR;
+ 
+ #define DATA_LENGTH(x)		((x - 1) << 8)
+ #define ADDR_LENGTH(x)		((x - 1) << 16)
++#define ADDR_LEN_OFFSET		16
++#define ADDR_LEN_MASK		(0x3 << ADDR_LEN_OFFSET)
+ 
+ #define TRAMODE_OFFSET		24
+ #define TRAMODE_MASK		(0x0F << TRAMODE_OFFSET)
+@@ -47,9 +49,10 @@ DECLARE_GLOBAL_DATA_PTR;
+ #define TRAMODE_DW		(8 << TRAMODE_OFFSET)
+ #define TRAMODE_DR		(9 << TRAMODE_OFFSET)
+ #define WCNT_OFFSET		12
+-#define WCNT_MASK		(0x01FF << WCNT_OFFSET)
++#define CNT_MASK		0x1FF
++#define WCNT_MASK		(CNT_MASK << WCNT_OFFSET)
+ #define RCNT_OFFSET		0
+-#define RCNT_MASK		(0x01FF << RCNT_OFFSET)
++#define RCNT_MASK		(CNT_MASK << RCNT_OFFSET)
+ 
+ #define TXFTH_OFFSET		16
+ #define RXFTH_OFFSET		8
+@@ -183,23 +186,16 @@ static int __atcspi200_spi_release_bus(struct nds_spi_subordinate *ns)
+ 
+ static int __atcspi200_spi_start(struct nds_spi_subordinate *ns)
+ {
+-	int i;
+-	int olen;
+ 	int tc;
+ 
+-	tc = ns->regs->tctrl & ~(WCNT_MASK | RCNT_MASK | TRAMODE_MASK);
+-	if ((ns->din) && (ns->cmd_len))
+-		tc |= TRAMODE_WR;
+-	else if (ns->din)
++	tc = 0;
++	if (ns->din && !ns->dout)
+ 		tc |= TRAMODE_RO;
+-	else
++	else if (ns->dout && !ns->din)
+ 		tc |= TRAMODE_WO;
+ 
+ 	if (ns->dout)
+-		olen = ns->tran_len;
+-	else
+-		olen = 0;
+-	tc |= (ns->cmd_len + olen - 1) << WCNT_OFFSET;
++		tc |= (ns->tran_len - 1) << WCNT_OFFSET;
+ 
+ 	if (ns->din)
+ 		tc |= (ns->tran_len - 1) << RCNT_OFFSET;
+@@ -207,9 +203,6 @@ static int __atcspi200_spi_start(struct nds_spi_subordinate *ns)
+ 	ns->regs->tctrl = tc;
+ 	ns->regs->cmd = 1;
+ 
+-	for (i = 0; i < ns->cmd_len; i++)
+-		ns->regs->data = ns->cmd_buf[i];
+-
+ 	return 0;
+ }
+ 
+@@ -247,6 +240,7 @@ static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bit
+ 	unsigned long data_len = bitlen / 8;
+ 	int rf_cnt;
+ 	int ret = 0, timeout = 0;
++	int tx_count = 0, rx_count = 0;
+ 
+ 	max_tran_len = ns->max_transfer_length;
+ 	switch (flags) {
+@@ -266,14 +260,9 @@ static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bit
+ 		break;
+ 
+ 	case SPI_XFER_BEGIN | SPI_XFER_END:
+-		ns->data_len = 0;
+-		ns->din = 0;
+-		ns->dout = 0;
+-		cmd_len = ns->cmd_len = data_len;
+-		memcpy(cmd_buf, data_out, cmd_len);
+-		data_out = 0;
+-		data_len = 0;
+-		__atcspi200_spi_start(ns);
++		ns->data_len = data_len;
++		ns->din = (u8 *)data_in;
++		ns->dout = (u8 *)data_out;
+ 		break;
+ 	default:
+ 		BUG_ON(1);
+@@ -295,16 +284,21 @@ static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bit
+ 		if(num_bytes == 0)
+ 			num_bytes = CHUNK_SIZE;
+ 		__atcspi200_spi_start(ns);
++		if (ns->dout)
++			tx_count = ((ns->regs->tctrl >> 12) & CNT_MASK) + 1;
++		if (ns->din)
++			rx_count = ((ns->regs->tctrl >> 0) & CNT_MASK) + 1;
+ 
+ 		while (num_blks && (timeout--)) {
+ 			event = in_le32(&ns->regs->status);
+-			if ((event & TXEPTY) && (data_out)) {
++			if ((event & TXEPTY) && data_out && tx_count) {
+ 				__nspi_espi_tx(ns, dout);
+-				num_blks -= CHUNK_SIZE;
+ 				dout += CHUNK_SIZE;
++				tx_count--;
+ 			}
+ 
+-			if ((event & RXFVE_MASK) && (data_in)) {
++			event = in_le32(&ns->regs->status);
++			if ((event & RXFVE_MASK) && data_in && rx_count) {
+ 				rf_cnt = ((event & RXFVE_MASK)>> RXFVE_OFFSET);
+ 				if (rf_cnt >= CHUNK_SIZE)
+ 					rx_bytes = CHUNK_SIZE;
+@@ -314,8 +308,8 @@ static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bit
+ 					continue;
+ 
+ 				if (__nspi_espi_rx(ns, din, rx_bytes) == rx_bytes) {
+-					num_blks -= CHUNK_SIZE;
+ 					din = (unsigned char *)din + rx_bytes;
++					rx_count--;
+ 				}
+ 			}
+ 
+@@ -323,6 +317,7 @@ static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bit
+ 				debug("spi_xfer: %s() timeout\n", __func__);
+ 				break;
+ 			}
++			num_blks = max(tx_count, rx_count);
+ 		}
+ 
+ 		data_len -= tran_len;
+@@ -536,9 +531,11 @@ static int atcspi200_spi_mem_exec_op(struct spi_slave *subordinate,
+ 	struct udevice *bus;
+ 	struct nds_spi_subordinate *ns;
+ 	int ret;
++	unsigned int format_val;
+ 
+ 	bus = subordinate->dev->parent;
+ 	ns = dev_get_priv(bus);
++	format_val = ns->regs->format;
+ 	if (op->data.nbytes) {
+ 		if (op->data.dir == SPI_MEM_DATA_IN) {
+ 			ns->din = op->data.buf.in;
+@@ -548,6 +545,16 @@ static int atcspi200_spi_mem_exec_op(struct spi_slave *subordinate,
+ 			ns->din = 0;
+ 		}
+ 	}
++
++	if (op->addr.nbytes) {
++		format_val = format_val & ~(ADDR_LEN_MASK);
++		if (op->addr.nbytes == 3)
++			format_val |= ADDR_LENGTH(3);
++		else if (op->addr.nbytes == 4)
++			format_val |= ADDR_LENGTH(4);
++	}
++	ns->regs->format = format_val;
++
+ 	ret = atcspi200_spi_setting(ns, op);
+ 	if (pio_enable)
+ 		pio_transfer_data(ns, ns->din, ns->dout, op->data.nbytes);
+-- 
+2.34.1
+

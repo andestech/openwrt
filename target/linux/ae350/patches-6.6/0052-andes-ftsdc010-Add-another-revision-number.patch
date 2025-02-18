@@ -1,0 +1,48 @@
+From 19e6d3be342751680b55865e792ea4a8cceb911e Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Tue, 5 Sep 2023 11:20:50 +0800
+Subject: [PATCH 052/168] andes: ftsdc010: Add another revision number
+
+According to Kavalan/James <jamesykm@andestech.com>,
+the revision number for future Andes SDC IP will be changed to 32'h0003_0108.
+Therefore, for backward compatibility, we add another revision number
+to accommodate this change.
+
+Based on the FPGA bitmap feedback from Condor, the MMC controller has
+a revision ID of 0x00030106. Therefore, we have added support for this
+revision of the MMC controller.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Signed-off-by: CL Wang  <cl634@andestech.com>
+---
+ drivers/mmc/host/ftsdc010g.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mmc/host/ftsdc010g.c b/drivers/mmc/host/ftsdc010g.c
+index 26d933afb012..7f4da744983c 100644
+--- a/drivers/mmc/host/ftsdc010g.c
++++ b/drivers/mmc/host/ftsdc010g.c
+@@ -1371,7 +1371,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	struct mmc_host	*mmc;
+ 	struct ftsdc_mmc_config *pdata = NULL;
+ 	struct resource *r, *mem = NULL;
+-	int ret = -ENOMEM;
++	int ret = -ENOMEM, ret2 = -ENOMEM, ret3 = -ENOMEM;
+ 	u32 con;
+ 	int irq = 0;
+ 	size_t mem_size;
+@@ -1430,8 +1430,10 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	/* Check revision register */
+ 	read_fixup = symbol_get(readl_fixup);
+ 	ret = read_fixup(host->base + SDC_REVISION_REG, 0x00030107, 0);
++	ret2 = read_fixup(host->base + SDC_REVISION_REG, 0x00030108, 0);
++	ret3 = read_fixup(host->base + SDC_REVISION_REG, 0x00030106, 0);
+ 	symbol_put(readl_fixup);
+-	if (!ret) {
++	if (!ret && !ret2 && !ret3) {
+ 		dev_err(&pdev->dev,
+ 			"bitmap revision mismatch(ftsdc)\n");
+ 		ret = -ENXIO;
+-- 
+2.34.1
+

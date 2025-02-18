@@ -1,0 +1,70 @@
+From b94396c7dde699c17e81e087aadafda125f86856 Mon Sep 17 00:00:00 2001
+From: Samuel Holland <samuel.holland@sifive.com>
+Date: Mon, 18 Mar 2024 07:49:28 -0700
+Subject: [PATCH 071/172] lib: utils/timer: Optimize current hart scratch
+ access
+
+The address of the local scratch area is stored in each hart's mscratch
+CSR. It is more efficient to read the CSR than to compute the address
+from the hart ID.
+
+Signed-off-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/timer/aclint_mtimer.c | 18 +++---------------
+ 1 file changed, 3 insertions(+), 15 deletions(-)
+
+diff --git a/lib/utils/timer/aclint_mtimer.c b/lib/utils/timer/aclint_mtimer.c
+index 271e6252fef9..9acb26eb7cc2 100644
+--- a/lib/utils/timer/aclint_mtimer.c
++++ b/lib/utils/timer/aclint_mtimer.c
+@@ -72,14 +72,10 @@ static u64 mtimer_value(void)
+ static void mtimer_event_stop(void)
+ {
+ 	u32 target_hart = current_hartid();
+-	struct sbi_scratch *scratch;
++	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+ 	struct aclint_mtimer_data *mt;
+ 	u64 *time_cmp;
+ 
+-	scratch = sbi_hartid_to_scratch(target_hart);
+-	if (!scratch)
+-		return;
+-
+ 	mt = mtimer_get_hart_data_ptr(scratch);
+ 	if (!mt)
+ 		return;
+@@ -92,14 +88,10 @@ static void mtimer_event_stop(void)
+ static void mtimer_event_start(u64 next_event)
+ {
+ 	u32 target_hart = current_hartid();
+-	struct sbi_scratch *scratch;
++	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+ 	struct aclint_mtimer_data *mt;
+ 	u64 *time_cmp;
+ 
+-	scratch = sbi_hartid_to_scratch(target_hart);
+-	if (!scratch)
+-		return;
+-
+ 	mt = mtimer_get_hart_data_ptr(scratch);
+ 	if (!mt)
+ 		return;
+@@ -155,13 +147,9 @@ int aclint_mtimer_warm_init(void)
+ {
+ 	u64 *mt_time_cmp;
+ 	u32 target_hart = current_hartid();
+-	struct sbi_scratch *scratch;
++	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+ 	struct aclint_mtimer_data *mt;
+ 
+-	scratch = sbi_hartid_to_scratch(target_hart);
+-	if (!scratch)
+-		return SBI_ENOENT;
+-
+ 	mt = mtimer_get_hart_data_ptr(scratch);
+ 	if (!mt)
+ 		return SBI_ENODEV;
+-- 
+2.34.1
+

@@ -1,0 +1,30 @@
+From 455de672dd7c2aa1992df54dfb08dc11abbc1b1a Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Sun, 30 Jun 2024 14:03:26 +0530
+Subject: [PATCH 134/172] include: Bump-up version to 1.5
+
+This patch updates OpenSBI version to 1.5 as part of
+release preparation.
+
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/sbi_version.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/sbi/sbi_version.h b/include/sbi/sbi_version.h
+index 8d9e395bd8ff..d876aa5038a8 100644
+--- a/include/sbi/sbi_version.h
++++ b/include/sbi/sbi_version.h
+@@ -11,7 +11,7 @@
+ #define __SBI_VERSION_H__
+ 
+ #define OPENSBI_VERSION_MAJOR 1
+-#define OPENSBI_VERSION_MINOR 4
++#define OPENSBI_VERSION_MINOR 5
+ 
+ /**
+  * OpenSBI 32-bit version with:
+-- 
+2.34.1
+

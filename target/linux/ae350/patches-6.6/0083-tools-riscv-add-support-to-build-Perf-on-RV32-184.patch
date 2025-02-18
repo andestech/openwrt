@@ -1,0 +1,78 @@
+From 5e40408f03d26b55e7a4555936a76c57d126a39c Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Thu, 12 Sep 2024 13:31:58 +0800
+Subject: [PATCH 083/168] tools: riscv: add support to build Perf on RV32
+ (#184)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Port patches to build Perf on RV32.
+
+From upstream：
+- Commit 135eb16c07 ("	perf riscv: Fix the warning due to the incompatible type")
+It needs to be reverted when upgrading the kernel.
+
+The other twos are from ast-v5_3_0-branch：
+- Commit 8b7cb310d8 ("tools: perf: add support to build Perf on RV32")
+- Commit fc351c0cf5 ("tool: andes: perf: fix perf tools compile error on Linux5.4")
+
+Co-authored-by: Eric Lin <tesheng@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/184
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-committed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ tools/arch/riscv/include/uapi/asm/unistd.h | 6 ++++++
+ tools/perf/arch/riscv/util/header.c        | 2 +-
+ tools/perf/util/genelf.h                   | 3 +++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/tools/arch/riscv/include/uapi/asm/unistd.h b/tools/arch/riscv/include/uapi/asm/unistd.h
+index f506cca520b0..0b4612042986 100644
+--- a/tools/arch/riscv/include/uapi/asm/unistd.h
++++ b/tools/arch/riscv/include/uapi/asm/unistd.h
+@@ -20,6 +20,12 @@
+ #define __ARCH_WANT_SET_GET_RLIMIT
+ #endif /* __LP64__ */
+ 
++#define __ARCH_WANT_NEW_STAT
++#define __ARCH_WANT_STAT64
++#define __ARCH_WANT_SET_GET_RLIMIT
++#define __ARCH_WANT_SYS_CLONE3
++#define __ARCH_WANT_TIME32_SYSCALLS
++
+ #include <asm-generic/unistd.h>
+ 
+ /*
+diff --git a/tools/perf/arch/riscv/util/header.c b/tools/perf/arch/riscv/util/header.c
+index 4a41856938a8..1b29030021ee 100644
+--- a/tools/perf/arch/riscv/util/header.c
++++ b/tools/perf/arch/riscv/util/header.c
+@@ -41,7 +41,7 @@ static char *_get_cpuid(void)
+ 	char *mimpid = NULL;
+ 	char *cpuid = NULL;
+ 	int read;
+-	unsigned long line_sz;
++	size_t line_sz;
+ 	FILE *cpuinfo;
+ 
+ 	cpuinfo = fopen(CPUINFO, "r");
+diff --git a/tools/perf/util/genelf.h b/tools/perf/util/genelf.h
+index 5f18d20ea903..4e2e4f40e134 100644
+--- a/tools/perf/util/genelf.h
++++ b/tools/perf/util/genelf.h
+@@ -43,6 +43,9 @@ int jit_add_debug_info(Elf *e, uint64_t code_addr, void *debug, int nr_debug_ent
+ #elif defined(__riscv) && __riscv_xlen == 64
+ #define GEN_ELF_ARCH	EM_RISCV
+ #define GEN_ELF_CLASS	ELFCLASS64
++#elif defined(__riscv) && __riscv_xlen == 32
++#define GEN_ELF_ARCH	EM_RISCV
++#define GEN_ELF_CLASS	ELFCLASS32
+ #elif defined(__loongarch__)
+ #define GEN_ELF_ARCH	EM_LOONGARCH
+ #define GEN_ELF_CLASS	ELFCLASS64
+-- 
+2.34.1
+

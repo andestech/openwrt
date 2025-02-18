@@ -1,0 +1,215 @@
+From 4ffe2c96d1f69e5b6a77ac25724b381d1c22229a Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Wed, 29 May 2024 14:25:48 +0800
+Subject: [PATCH 016/168] riscv: dts: andes: rename compatible string
+ "riscv,andes-pmu" to "riscv,pmu"
+
+Modify the riscv PMU device node according to the devicetree bindings.
+
+Please refer to: Documentation/devicetree/bindings/perf/riscv,pmu.yaml
+
+Gitea issues : https://gitea.andestech.com/RD-SW/linux/issues/100
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts    | 2 +-
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts              | 2 +-
+ arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 2 +-
+ arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts    | 2 +-
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts              | 2 +-
+ arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts   | 2 +-
+ arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts          | 2 +-
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts             | 2 +-
+ arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 2 +-
+ arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts   | 2 +-
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts             | 2 +-
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts                   | 2 +-
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts            | 2 +-
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts             | 2 +-
+ 14 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 7b31d642b057..f9ffbee0ca17 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -233,7 +233,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index e11bcfbb5ea9..99962c83e70b 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -300,7 +300,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 6fcac0e87aa3..ab2434ae9039 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -246,7 +246,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index d088b955e6b2..33f5d29150f6 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -235,7 +235,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index ff6cfa24b4c3..09c55ed3df41 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -299,7 +299,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 4229f600f98c..bb53a678fc67 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -233,7 +233,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index 733a739a8393..804bf9958169 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -272,7 +272,7 @@ snd@f0d00000 {
+ 
+ 	pmu {
+ 		device_type = "pmu";
+-		compatible = "riscv,andes-pmu";
++		compatible = "riscv,pmu";
+ 	};
+ 
+ 	nor@0,0 {
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index a73448e9e497..f819cfa58a22 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -300,7 +300,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 0fc13182ae49..657b7470f43e 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -246,7 +246,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 978145a0a4e1..7f9c0d689fe8 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -235,7 +235,7 @@ snd@f0d00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index 57d65f0e575c..8cecd6dd56a9 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -299,7 +299,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index 3fc74f5a3a95..c5a5b577634f 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -411,7 +411,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 47f70050645e..72fb7f33c501 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -299,7 +299,7 @@ lcd@e0200000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index b1df293b882b..e482a93754bc 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -238,7 +238,7 @@ dma@f0c00000 {
+ 		};
+ 
+ 		pmu {
+-			compatible = "riscv,andes-pmu";
++			compatible = "riscv,pmu";
+ 			device_type = "pmu";
+ 		};
+ 
+-- 
+2.34.1
+

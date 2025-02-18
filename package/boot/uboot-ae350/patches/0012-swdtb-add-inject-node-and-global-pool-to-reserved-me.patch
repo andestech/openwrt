@@ -1,0 +1,332 @@
+From 8765edc2b5564d59e40187d57e91fd75b7352653 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:51:41 +0800
+Subject: [PATCH 12/53] swdtb: add inject node and global pool to reserved
+ memory (#105)
+
+1. swdtb: inject: add inject node to reserved memory
+2. swdtb: global_pool: add DMA global pool to reserved memory
+
+*Add inject node to reserved memory
+Add the inject node to the reserved-memory node.
+If the reserved-memory node is absent, it will be created as part of this
+fix.
+
+Example:
+reserved-memory {
+	#address-cells = <0x02>;
+	#size-cells = <0x02>;
+	ranges;
+	andes_inject@100000 {
+		compatible = "inject";
+		reg = <0x00 0x100000 0x00 0x100000>;
+		reusable;
+	};
+};
+
+*Add DMA global pool to reserved memory:
+Add the DMA global pool node to the reserved-memory node.
+If the reserved-memory node does not exist, it will be created as part of
+this fix.
+
+Example:
+reserved-memory {
+	#address-cells = <0x02>;
+	#size-cells = <0x02>;
+	ranges;
+	dma_global_pool0@3e800000 {
+		linux,dma-default;
+		compatible = "shared-dma-pool";
+		reg = <0x00 0x3e800000 0x00 0x200000>;
+		phandle = <0x06>;
+		no-map;
+	};
+};
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/105
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_config.h        |   7 +
+ .../common/swdtb_merger/swdtb_merger.c        |  31 +++++
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 127 ++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |   2 +
+ .../common/swdtb_merger/swdtb_tool.c          |  31 +++++
+ .../common/swdtb_merger/swdtb_tool.h          |   3 +
+ 6 files changed, 201 insertions(+)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_config.h b/board/andestech/common/swdtb_merger/swdtb_config.h
+index 3011ad40b6ea..2aa355ee4fb9 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_config.h
++++ b/board/andestech/common/swdtb_merger/swdtb_config.h
+@@ -42,4 +42,11 @@
+ 	printf("******************************\n");       \
+ } while (0)
+ 
++/* For adding a new node to the reserved memory */
++#define ANDES_INJECT_NODE_START		(0x100000)
++#define ANDES_INJECT_NODE_SIZE		(0x100000)
++
++#define ANDES_DMA_POOL_NODE_START	(0x3E800000)
++#define ANDES_DMA_POOL_NODE_SIZE	(0x200000)
++
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index db3149dbf780..0d288748def6 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -51,6 +51,17 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "dma type to lcd",		dma_type_to_lcd_fixup},
+ };
+ 
++/*
++ * The table is for appending nodes only.
++ * If you want to disable a sub-feature, change SWDTB_ENABLE to SWDTB_DISABLE
++ */
++struct swdtb_table dtb_insert_table[] = {
++	{SWDTB_ENABLE,	1,
++	 "insert inject node",		insert_inject_node},
++	{SWDTB_ENABLE,	1,
++	 "insert global dma pool node",	dma_global_pool_fixup},
++};
++
+ static void process_string_data(void *blob, int node, char *name, char *value)
+ {
+ 	int element_cnt;
+@@ -89,6 +100,24 @@ static void process_numeral_data(void *blob, int node, char *name, int len)
+ 	/* Still no code here */
+ }
+ 
++static void process_insert_node(void *fdt)
++{
++	int element_cnt;
++
++	/* Begin appending a new node.*/
++	element_cnt = sizeof(dtb_insert_table) / sizeof(struct swdtb_table);
++	for (int idx = 0 ; idx < element_cnt; idx++) {
++		if (dtb_insert_table[idx].enable &&
++		    dtb_insert_table[idx].count) {
++			/*
++			 * There is no need to decrease the count, as the
++			 * function is executed only once here.
++			 */
++			dtb_insert_table[idx].fixup(fdt, 0, NULL, NULL);
++		}
++	}
++}
++
+ /**
+  * List all properties in a node, one per line.
+  * @blob:	FDT blob
+@@ -168,6 +197,8 @@ static int swdtb_find_node(void *fdt)
+ 		}
+ 	}
+ 
++	process_insert_node(fdt);
++
+ 	return 0;
+ }
+ 
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index a3ae89ad934f..0ebea1b93b6e 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -606,3 +606,130 @@ int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value)
+ 	}
+ 	return !(RETURN_DONE);
+ }
++
++/**
++ * The insert_inject_node() function will add the injection node to
++ * reserved-memory. If reserved-memory does not exist, this function
++ * will create it as well.
++ * reserved-memory {
++ *     #address-cells = <0x02>;
++ *     #size-cells = <0x02>;
++ *     ranges;
++ *     andes_inject@100000 {
++ *         compatible = "inject";
++ *         reg = <0x00 0x100000 0x00 0x100000>;
++ *         reusable;
++ *     };
++ * };
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int insert_inject_node(void *fdt, int node, char *name, char *value)
++{
++	struct fdt_memory inject_node = {
++		.start = ANDES_INJECT_NODE_START,
++		.end = ANDES_INJECT_NODE_START + ANDES_INJECT_NODE_SIZE - 1,
++	};
++
++	unsigned long flags = 0;
++	int ret;
++	const char *node_name = "andes_inject";
++	const char *compatible = "inject";
++	int reserved_off;
++	int inject_off;
++	u32 phandle;
++	u32 rmem_offset;
++
++	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
++	if (reserved_off > 0) {
++		inject_off = fdt_subnode_offset(fdt, reserved_off, node_name);
++		if (inject_off > 0) {
++			/* The target node andes_inject already exists */
++			return RETURN_DONE;
++		}
++	}
++
++	/* Inject the reserved-memory nodes into the DTS */
++	ret = fdtdec_add_reserved_memory(fdt, node_name, &inject_node,
++					 &compatible, 1, &phandle, flags);
++	if (ret) {
++		dtb_error("fdtdec_add_reserved_memory failed:%s\n",
++			  fdt_strerror(ret));
++		return ret;
++	}
++
++	/*
++	 * In order to find the node we added, use the "phandle"
++	 * to point to it.
++	 */
++	rmem_offset = fdt_node_offset_by_phandle(fdt, phandle);
++	if (rmem_offset)
++		fdt_setprop_empty(fdt, rmem_offset, "reusable");
++
++	ret = show_reserved_memory_node(fdt, rmem_offset, compatible);
++
++	return ret;
++}
++
++/**
++ * This fixup will add the injection node to reserved-memory.
++ * If reserved-memory does not exist, this fixup will create it as well.
++ * reserved-memory {
++ *     #address-cells = <0x02>;
++ *      #size-cells = <0x02>;
++ *      ranges;
++ *      andes_dma_global_pool0@3e800000 {
++ *           linux,dma-default;
++ *           compatible = "shared-dma-pool";
++ *           reg = <0x00 0x3e800000 0x00 0x200000>;
++ *           phandle = <0x06>;
++ *           no-map;
++ *     };
++ * };
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int dma_global_pool_fixup(void *fdt, int node, char *name, char *value)
++{
++	/* For AE350 platform */
++	struct fdt_memory dma_pool = {
++		.start = ANDES_DMA_POOL_NODE_START,
++		.end = ANDES_DMA_POOL_NODE_START + ANDES_DMA_POOL_NODE_SIZE - 1,
++	};
++
++	unsigned long flags = FDTDEC_RESERVED_MEMORY_NO_MAP;
++	int ret;
++	int reserved_off;
++	int dma_off;
++	const char *node_name = "dma_global_pool0";
++	const char *compatible = "shared-dma-pool";
++	const char *dma_default = "linux,dma-default";
++	u32 phandle;
++	u32 rmem_offset;
++
++	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
++	if (reserved_off > 0) {
++		dma_off = fdt_subnode_offset(fdt, reserved_off, node_name);
++		if (dma_off > 0) {
++			/* The target node dma_global_pool0 already exists */
++			return RETURN_DONE;
++		}
++	}
++
++	/* Inject the reserved-memory nodes into the DTS */
++	ret = fdtdec_add_reserved_memory(fdt, node_name, &dma_pool,
++					 &compatible, 1, &phandle, flags);
++	if (ret) {
++		dtb_error("fdtdec_add_reserved_memory failed: %s\n",
++			  fdt_strerror(ret));
++		return ret;
++	}
++
++	rmem_offset = fdt_node_offset_by_phandle(fdt, phandle);
++	if (rmem_offset)
++		fdt_setprop_empty(fdt, rmem_offset, dma_default);
++
++	ret = show_reserved_memory_node(fdt, rmem_offset, compatible);
++
++	return ret;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 36e852c038c4..0252076e5f3e 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -48,4 +48,6 @@ int dma_type_to_mmc_fixup(void *fdt, int node, char *name, char *value);
+ int dma_type_to_snd_fixup(void *fdt, int node, char *name, char *value);
+ int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value);
+ 
++int insert_inject_node(void *fdt, int node, char *name, char *value);
++int dma_global_pool_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 06305b6196f2..6215a0eb9800 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -149,3 +149,34 @@ void show_result(const void *fdt, int node, const char *prop_name, int type)
+ 	}
+ #endif
+ }
++
++int show_reserved_memory_node(const void *fdt, int node,
++			      const char *compatible)
++{
++#ifdef ANDES_SWDTB_MERGER_CHECK
++	struct fdt_memory carveout;
++	fdt_size_t size;
++
++	const struct fdt_node_header *nh =
++		fdt_offset_ptr_(fdt, node);
++	printf("Result: %s: %s %s %s\n",
++	       compatible, KYEL, nh->name, KNRM);
++
++	carveout.start =
++		fdtdec_get_addr_size_auto_noparent(fdt, node,
++						   "reg", 0, &size,
++						   true);
++	if (carveout.start == FDT_ADDR_T_NONE) {
++		dtb_debug("failed to read address/size from \"reg\" property\n");
++		return -FDT_ERR_NOTFOUND;
++	}
++
++	carveout.end = carveout.start + size - 1;
++
++	printf("Reserved %s0x%lx%s ~ %s0x%lx%s\n",
++	       KYEL, (unsigned long)carveout.start, KNRM,
++	       KYEL, (unsigned long)carveout.end, KNRM);
++
++	return RETURN_DONE;
++#endif
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 73fda6218e5a..cc0200969b8c 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -61,4 +61,7 @@ void show_rawdtb(const char *prop_name, const char *node_name);
+ #define RESULT_NUMERAL	1
+ void show_result(const void *fdt, int node, const char *prop_name, int type);
+ 
++int show_reserved_memory_node(const void *fdt, int node,
++			      const char *compatible);
++
+ #endif
+-- 
+2.34.1
+

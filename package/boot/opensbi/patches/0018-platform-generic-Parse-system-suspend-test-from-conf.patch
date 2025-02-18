@@ -1,0 +1,31 @@
+From 8df836d7723f1b5e3b365a55545852b63ae690ca Mon Sep 17 00:00:00 2001
+From: Cheng Yang <yangcheng.work@foxmail.com>
+Date: Thu, 8 Feb 2024 11:14:34 +0800
+Subject: [PATCH 018/172] platform: generic: Parse system suspend test from
+ config node.
+
+This patch update generic_domains_init() so that "system-suspend-test"
+is parsed from "/chosen/opensbi-config" DT node.
+
+Signed-off-by: Cheng Yang <yangcheng.work@foxmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/platform.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/generic/platform.c b/platform/generic/platform.c
+index 00c6c2e27358..1f46b76c4d7c 100644
+--- a/platform/generic/platform.c
++++ b/platform/generic/platform.c
+@@ -316,7 +316,7 @@ static int generic_domains_init(void)
+ 
+ 	if (offset >= 0) {
+ 		offset = fdt_node_offset_by_compatible(fdt, offset,
+-						       "opensbi,domain,config");
++						       "opensbi,config");
+ 		if (offset >= 0 &&
+ 		    fdt_get_property(fdt, offset, "system-suspend-test", NULL))
+ 			sbi_system_suspend_test_enable();
+-- 
+2.34.1
+

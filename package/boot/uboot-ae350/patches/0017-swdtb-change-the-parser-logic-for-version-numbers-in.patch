@@ -1,0 +1,54 @@
+From 51fe27d99724df636e598bfcc23e2bc7409e05d5 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 14 Aug 2024 16:31:19 +0800
+Subject: [PATCH 17/53] swdtb: change the parser logic for version numbers in
+ the ISA string (#116)
+
+Modify the parser logic for the ISA string version number to
+skip over numerical values and the character "p"
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/116
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c        | 13 ++++---------
+ 1 file changed, 4 insertions(+), 9 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 2679e440f043..2466947c30a5 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -117,7 +117,6 @@ int plmt_fixup(void *fdt, int node, char *name, char *value)
+  */
+ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ {
+-#define ISA_SUBVERSION_LENGTH	3
+ #if defined(CONFIG_ARCH_RV64I)
+ 	const char *rv_str = "rv64";
+ #else
+@@ -172,15 +171,11 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 			/*
+ 			 * Remove subversion phase
+-			 * The subversion format is 0p0 1p0 2p0 ....
++			 * The subversion format is 0p0 1p0 2p0 or 0p7p2...
+ 			 */
+-			if (isdigit(old_str[idx])) {
+-				if (old_str[idx + 1] == 'p') {
+-					if (isdigit(old_str[idx + 2])) {
+-						idx += ISA_SUBVERSION_LENGTH;
+-						continue;
+-					}
+-				}
++			if (isdigit(old_str[idx]) || (old_str[idx] == 'p')) {
++				idx += 1;
++				continue;
+ 			}
+ 
+ 			/*
+-- 
+2.34.1
+

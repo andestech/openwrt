@@ -1,0 +1,31 @@
+From a7c5c2cbd27af430e80d894944c479e5e4df71b3 Mon Sep 17 00:00:00 2001
+From: Samuel Holland <samuel.holland@sifive.com>
+Date: Mon, 18 Mar 2024 13:49:41 -0700
+Subject: [PATCH 077/172] Makefile: Remove unnecessary dependencies
+
+The rule included from auto.conf.cmd adds a dependency on every Kconfig
+file, so these two Kconfig files do not need to be specified again here.
+
+Signed-off-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Tested-by: Anup Patel <anup@brainfault.org>
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index e3b3b52b4b44..7df39b4e7931 100644
+--- a/Makefile
++++ b/Makefile
+@@ -227,7 +227,7 @@ savedefconfig: $(platform_src_dir)/Kconfig $(src_dir)/Kconfig
+ 	$(CMD_PREFIX)mkdir -p $(KCONFIG_DIR)
+ 	$(CMD_PREFIX)$(src_dir)/scripts/Kconfiglib/savedefconfig.py --kconfig $(src_dir)/Kconfig --out $(KCONFIG_DIR)/defconfig
+ 
+-$(KCONFIG_CONFIG): $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG) $(platform_src_dir)/Kconfig $(src_dir)/Kconfig
++$(KCONFIG_CONFIG): $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG)
+ 	$(CMD_PREFIX)mkdir -p $(KCONFIG_DIR)
+ 	$(CMD_PREFIX)$(src_dir)/scripts/Kconfiglib/defconfig.py --kconfig $(src_dir)/Kconfig $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG)
+ 
+-- 
+2.34.1
+

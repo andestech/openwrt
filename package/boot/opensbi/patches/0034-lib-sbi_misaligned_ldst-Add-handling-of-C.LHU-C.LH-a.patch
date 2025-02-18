@@ -1,0 +1,65 @@
+From 748bef1f9d6c4da16d07a8152566f3f921b8702c Mon Sep 17 00:00:00 2001
+From: Nylon Chen <nylon.chen@sifive.com>
+Date: Mon, 26 Feb 2024 13:56:44 +0800
+Subject: [PATCH 034/172] lib: sbi_misaligned_ldst: Add handling of C.LHU/C.LH
+ and C.SH
+
+Added exception handling for compressed instructions C.LHU, C.LH, and
+C.SH from the zcb extension to the sbi_misaligned_ldst library.
+
+Signed-off-by: Nylon Chen <nylon.chen@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/riscv_encoding.h  |  7 +++++++
+ lib/sbi/sbi_misaligned_ldst.c | 10 ++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/include/sbi/riscv_encoding.h b/include/sbi/riscv_encoding.h
+index eb5306973d68..46bbeed04f44 100644
+--- a/include/sbi/riscv_encoding.h
++++ b/include/sbi/riscv_encoding.h
+@@ -856,6 +856,13 @@
+ #define INSN_MATCH_C_FSWSP		0xe002
+ #define INSN_MASK_C_FSWSP		0xe003
+ 
++#define INSN_MATCH_C_LHU		0x8400
++#define INSN_MASK_C_LHU		0xfc43
++#define INSN_MATCH_C_LH		0x8440
++#define INSN_MASK_C_LH			0xfc43
++#define INSN_MATCH_C_SH		0x8c00
++#define INSN_MASK_C_SH			0xfc43
++
+ #define INSN_MASK_WFI			0xffffff00
+ #define INSN_MATCH_WFI			0x10500000
+ 
+diff --git a/lib/sbi/sbi_misaligned_ldst.c b/lib/sbi/sbi_misaligned_ldst.c
+index aa512de39859..71b6232e6689 100644
+--- a/lib/sbi/sbi_misaligned_ldst.c
++++ b/lib/sbi/sbi_misaligned_ldst.c
+@@ -123,6 +123,13 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+ 		len = 4;
+ #endif
+ #endif
++	} else if ((insn & INSN_MASK_C_LHU) == INSN_MATCH_C_LHU) {
++		len = 2;
++		insn = RVC_RS2S(insn) << SH_RD;
++	} else if ((insn & INSN_MASK_C_LH) == INSN_MATCH_C_LH) {
++		len = 2;
++		shift = 8 * (sizeof(ulong) - len);
++		insn = RVC_RS2S(insn) << SH_RD;
+ 	} else {
+ 		uptrap.epc = regs->mepc;
+ 		uptrap.cause = CAUSE_MISALIGNED_LOAD;
+@@ -237,6 +244,9 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+ 		val.data_ulong = GET_F32_RS2C(insn, regs);
+ #endif
+ #endif
++	} else if ((insn & INSN_MASK_C_SH) == INSN_MATCH_C_SH) {
++		len		= 2;
++		val.data_ulong = GET_RS2S(insn, regs);
+ 	} else {
+ 		uptrap.epc = regs->mepc;
+ 		uptrap.cause = CAUSE_MISALIGNED_STORE;
+-- 
+2.34.1
+

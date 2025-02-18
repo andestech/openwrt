@@ -1,0 +1,62 @@
+From 46c8c6582db1186ed8d474ff59df428e0e6dd89b Mon Sep 17 00:00:00 2001
+From: Cheng Yang <yangcheng.work@foxmail.com>
+Date: Thu, 8 Feb 2024 11:14:35 +0800
+Subject: [PATCH 019/172] docs: move documentation of system suspend test.
+
+This patch move documentation of "system-suspend-test" from
+docs/domain_support.md to docs/opensbi_config.md
+
+Signed-off-by: Cheng Yang <yangcheng.work@foxmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ docs/domain_support.md | 4 ----
+ docs/opensbi_config.md | 4 ++++
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/docs/domain_support.md b/docs/domain_support.md
+index b285d65aec02..65b614271661 100644
+--- a/docs/domain_support.md
++++ b/docs/domain_support.md
+@@ -126,9 +126,6 @@ The DT properties of a domain configuration DT node are as follows:
+ * **compatible** (Mandatory) - The compatible string of the domain
+   configuration. This DT property should have value *"opensbi,domain,config"*
+ 
+-* **system-suspend-test** (Optional) - When present, enable a system
+-  suspend test implementation which simply waits five seconds and issues a WFI.
+-
+ ### Domain Memory Region Node
+ 
+ The domain memory region DT node describes details of a memory region and
+@@ -237,7 +234,6 @@ be done:
+     chosen {
+         opensbi-domains {
+             compatible = "opensbi,domain,config";
+-            system-suspend-test;
+ 
+             tmem: tmem {
+                 compatible = "opensbi,domain,memregion";
+diff --git a/docs/opensbi_config.md b/docs/opensbi_config.md
+index 0c42443b15f9..1b710f1a1059 100644
+--- a/docs/opensbi_config.md
++++ b/docs/opensbi_config.md
+@@ -23,6 +23,9 @@ The DT properties of a domain configuration DT node are as follows:
+   set of harts is permitted to perform a cold boot. Otherwise, all
+   harts are allowed to cold boot.
+ 
++* **system-suspend-test** (Optional) - When present, enable a system
++  suspend test implementation which simply waits five seconds and issues a WFI.
++
+ The OpenSBI Configuration Node will be deleted at the end of cold boot
+ (replace the node (subtree) with nop tags).
+ 
+@@ -33,6 +36,7 @@ The OpenSBI Configuration Node will be deleted at the end of cold boot
+         opensbi-config {
+             compatible = "opensbi,config";
+             cold-boot-harts = <&cpu1 &cpu2 &cpu3 &cpu4>;
++            system-suspend-test;
+         };
+     };
+ 
+-- 
+2.34.1
+

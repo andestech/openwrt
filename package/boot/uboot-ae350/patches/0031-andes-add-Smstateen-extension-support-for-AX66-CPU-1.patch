@@ -1,0 +1,114 @@
+From 4a5adb43aee49251c9fbf057faa740ff44fc4b87 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Mon, 23 Dec 2024 14:04:47 +0800
+Subject: [PATCH 31/53] andes: add Smstateen extension support for AX66 CPU
+ (#137)
+
+U-Boot currently does not support parsing multi-letter extension,
+parsing DTS ISA string for smstateen might be somewhat complicated,
+So use MARCHID instead to identify AX66 CPU for now.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+
+Co-authored-by: Hui Min Mina Chou <minachou@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/137
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+---
+ arch/riscv/cpu/andes/cpu.c   | 28 +++++++++++++++++++++++++---
+ arch/riscv/include/asm/csr.h | 14 ++++++++++++++
+ 2 files changed, 39 insertions(+), 3 deletions(-)
+
+diff --git a/arch/riscv/cpu/andes/cpu.c b/arch/riscv/cpu/andes/cpu.c
+index 64ed654e671e..79c333dff12f 100644
+--- a/arch/riscv/cpu/andes/cpu.c
++++ b/arch/riscv/cpu/andes/cpu.c
+@@ -37,13 +37,14 @@ void harts_early_init(void)
+ {
+ 	/* Enable I/D-cache in SPL */
+ 	if (CONFIG_IS_ENABLED(RISCV_MMODE)) {
++		unsigned long long mstateen0 = 0, sstateen0 = 0;
+ 		unsigned long mcache_ctl_val = csr_read(CSR_MCACHE_CTL);
+ 		unsigned long mmisc_ctl_val = csr_read(CSR_MMISC_CTL);
+ 
+ 		mcache_ctl_val |= (MCACHE_CTL_CCTL_SUEN | \
+-				MCACHE_CTL_IC_PREFETCH_EN | MCACHE_CTL_DC_PREFETCH_EN | \
+-				MCACHE_CTL_DC_WAROUND_EN | MCACHE_CTL_L2C_WAROUND_EN | \
+-				MCACHE_CTL_IC_ECCEN | MCACHE_CTL_DC_ECCEN | MCACHE_CTL_TLB_ECCEN);
++				   MCACHE_CTL_IC_PREFETCH_EN | MCACHE_CTL_DC_PREFETCH_EN | \
++				   MCACHE_CTL_DC_WAROUND_EN | MCACHE_CTL_L2C_WAROUND_EN | \
++				   MCACHE_CTL_IC_ECCEN | MCACHE_CTL_DC_ECCEN | MCACHE_CTL_TLB_ECCEN);
+ 
+ 		if (!CONFIG_IS_ENABLED(SYS_ICACHE_OFF))
+ 			mcache_ctl_val |= MCACHE_CTL_IC_EN;
+@@ -67,5 +68,26 @@ void harts_early_init(void)
+ 		mmisc_ctl_val |= MMISC_CTL_NON_BLOCKING_EN;
+ 
+ 		csr_write(CSR_MMISC_CTL, mmisc_ctl_val);
++
++		/* FIXME: Should find a better way to judge */
++		if ((csr_read(CSR_MARCHID) & 0xff) == 0x66) {
++			mstateen0 = csr_read(CSR_MSTATEEN0);
++#if __riscv_xlen == 32
++			mstateen0 = ((unsigned long long)(csr_read(CSR_MSTATEEN0H)) << 32);
++#endif
++			sstateen0 = csr_read(CSR_SSTATEEN0);
++
++			mstateen0 |= (SMSTATEEN0_C | SMSTATEEN0_FCSR | SMSTATEEN0_CONTEXT | \
++				      SMSTATEEN0_IMSIC | SMSTATEEN0_AIA | SMSTATEEN0_CSRIND | \
++				      SMSTATEEN0_ENVCFG | SMSTATEEN0_SE0);
++
++			sstateen0 |= (SMSTATEEN0_C | SMSTATEEN0_FCSR);
++
++			csr_write(CSR_MSTATEEN0, mstateen0);
++#if __riscv_xlen == 32
++			csr_write(CSR_MSTATEEN0H, mstateen0 >> 32);
++#endif
++			csr_write(CSR_SSTATEEN0, sstateen0);
++		}
+ 	}
+ }
+diff --git a/arch/riscv/include/asm/csr.h b/arch/riscv/include/asm/csr.h
+index 986f951c31ac..0301f114cad4 100644
+--- a/arch/riscv/include/asm/csr.h
++++ b/arch/riscv/include/asm/csr.h
+@@ -97,6 +97,17 @@
+ #define SIE_STIE		(_AC(0x1, UL) << IRQ_S_TIMER)
+ #define SIE_SEIE		(_AC(0x1, UL) << IRQ_S_EXT)
+ 
++/* Bit field of mstateen0 & sstateen0 */
++#define SMSTATEEN0_C		BIT(0)
++#define SMSTATEEN0_FCSR		BIT(1)
++#define SMSTATEEN0_JVT		BIT(2)
++#define SMSTATEEN0_CONTEXT	BIT(57)
++#define SMSTATEEN0_IMSIC	BIT(58)
++#define SMSTATEEN0_AIA		BIT(59)
++#define SMSTATEEN0_CSRIND	BIT(60)
++#define SMSTATEEN0_ENVCFG	BIT(62)
++#define SMSTATEEN0_SE0		BIT(63)
++
+ #define CSR_FCSR		0x003
+ #define CSR_CYCLE		0xc00
+ #define CSR_TIME		0xc01
+@@ -105,6 +116,7 @@
+ #define CSR_SIE			0x104
+ #define CSR_STVEC		0x105
+ #define CSR_SCOUNTEREN		0x106
++#define CSR_SSTATEEN0		0x10c
+ #define CSR_SSCRATCH		0x140
+ #define CSR_SEPC		0x141
+ #define CSR_SCAUSE		0x142
+@@ -119,6 +131,8 @@
+ #define CSR_MISA		0x301
+ #define CSR_MIE			0x304
+ #define CSR_MTVEC		0x305
++#define CSR_MSTATEEN0		0x30c
++#define CSR_MSTATEEN0H		0x31c
+ #ifdef CONFIG_RISCV_PRIV_1_9
+ #define CSR_MUCOUNTEREN         0x320
+ #define CSR_MSCOUNTEREN         0x321
+-- 
+2.34.1
+

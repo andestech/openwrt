@@ -1,0 +1,39 @@
+From 033104da08baf52c8b65b56a03363ea238c9ca31 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:08 +0200
+Subject: [PATCH 091/172] lib: sbi: sse: check handler entry to belong to
+ supervisor mode
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When registering an SSE event, check for the handler_entry_pc to belong
+to supervisor mode domain using sbi_domain_check_addr_range().
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reported-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index 76fbee457fc1..18dfdb6dc956 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -959,6 +959,12 @@ int sbi_sse_register(uint32_t event_id, unsigned long handler_entry_pc,
+ 	if (handler_entry_pc & 0x1)
+ 		return SBI_EINVAL;
+ 
++	if (!sbi_domain_check_addr_range(sbi_domain_thishart_ptr(),
++					 handler_entry_pc,
++					 sizeof(unsigned long), PRV_S,
++					 SBI_DOMAIN_EXECUTE))
++		return SBI_EINVALID_ADDR;
++
+ 	e = sse_event_get(event_id);
+ 	if (!e)
+ 		return SBI_EINVAL;
+-- 
+2.34.1
+

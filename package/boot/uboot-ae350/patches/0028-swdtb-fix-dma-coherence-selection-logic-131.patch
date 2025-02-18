@@ -1,0 +1,29 @@
+From 4bbae5e0b6ebb5a5ca070a111bb399c323b91ea6 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Fri, 18 Oct 2024 11:40:41 +0800
+Subject: [PATCH 28/53] swdtb: fix dma coherence selection logic (#131)
+
+Reported-by: Josh
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/131
+Reviewed-by: randolph <randolph@andestech.com>
+---
+ board/andestech/common/swdtb_merger/swdtb_tool.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 59bda2e6af93..8c097b365700 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -117,7 +117,7 @@ int dma_type_to_node(void *fdt, int node, char *name, const char *target_node)
+ 			dma_type_from_mmc_node(fdt);
+ 
+ 			if (global_dma_type == DMA_TYPE_INIT) {
+-				global_dma_type = DMA_TYPE_COHERENT;
++				global_dma_type = DMA_TYPE_NONCOHERENT;
+ 				printf("Bitmap's DMA type is %s\n", target_2);
+ 			}
+ 		}
+-- 
+2.34.1
+

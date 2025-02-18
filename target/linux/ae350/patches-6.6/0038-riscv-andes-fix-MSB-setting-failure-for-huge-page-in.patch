@@ -1,0 +1,64 @@
+From 4b7e98fda7afe58110785ac61e588e96ad7bb55a Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 17 May 2024 10:42:08 +0800
+Subject: [PATCH 038/168] riscv: andes: fix MSB setting failure for huge page
+ in 64-bit system
+
+When using the MSB mechanism to set uncacheable mappings on
+a 64-bit system, calling ioremap_wc() with a 2MiB huge page
+to set the MSB fails.
+
+This issue arises because the original MSB setting procedure involves
+calling ioremap_wc() to set _PAGE_ANDES25_NOCACHE in pgprot, allowing
+pfn_pte() to configure the MSB in the PFN of a 4KiB page and subsequently
+create the PTE. This process overlooks scenarios where different
+page sizes are used for mapping operations.
+
+ref : (310f541a027b) riscv: Enable HAVE_ARCH_HUGE_VMAP for 64BIT
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/mm/pgtable.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/arch/riscv/mm/pgtable.c b/arch/riscv/mm/pgtable.c
+index fef4e7328e49..fdf1e484deea 100644
+--- a/arch/riscv/mm/pgtable.c
++++ b/arch/riscv/mm/pgtable.c
+@@ -17,6 +17,16 @@ void p4d_clear_huge(p4d_t *p4d)
+ 
+ int pud_set_huge(pud_t *pud, phys_addr_t phys, pgprot_t prot)
+ {
++
++#ifdef CONFIG_ARCH_ANDES
++	/*
++	 * When PPMA is on and activated: andes_pfn_msb == 0
++	 *                     Otherwise: andes_pfn_msb != 0
++	 */
++	if (andes_pfn_msb && (pgprot_val(prot) & _PAGE_ANDES25_NOCACHE))
++		phys |= (andes_pfn_msb << (_PAGE_PFN_SHIFT + 2));
++#endif /* CONFIG_ARCH_ANDES */
++
+ 	pud_t new_pud = pfn_pud(__phys_to_pfn(phys), prot);
+ 
+ 	set_pud(pud, new_pud);
+@@ -55,6 +65,16 @@ int pud_free_pmd_page(pud_t *pud, unsigned long addr)
+ 
+ int pmd_set_huge(pmd_t *pmd, phys_addr_t phys, pgprot_t prot)
+ {
++
++#ifdef CONFIG_ARCH_ANDES
++	/*
++	 * When PPMA is on and activated: andes_pfn_msb == 0
++	 *                     Otherwise: andes_pfn_msb != 0
++	 */
++	if (andes_pfn_msb && (pgprot_val(prot) & _PAGE_ANDES25_NOCACHE))
++		phys |= (andes_pfn_msb << (_PAGE_PFN_SHIFT + 2));
++#endif /* CONFIG_ARCH_ANDES */
++
+ 	pmd_t new_pmd = pfn_pmd(__phys_to_pfn(phys), prot);
+ 
+ 	set_pmd(pmd, new_pmd);
+-- 
+2.34.1
+

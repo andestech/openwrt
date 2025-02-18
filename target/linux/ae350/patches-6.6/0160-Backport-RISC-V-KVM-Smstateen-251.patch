@@ -1,0 +1,446 @@
+From e80de218ffcace104e9df86ab6010d2416a24979 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 13 Feb 2025 19:51:40 +0800
+Subject: [PATCH 160/168] [Backport] RISC-V KVM Smstateen (#251)
+
+Backported RISC-V KVM Smstateen patch series to support bringing up guest OS that support AIA extension.
+
+Co-authored-by: Mayuresh Chitale <mchitale@ventanamicro.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/251
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+---
+ .../devicetree/bindings/riscv/extensions.yaml |  6 ++
+ arch/riscv/include/asm/csr.h                  | 17 +++++
+ arch/riscv/include/asm/hwcap.h                |  1 +
+ arch/riscv/include/asm/kvm_host.h             | 16 +++++
+ arch/riscv/include/uapi/asm/kvm.h             |  9 +++
+ arch/riscv/kernel/cpufeature.c                |  1 +
+ arch/riscv/kvm/vcpu.c                         | 54 ++++++++++----
+ arch/riscv/kvm/vcpu_onereg.c                  | 70 ++++++++++++++++++-
+ 8 files changed, 158 insertions(+), 16 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/riscv/extensions.yaml b/Documentation/devicetree/bindings/riscv/extensions.yaml
+index 5f1ee2d484fd..cdd8de81a7c9 100644
+--- a/Documentation/devicetree/bindings/riscv/extensions.yaml
++++ b/Documentation/devicetree/bindings/riscv/extensions.yaml
+@@ -140,6 +140,12 @@ properties:
+             ratified at commit d70011dde6c2 ("Update to ratified state")
+             of riscv-j-extension.
+ 
++	- const: smstateen
++          description: |
++            The standard Smstateen extension for controlling access to CSRs
++            added by other RISC-V extensions in H/S/VS/U/VU modes and as
++            ratified at commit a28bfae (Ratified (#7)) of riscv-state-enable.
++
+         - const: ssaia
+           description: |
+             The standard Ssaia supervisor-level extension for the advanced
+diff --git a/arch/riscv/include/asm/csr.h b/arch/riscv/include/asm/csr.h
+index d70caf0129f0..99b4bb4b7e84 100644
+--- a/arch/riscv/include/asm/csr.h
++++ b/arch/riscv/include/asm/csr.h
+@@ -211,6 +211,18 @@
+ #define ENVCFG_CBIE_INV			_AC(0x3, UL)
+ #define ENVCFG_FIOM			_AC(0x1, UL)
+ 
++/* Smstateen bits */
++#define SMSTATEEN0_AIA_IMSIC_SHIFT	58
++#define SMSTATEEN0_AIA_IMSIC		(_ULL(1) << SMSTATEEN0_AIA_IMSIC_SHIFT)
++#define SMSTATEEN0_AIA_SHIFT		59
++#define SMSTATEEN0_AIA			(_ULL(1) << SMSTATEEN0_AIA_SHIFT)
++#define SMSTATEEN0_AIA_ISEL_SHIFT	60
++#define SMSTATEEN0_AIA_ISEL		(_ULL(1) << SMSTATEEN0_AIA_ISEL_SHIFT)
++#define SMSTATEEN0_HSENVCFG_SHIFT	62
++#define SMSTATEEN0_HSENVCFG		(_ULL(1) << SMSTATEEN0_HSENVCFG_SHIFT)
++#define SMSTATEEN0_SSTATEEN0_SHIFT	63
++#define SMSTATEEN0_SSTATEEN0		(_ULL(1) << SMSTATEEN0_SSTATEEN0_SHIFT)
++
+ /* mseccfg bits */
+ #define MSECCFG_PMM			ENVCFG_PMM
+ #define MSECCFG_PMM_PMLEN_0		ENVCFG_PMM_PMLEN_0
+@@ -290,6 +302,7 @@
+ #define CSR_STVEC		0x105
+ #define CSR_SCOUNTEREN		0x106
+ #define CSR_SENVCFG		0x10a
++#define CSR_SSTATEEN0		0x10c
+ #define CSR_SSCRATCH		0x140
+ #define CSR_SEPC		0x141
+ #define CSR_SCAUSE		0x142
+@@ -364,6 +377,10 @@
+ #define CSR_VSIEH		0x214
+ #define CSR_VSIPH		0x254
+ 
++/* Hypervisor stateen CSRs */
++#define CSR_HSTATEEN0		0x60c
++#define CSR_HSTATEEN0H		0x61c
++
+ #define CSR_MSTATUS		0x300
+ #define CSR_MISA		0x301
+ #define CSR_MIDELEG		0x303
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index 58fe3b4e8d18..4599ae8911a6 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -55,6 +55,7 @@
+ #define RISCV_ISA_EXT_ZICSR		40
+ #define RISCV_ISA_EXT_ZIFENCEI		41
+ #define RISCV_ISA_EXT_ZIHPM		42
++#define RISCV_ISA_EXT_SMSTATEEN		43
+ #define RISCV_ISA_EXT_SVVPTC		44
+ #define RISCV_ISA_EXT_ZBKB		46
+ #define RISCV_ISA_EXT_ZBKC		47
+diff --git a/arch/riscv/include/asm/kvm_host.h b/arch/riscv/include/asm/kvm_host.h
+index 692da15bb915..0eefd9c991ae 100644
+--- a/arch/riscv/include/asm/kvm_host.h
++++ b/arch/riscv/include/asm/kvm_host.h
+@@ -165,6 +165,15 @@ struct kvm_vcpu_csr {
+ 	unsigned long senvcfg;
+ };
+ 
++struct kvm_vcpu_config {
++	u64 henvcfg;
++	u64 hstateen0;
++};
++
++struct kvm_vcpu_smstateen_csr {
++	unsigned long sstateen0;
++};
++
+ struct kvm_vcpu_arch {
+ 	/* VCPU ran at least once */
+ 	bool ran_atleast_once;
+@@ -185,6 +194,7 @@ struct kvm_vcpu_arch {
+ 	unsigned long host_stvec;
+ 	unsigned long host_scounteren;
+ 	unsigned long host_senvcfg;
++	unsigned long host_sstateen0;
+ 
+ 	/* CPU context of Host */
+ 	struct kvm_cpu_context host_context;
+@@ -195,6 +205,9 @@ struct kvm_vcpu_arch {
+ 	/* CPU CSR context of Guest VCPU */
+ 	struct kvm_vcpu_csr guest_csr;
+ 
++	/* CPU Smstateen CSR context of Guest VCPU */
++	struct kvm_vcpu_smstateen_csr smstateen_csr;
++
+ 	/* CPU context upon Guest VCPU reset */
+ 	struct kvm_cpu_context guest_reset_context;
+ 
+@@ -246,6 +259,9 @@ struct kvm_vcpu_arch {
+ 
+ 	/* Performance monitoring context */
+ 	struct kvm_pmu pmu_context;
++
++	/* 'static' configurations which are set only once */
++	struct kvm_vcpu_config cfg;
+ };
+ 
+ static inline void kvm_arch_sync_events(struct kvm *kvm) {}
+diff --git a/arch/riscv/include/uapi/asm/kvm.h b/arch/riscv/include/uapi/asm/kvm.h
+index 27a37b6468ff..7e8ed7f7d540 100644
+--- a/arch/riscv/include/uapi/asm/kvm.h
++++ b/arch/riscv/include/uapi/asm/kvm.h
+@@ -94,6 +94,11 @@ struct kvm_riscv_aia_csr {
+ 	unsigned long iprio2h;
+ };
+ 
++/* Smstateen CSR for KVM_GET_ONE_REG and KVM_SET_ONE_REG */
++struct kvm_riscv_smstateen_csr {
++	unsigned long sstateen0;
++};
++
+ /* TIMER registers for KVM_GET_ONE_REG and KVM_SET_ONE_REG */
+ struct kvm_riscv_timer {
+ 	__u64 frequency;
+@@ -134,6 +139,7 @@ enum KVM_RISCV_ISA_EXT_ID {
+ 	KVM_RISCV_ISA_EXT_ZIHPM,
+ 	KVM_RISCV_ISA_EXT_SMNPM,
+ 	KVM_RISCV_ISA_EXT_SSNPM,
++	KVM_RISCV_ISA_EXT_SMSTATEEN,
+ 	KVM_RISCV_ISA_EXT_MAX,
+ };
+ 
+@@ -181,10 +187,13 @@ enum KVM_RISCV_SBI_EXT_ID {
+ #define KVM_REG_RISCV_CSR		(0x03 << KVM_REG_RISCV_TYPE_SHIFT)
+ #define KVM_REG_RISCV_CSR_GENERAL	(0x0 << KVM_REG_RISCV_SUBTYPE_SHIFT)
+ #define KVM_REG_RISCV_CSR_AIA		(0x1 << KVM_REG_RISCV_SUBTYPE_SHIFT)
++#define KVM_REG_RISCV_CSR_SMSTATEEN	(0x2 << KVM_REG_RISCV_SUBTYPE_SHIFT)
+ #define KVM_REG_RISCV_CSR_REG(name)	\
+ 		(offsetof(struct kvm_riscv_csr, name) / sizeof(unsigned long))
+ #define KVM_REG_RISCV_CSR_AIA_REG(name)	\
+ 	(offsetof(struct kvm_riscv_aia_csr, name) / sizeof(unsigned long))
++#define KVM_REG_RISCV_CSR_SMSTATEEN_REG(name)  \
++	(offsetof(struct kvm_riscv_smstateen_csr, name) / sizeof(unsigned long))
+ 
+ /* Timer registers are mapped as type 4 */
+ #define KVM_REG_RISCV_TIMER		(0x04 << KVM_REG_RISCV_TYPE_SHIFT)
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index 001fd228f8e8..a0e4569a7922 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -291,6 +291,7 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+ 	__RISCV_ISA_EXT_DATA(smaia, RISCV_ISA_EXT_SMAIA),
+ 	__RISCV_ISA_EXT_DATA(smmpm, RISCV_ISA_EXT_SMMPM),
+ 	__RISCV_ISA_EXT_DATA(smnpm, RISCV_ISA_EXT_SMNPM),
++	__RISCV_ISA_EXT_DATA(smstateen, RISCV_ISA_EXT_SMSTATEEN),
+ 	__RISCV_ISA_EXT_DATA(ssaia, RISCV_ISA_EXT_SSAIA),
+ 	__RISCV_ISA_EXT_DATA(sscofpmf, RISCV_ISA_EXT_SSCOFPMF),
+ 	__RISCV_ISA_EXT_DATA(ssnpm, RISCV_ISA_EXT_SSNPM),
+diff --git a/arch/riscv/kvm/vcpu.c b/arch/riscv/kvm/vcpu.c
+index e30fdc43fd5a..c061a1c5fe98 100644
+--- a/arch/riscv/kvm/vcpu.c
++++ b/arch/riscv/kvm/vcpu.c
+@@ -471,31 +471,38 @@ int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
+ 	return -EINVAL;
+ }
+ 
+-static void kvm_riscv_vcpu_update_config(const unsigned long *isa)
++static void kvm_riscv_vcpu_setup_config(struct kvm_vcpu *vcpu)
+ {
+-	u64 henvcfg = 0;
++	const unsigned long *isa = vcpu->arch.isa;
++	struct kvm_vcpu_config *cfg = &vcpu->arch.cfg;
+ 
+ 	if (riscv_isa_extension_available(isa, SVPBMT))
+-		henvcfg |= ENVCFG_PBMTE;
++		cfg->henvcfg |= ENVCFG_PBMTE;
+ 
+ 	if (riscv_isa_extension_available(isa, SSTC))
+-		henvcfg |= ENVCFG_STCE;
++		cfg->henvcfg |= ENVCFG_STCE;
+ 
+ 	if (riscv_isa_extension_available(isa, ZICBOM))
+-		henvcfg |= (ENVCFG_CBIE | ENVCFG_CBCFE);
++		cfg->henvcfg |= (ENVCFG_CBIE | ENVCFG_CBCFE);
+ 
+ 	if (riscv_isa_extension_available(isa, ZICBOZ))
+-		henvcfg |= ENVCFG_CBZE;
+-
+-	csr_write(CSR_HENVCFG, henvcfg);
+-#ifdef CONFIG_32BIT
+-	csr_write(CSR_HENVCFGH, henvcfg >> 32);
+-#endif
++		cfg->henvcfg |= ENVCFG_CBZE;
++
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN)) {
++		cfg->hstateen0 |= SMSTATEEN0_HSENVCFG;
++		if (riscv_isa_extension_available(isa, SSAIA))
++			cfg->hstateen0 |= SMSTATEEN0_AIA_IMSIC |
++					  SMSTATEEN0_AIA |
++					  SMSTATEEN0_AIA_ISEL;
++		if (riscv_isa_extension_available(isa, SMSTATEEN))
++			cfg->hstateen0 |= SMSTATEEN0_SSTATEEN0;
++	}
+ }
+ 
+ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
+ {
+ 	struct kvm_vcpu_csr *csr = &vcpu->arch.guest_csr;
++	struct kvm_vcpu_config *cfg = &vcpu->arch.cfg;
+ 
+ 	csr_write(CSR_VSSTATUS, csr->vsstatus);
+ 	csr_write(CSR_VSIE, csr->vsie);
+@@ -506,8 +513,14 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
+ 	csr_write(CSR_VSTVAL, csr->vstval);
+ 	csr_write(CSR_HVIP, csr->hvip);
+ 	csr_write(CSR_VSATP, csr->vsatp);
+-
+-	kvm_riscv_vcpu_update_config(vcpu->arch.isa);
++	csr_write(CSR_HENVCFG, cfg->henvcfg);
++	if (IS_ENABLED(CONFIG_32BIT))
++		csr_write(CSR_HENVCFGH, cfg->henvcfg >> 32);
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN)) {
++		csr_write(CSR_HSTATEEN0, cfg->hstateen0);
++		if (IS_ENABLED(CONFIG_32BIT))
++			csr_write(CSR_HSTATEEN0H, cfg->hstateen0 >> 32);
++	}
+ 
+ 	kvm_riscv_gstage_update_hgatp(vcpu);
+ 
+@@ -608,16 +621,28 @@ static void kvm_riscv_update_hvip(struct kvm_vcpu *vcpu)
+ 
+ static __always_inline void kvm_riscv_vcpu_swap_in_guest_state(struct kvm_vcpu *vcpu)
+ {
++	struct kvm_vcpu_smstateen_csr *smcsr = &vcpu->arch.smstateen_csr;
+ 	struct kvm_vcpu_csr *csr = &vcpu->arch.guest_csr;
++	struct kvm_vcpu_config *cfg = &vcpu->arch.cfg;
+ 
+ 	vcpu->arch.host_senvcfg = csr_swap(CSR_SENVCFG, csr->senvcfg);
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN) &&
++	    (cfg->hstateen0 & SMSTATEEN0_SSTATEEN0))
++		vcpu->arch.host_sstateen0 = csr_swap(CSR_SSTATEEN0,
++						     smcsr->sstateen0);
+ }
+ 
+ static __always_inline void kvm_riscv_vcpu_swap_in_host_state(struct kvm_vcpu *vcpu)
+ {
++	struct kvm_vcpu_smstateen_csr *smcsr = &vcpu->arch.smstateen_csr;
+ 	struct kvm_vcpu_csr *csr = &vcpu->arch.guest_csr;
++	struct kvm_vcpu_config *cfg = &vcpu->arch.cfg;
+ 
+ 	csr->senvcfg = csr_swap(CSR_SENVCFG, vcpu->arch.host_senvcfg);
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN) &&
++	    (cfg->hstateen0 & SMSTATEEN0_SSTATEEN0))
++		smcsr->sstateen0 = csr_swap(CSR_SSTATEEN0,
++					    vcpu->arch.host_sstateen0);
+ }
+ 
+ /*
+@@ -643,6 +668,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ 	struct kvm_cpu_trap trap;
+ 	struct kvm_run *run = vcpu->run;
+ 
++	if (!vcpu->arch.ran_atleast_once)
++		kvm_riscv_vcpu_setup_config(vcpu);
++
+ 	/* Mark this VCPU ran at least once */
+ 	vcpu->arch.ran_atleast_once = true;
+ 
+diff --git a/arch/riscv/kvm/vcpu_onereg.c b/arch/riscv/kvm/vcpu_onereg.c
+index 3babcbbc5c2f..638c0f7863b4 100644
+--- a/arch/riscv/kvm/vcpu_onereg.c
++++ b/arch/riscv/kvm/vcpu_onereg.c
+@@ -34,6 +34,7 @@ static const unsigned long kvm_isa_ext_arr[] = {
+ 	[KVM_RISCV_ISA_EXT_M] = RISCV_ISA_EXT_m,
+ 	[KVM_RISCV_ISA_EXT_V] = RISCV_ISA_EXT_v,
+ 	/* Multi letter extensions (alphabetically sorted) */
++	KVM_ISA_EXT_ARR(SMSTATEEN),
+ 	KVM_ISA_EXT_ARR(SSAIA),
+ 	[KVM_RISCV_ISA_EXT_SMNPM] = RISCV_ISA_EXT_SSNPM,
+ 	KVM_ISA_EXT_ARR(SSNPM),
+@@ -82,11 +83,11 @@ static bool kvm_riscv_vcpu_isa_enable_allowed(unsigned long ext)
+ static bool kvm_riscv_vcpu_isa_disable_allowed(unsigned long ext)
+ {
+ 	switch (ext) {
++	/* Extensions which don't have any mechanism to disable */
+ 	case KVM_RISCV_ISA_EXT_A:
+ 	case KVM_RISCV_ISA_EXT_C:
+ 	case KVM_RISCV_ISA_EXT_I:
+ 	case KVM_RISCV_ISA_EXT_M:
+-	case KVM_RISCV_ISA_EXT_SSAIA:
+ 	case KVM_RISCV_ISA_EXT_SMNPM:
+ 	case KVM_RISCV_ISA_EXT_SSNPM:
+ 	case KVM_RISCV_ISA_EXT_SSTC:
+@@ -101,6 +102,9 @@ static bool kvm_riscv_vcpu_isa_disable_allowed(unsigned long ext)
+ 	case KVM_RISCV_ISA_EXT_ZIHINTPAUSE:
+ 	case KVM_RISCV_ISA_EXT_ZIHPM:
+ 		return false;
++	/* Extensions which can be disabled using Smstateen */
++	case KVM_RISCV_ISA_EXT_SSAIA:
++		return riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN);
+ 	default:
+ 		break;
+ 	}
+@@ -382,6 +386,34 @@ static int kvm_riscv_vcpu_general_set_csr(struct kvm_vcpu *vcpu,
+ 	return 0;
+ }
+ 
++static inline int kvm_riscv_vcpu_smstateen_set_csr(struct kvm_vcpu *vcpu,
++						   unsigned long reg_num,
++						   unsigned long reg_val)
++{
++	struct kvm_vcpu_smstateen_csr *csr = &vcpu->arch.smstateen_csr;
++
++	if (reg_num >= sizeof(struct kvm_riscv_smstateen_csr) /
++		sizeof(unsigned long))
++		return -EINVAL;
++
++	((unsigned long *)csr)[reg_num] = reg_val;
++	return 0;
++}
++
++static int kvm_riscv_vcpu_smstateen_get_csr(struct kvm_vcpu *vcpu,
++					    unsigned long reg_num,
++					    unsigned long *out_val)
++{
++	struct kvm_vcpu_smstateen_csr *csr = &vcpu->arch.smstateen_csr;
++
++	if (reg_num >= sizeof(struct kvm_riscv_smstateen_csr) /
++		sizeof(unsigned long))
++		return -EINVAL;
++
++	*out_val = ((unsigned long *)csr)[reg_num];
++	return 0;
++}
++
+ static int kvm_riscv_vcpu_get_reg_csr(struct kvm_vcpu *vcpu,
+ 				      const struct kvm_one_reg *reg)
+ {
+@@ -405,6 +437,12 @@ static int kvm_riscv_vcpu_get_reg_csr(struct kvm_vcpu *vcpu,
+ 	case KVM_REG_RISCV_CSR_AIA:
+ 		rc = kvm_riscv_vcpu_aia_get_csr(vcpu, reg_num, &reg_val);
+ 		break;
++	case KVM_REG_RISCV_CSR_SMSTATEEN:
++		rc = -EINVAL;
++		if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN))
++			rc = kvm_riscv_vcpu_smstateen_get_csr(vcpu, reg_num,
++							      &reg_val);
++		break;
+ 	default:
+ 		rc = -ENOENT;
+ 		break;
+@@ -444,6 +482,12 @@ static int kvm_riscv_vcpu_set_reg_csr(struct kvm_vcpu *vcpu,
+ 	case KVM_REG_RISCV_CSR_AIA:
+ 		rc = kvm_riscv_vcpu_aia_set_csr(vcpu, reg_num, reg_val);
+ 		break;
++	case KVM_REG_RISCV_CSR_SMSTATEEN:
++		rc = -EINVAL;
++		if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SMSTATEEN))
++			rc = kvm_riscv_vcpu_smstateen_set_csr(vcpu, reg_num,
++							      reg_val);
++break;
+ 	default:
+ 		rc = -ENOENT;
+ 		break;
+@@ -700,6 +744,8 @@ static inline unsigned long num_csr_regs(const struct kvm_vcpu *vcpu)
+ 
+ 	if (riscv_isa_extension_available(vcpu->arch.isa, SSAIA))
+ 		n += sizeof(struct kvm_riscv_aia_csr) / sizeof(unsigned long);
++	if (riscv_isa_extension_available(vcpu->arch.isa, SMSTATEEN))
++		n += sizeof(struct kvm_riscv_smstateen_csr) / sizeof(unsigned long);
+ 
+ 	return n;
+ }
+@@ -708,7 +754,7 @@ static int copy_csr_reg_indices(const struct kvm_vcpu *vcpu,
+ 				u64 __user *uindices)
+ {
+ 	int n1 = sizeof(struct kvm_riscv_csr) / sizeof(unsigned long);
+-	int n2 = 0;
++	int n2 = 0, n3 = 0;
+ 
+ 	/* copy general csr regs */
+ 	for (int i = 0; i < n1; i++) {
+@@ -742,7 +788,25 @@ static int copy_csr_reg_indices(const struct kvm_vcpu *vcpu,
+ 		}
+ 	}
+ 
+-	return n1 + n2;
++	/* copy Smstateen csr regs */
++	if (riscv_isa_extension_available(vcpu->arch.isa, SMSTATEEN)) {
++		n3 = sizeof(struct kvm_riscv_smstateen_csr) / sizeof(unsigned long);
++
++		for (int i = 0; i < n3; i++) {
++			u64 size = IS_ENABLED(CONFIG_32BIT) ?
++				   KVM_REG_SIZE_U32 : KVM_REG_SIZE_U64;
++			u64 reg = KVM_REG_RISCV | size | KVM_REG_RISCV_CSR |
++					  KVM_REG_RISCV_CSR_SMSTATEEN | i;
++
++			if (uindices) {
++				if (put_user(reg, uindices))
++					return -EFAULT;
++				uindices++;
++			}
++		}
++	}
++
++	return n1 + n2 + n3;
+ }
+ 
+ static inline unsigned long num_timer_regs(void)
+-- 
+2.34.1
+

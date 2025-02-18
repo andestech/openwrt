@@ -1,0 +1,126 @@
+From 0b1f04d4f97547124dc5ab23f086afcfe675d8e9 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:49:16 +0800
+Subject: [PATCH 10/53] swdtb: spi: add quad mode support into spi flash node
+ (#101)
+
+swdtb: spi: add quad mode support to flash node
+
+This fix will add support for quad mode to the SPI flash node by
+incorporating the options spi-rx-bus-width and spi-tx-bus-width into the
+SPI flash node configuration.
+
+Example:
+
+    spi-rx-bus-width = <0x04>;
+    spi-tx-bus-width = <0x04>;
+
+Test: on BigOrca with AX27L2 AX25 AX45MPGen2 bitmap
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/101
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        |  2 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 60 +++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |  2 +
+ 3 files changed, 64 insertions(+)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 6e362667c27b..002e8b2f6e7c 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -37,6 +37,8 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "set l2c cache line",		l2c_cache_line_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "l2c interrupt pin",		l2c_interrupt_fixup},
++	{SWDTB_ENABLE,	1,
++	 "spi quad mode",		spi_quad_read_fixup},
+ };
+ 
+ static void process_string_data(void *blob, int node, char *name, char *value)
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index ac0945f95fb5..02cf81cfeb80 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -470,3 +470,63 @@ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 	return !(RETURN_DONE);
+ }
++
++/**
++ * The spi_quad_read_fixup() enables quad mode for SPI flash by inserting
++ * "spi-rx-bus-width" and "spi-tx-bus-width" into SPI flash subnode
++ * example:
++ * spi-rx-bus-width = <0x04>;
++ * spi-tx-bus-width = <0x04>;
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "flash";
++	const char *tx_name = "spi-tx-bus-width";
++	const char *rx_name = "spi-rx-bus-width";
++	const char *full_name;
++	const u32 tx_value = 4;
++	const u32 rx_value = 4;
++	int tx_ret;
++	int rx_ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		const u32 *value;
++
++		value = fdt_getprop(fdt, node, tx_name, NULL);
++		if (!value) {
++			show_rawdtb(tx_name, target_node);
++
++			tx_ret = fdt_appendprop_cell(fdt, node,
++						     tx_name, tx_value);
++			if (tx_ret) {
++				dtb_error("Error on %s fdt_appendprop_cell: %s\n",
++					  tx_name, fdt_strerror(tx_ret));
++			}
++
++			show_result(fdt, node, tx_name, RESULT_NUMERAL);
++		}
++
++		value = fdt_getprop(fdt, node, rx_name, NULL);
++		if (!value) {
++			show_rawdtb(rx_name, target_node);
++
++			rx_ret = fdt_appendprop_cell(fdt, node,
++						     rx_name, rx_value);
++			if (rx_ret) {
++				dtb_error("Error on %s fdt_appendprop_cell: %s\n",
++					  rx_name, fdt_strerror(rx_ret));
++			}
++
++			show_result(fdt, node, rx_name, RESULT_NUMERAL);
++		}
++
++		if (!tx_ret && !rx_ret)
++			return RETURN_DONE;
++	}
++
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 8a42619b2207..258bd5aa5c0e 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -39,4 +39,6 @@ int andespmu_node_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value);
+ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value);
++
++int spi_quad_read_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+-- 
+2.34.1
+

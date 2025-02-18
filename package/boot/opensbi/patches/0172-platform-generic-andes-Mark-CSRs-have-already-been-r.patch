@@ -1,0 +1,37 @@
+From 6bc151c581803354cd0327b69b9335b32901d537 Mon Sep 17 00:00:00 2001
+From: "alex749@andestech.com" <alex749@andestech.com>
+Date: Tue, 1 Apr 2025 08:39:50 +0800
+Subject: [PATCH 172/172] platform: generic: andes: Mark CSRs have already been
+ restored after restoration (#136)
+
+The patch prevents unexpected CSR restoration from memory when the CPU resumes
+from light sleep, provided that the CPU has performed deep sleep at least once.
+To avoid the unexpected restoration, the "saved" flag is unset after the CSR
+restoration has been completed.
+
+Signed-off-by: Alex Chun-Ju Lin <alex749@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/opensbi/pulls/136
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: alex749@andestech.com <alex749@andestech.com>
+Co-committed-by: alex749@andestech.com <alex749@andestech.com>
+---
+ platform/generic/andes/ae350.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index 5c540a98755b..9ca5f5ed2ae5 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -145,6 +145,8 @@ static void ae350_suspend_non_ret_restore(struct sbi_scratch *scratch, bool save
+ 	csr_write_allowed(CSR_SLIE, (ulong)&trap, regs->slie);
+ 	csr_write_allowed(CSR_SLIP, (ulong)&trap, regs->slip);
+ 
++	regs->saved = false;
++
+ 	if (save_l2c_setting && cache_get_addr(&l2c_addr) == SBI_OK)
+ 		writel(regs->l2c_ctl, (void*)(l2c_addr + L2C_CTL_OFFSET));
+ }
+-- 
+2.34.1
+

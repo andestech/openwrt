@@ -1,0 +1,48 @@
+From a731ac877af215e6feb6fe74b4f59674ff55f87a Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 2 Jan 2025 16:09:49 +0800
+Subject: [PATCH 45/53] riscv: imsic_ipi: Obtain interrupt file base address by
+ DTS
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/lib/imsic_ipi.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/arch/riscv/lib/imsic_ipi.c b/arch/riscv/lib/imsic_ipi.c
+index e3f2dae65e86..9a5db22f00d9 100644
+--- a/arch/riscv/lib/imsic_ipi.c
++++ b/arch/riscv/lib/imsic_ipi.c
+@@ -16,9 +16,6 @@
+ #include <regmap.h>
+ #include <syscon.h>
+ 
+-/* FIXME: Don't use hard-code address */
+-#define IMSIC_M_INTR_FILE_BASE		0x24000000
+-
+ #define IMSIC_INTR_FILE(base, hart)	((ulong)(base) + (0x1000 * (hart)))
+ 
+ #define IMSIC_IPI_ID			1
+@@ -99,7 +96,18 @@ int riscv_init_ipi(void)
+ 
+ int riscv_send_ipi(int hart)
+ {
+-	long *base = (long *)IMSIC_M_INTR_FILE_BASE;
++	static long *base = 0;
++
++	if (!base) {
++		/*
++		 * Get the base address of the first imsic node,
++		 * DTS provider should place the m-mode imsic node
++		 * before every other imsic nodes.
++		 */
++		base = syscon_get_first_range(RISCV_SYSCON_IMSIC);
++		if (IS_ERR(base))
++			return PTR_ERR(base);
++	}
+ 
+ 	writel(IMSIC_IPI_ID,
+ 	       (void __iomem *)IMSIC_INTR_FILE(base, hart));
+-- 
+2.34.1
+

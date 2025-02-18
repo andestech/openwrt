@@ -1,0 +1,5347 @@
+From 4267e264d5565c813b62d4f209af76e8fcfc806e Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Fri, 7 Feb 2025 10:07:11 +0800
+Subject: [PATCH 157/168] [backport] Support AIA extension on Andes ae350
+ platform (#240)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This patchset is backported from upstream linux to support AIA extension in 6.6 kernel.
+Modifies some driver initialization sequence and adds a new DTS for APLIC and IMSIC driver node.
+
+Co-authored-by: Anup Patel <apatel@ventanamicro.com>
+Co-authored-by: Thomas Gleixner <tglx@linutronix.de>
+Co-authored-by: Björn Töpel <bjorn@rivosinc.com>
+Co-authored-by: Samuel Holland <samuel.holland@sifive.com>
+Co-authored-by: Colin Ian King <colin.i.king@gmail.com>
+Co-authored-by: Yong-Xuan Wang <yongxuan.wang@sifive.com>
+Co-authored-by: Cyan Yang <cyan.yang@sifive.com>
+Co-authored-by: Dan Carpenter <dan.carpenter@linaro.org>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/240
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+---
+ .../interrupt-controller/riscv,aplic.yaml     | 172 ++++
+ .../interrupt-controller/riscv,imsics.yaml    | 172 ++++
+ MAINTAINERS                                   |  14 +
+ arch/riscv/Kconfig                            |   2 +
+ arch/riscv/boot/dts/andes/ae350-aplic.dts     | 236 +++++
+ arch/riscv/include/asm/kvm_aia_aplic.h        |  58 --
+ arch/riscv/include/asm/kvm_aia_imsic.h        |  38 -
+ arch/riscv/kvm/aia.c                          |  36 +-
+ arch/riscv/kvm/aia_aplic.c                    |   2 +-
+ arch/riscv/kvm/aia_device.c                   |   2 +-
+ arch/riscv/kvm/aia_imsic.c                    |  10 +-
+ arch/x86/include/asm/hw_irq.h                 |   2 -
+ drivers/base/platform-msi.c                   | 119 ++-
+ drivers/cache/andes_cache.c                   |   2 +-
+ drivers/dma/atcdmac300.c                      |  15 +-
+ drivers/dma/mv_xor_v2.c                       |   8 +-
+ drivers/dma/qcom/hidma.c                      |   6 +-
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c   |   5 +-
+ drivers/irqchip/Kconfig                       |  25 +
+ drivers/irqchip/Makefile                      |   3 +
+ drivers/irqchip/irq-gic-v3.c                  |   6 +-
+ drivers/irqchip/irq-riscv-aplic-direct.c      | 326 +++++++
+ drivers/irqchip/irq-riscv-aplic-main.c        | 211 +++++
+ drivers/irqchip/irq-riscv-aplic-main.h        |  52 ++
+ drivers/irqchip/irq-riscv-aplic-msi.c         | 275 ++++++
+ drivers/irqchip/irq-riscv-imsic-early.c       | 201 ++++
+ drivers/irqchip/irq-riscv-imsic-platform.c    | 375 ++++++++
+ drivers/irqchip/irq-riscv-imsic-state.c       | 865 ++++++++++++++++++
+ drivers/irqchip/irq-riscv-imsic-state.h       | 108 +++
+ drivers/irqchip/irq-riscv-intc.c              |  45 +-
+ drivers/irqchip/irq-sifive-plic.c             | 275 +++---
+ drivers/mailbox/bcm-flexrm-mailbox.c          |   8 +-
+ drivers/mmc/host/ftsdc010.c                   |  21 +-
+ drivers/of/property.c                         |   2 +
+ drivers/perf/arm_smmuv3_pmu.c                 |   4 +-
+ drivers/ufs/host/ufs-qcom.c                   |   8 +-
+ include/linux/cpuhotplug.h                    |   1 +
+ include/linux/irqchip/riscv-aplic.h           | 145 +++
+ include/linux/irqchip/riscv-imsic.h           |  87 ++
+ include/linux/irqdomain.h                     |  17 +
+ include/linux/irqdomain_defs.h                |   2 +
+ include/linux/msi.h                           |  24 +-
+ kernel/irq/irqdomain.c                        |  28 +-
+ kernel/irq/matrix.c                           |  28 +-
+ kernel/irq/msi.c                              | 184 +++-
+ 45 files changed, 3873 insertions(+), 352 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/interrupt-controller/riscv,aplic.yaml
+ create mode 100644 Documentation/devicetree/bindings/interrupt-controller/riscv,imsics.yaml
+ create mode 100644 arch/riscv/boot/dts/andes/ae350-aplic.dts
+ delete mode 100644 arch/riscv/include/asm/kvm_aia_aplic.h
+ delete mode 100644 arch/riscv/include/asm/kvm_aia_imsic.h
+ create mode 100644 drivers/irqchip/irq-riscv-aplic-direct.c
+ create mode 100644 drivers/irqchip/irq-riscv-aplic-main.c
+ create mode 100644 drivers/irqchip/irq-riscv-aplic-main.h
+ create mode 100644 drivers/irqchip/irq-riscv-aplic-msi.c
+ create mode 100644 drivers/irqchip/irq-riscv-imsic-early.c
+ create mode 100644 drivers/irqchip/irq-riscv-imsic-platform.c
+ create mode 100644 drivers/irqchip/irq-riscv-imsic-state.c
+ create mode 100644 drivers/irqchip/irq-riscv-imsic-state.h
+ create mode 100644 include/linux/irqchip/riscv-aplic.h
+ create mode 100644 include/linux/irqchip/riscv-imsic.h
+
+diff --git a/Documentation/devicetree/bindings/interrupt-controller/riscv,aplic.yaml b/Documentation/devicetree/bindings/interrupt-controller/riscv,aplic.yaml
+new file mode 100644
+index 000000000000..190a6499c932
+--- /dev/null
++++ b/Documentation/devicetree/bindings/interrupt-controller/riscv,aplic.yaml
+@@ -0,0 +1,172 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/interrupt-controller/riscv,aplic.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: RISC-V Advanced Platform Level Interrupt Controller (APLIC)
++
++maintainers:
++  - Anup Patel <anup@brainfault.org>
++
++description:
++  The RISC-V advanced interrupt architecture (AIA) defines an advanced
++  platform level interrupt controller (APLIC) for handling wired interrupts
++  in a RISC-V platform. The RISC-V AIA specification can be found at
++  https://github.com/riscv/riscv-aia.
++
++  The RISC-V APLIC is implemented as hierarchical APLIC domains where all
++  interrupt sources connect to the root APLIC domain and a parent APLIC
++  domain can delegate interrupt sources to it's child APLIC domains. There
++  is one device tree node for each APLIC domain.
++
++allOf:
++  - $ref: /schemas/interrupt-controller.yaml#
++
++properties:
++  compatible:
++    items:
++      - enum:
++          - qemu,aplic
++      - const: riscv,aplic
++
++  reg:
++    maxItems: 1
++
++  interrupt-controller: true
++
++  "#interrupt-cells":
++    const: 2
++
++  interrupts-extended:
++    minItems: 1
++    maxItems: 16384
++    description:
++      Given APLIC domain directly injects external interrupts to a set of
++      RISC-V HARTS (or CPUs). Each node pointed to should be a riscv,cpu-intc
++      node, which has a CPU node (i.e. RISC-V HART) as parent.
++
++  msi-parent:
++    description:
++      Given APLIC domain forwards wired interrupts as MSIs to a AIA incoming
++      message signaled interrupt controller (IMSIC). If both "msi-parent" and
++      "interrupts-extended" properties are present then it means the APLIC
++      domain supports both MSI mode and Direct mode in HW. In this case, the
++      APLIC driver has to choose between MSI mode or Direct mode.
++
++  riscv,num-sources:
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 1
++    maximum: 1023
++    description:
++      Specifies the number of wired interrupt sources supported by this
++      APLIC domain.
++
++  riscv,children:
++    $ref: /schemas/types.yaml#/definitions/phandle-array
++    minItems: 1
++    maxItems: 1024
++    items:
++      maxItems: 1
++    description:
++      A list of child APLIC domains for the given APLIC domain. Each child
++      APLIC domain is assigned a child index in increasing order, with the
++      first child APLIC domain assigned child index 0. The APLIC domain child
++      index is used by firmware to delegate interrupts from the given APLIC
++      domain to a particular child APLIC domain.
++
++  riscv,delegation:
++    $ref: /schemas/types.yaml#/definitions/phandle-array
++    minItems: 1
++    maxItems: 1024
++    items:
++      items:
++        - description: child APLIC domain phandle
++        - description: first interrupt number of the parent APLIC domain (inclusive)
++        - description: last interrupt number of the parent APLIC domain (inclusive)
++    description:
++      A interrupt delegation list where each entry is a triple consisting
++      of child APLIC domain phandle, first interrupt number of the parent
++      APLIC domain, and last interrupt number of the parent APLIC domain.
++      Firmware must configure interrupt delegation registers based on
++      interrupt delegation list.
++
++dependencies:
++  riscv,delegation: [ "riscv,children" ]
++
++required:
++  - compatible
++  - reg
++  - interrupt-controller
++  - "#interrupt-cells"
++  - riscv,num-sources
++
++anyOf:
++  - required:
++      - interrupts-extended
++  - required:
++      - msi-parent
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    // Example 1 (APLIC domains directly injecting interrupt to HARTs):
++
++    interrupt-controller@c000000 {
++      compatible = "qemu,aplic", "riscv,aplic";
++      interrupts-extended = <&cpu1_intc 11>,
++                            <&cpu2_intc 11>,
++                            <&cpu3_intc 11>,
++                            <&cpu4_intc 11>;
++      reg = <0xc000000 0x4080>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
++      riscv,num-sources = <63>;
++      riscv,children = <&aplic1>, <&aplic2>;
++      riscv,delegation = <&aplic1 1 63>;
++    };
++
++    aplic1: interrupt-controller@d000000 {
++      compatible = "qemu,aplic", "riscv,aplic";
++      interrupts-extended = <&cpu1_intc 9>,
++                            <&cpu2_intc 9>;
++      reg = <0xd000000 0x4080>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
++      riscv,num-sources = <63>;
++    };
++
++    aplic2: interrupt-controller@e000000 {
++      compatible = "qemu,aplic", "riscv,aplic";
++      interrupts-extended = <&cpu3_intc 9>,
++                            <&cpu4_intc 9>;
++      reg = <0xe000000 0x4080>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
++      riscv,num-sources = <63>;
++    };
++
++  - |
++    // Example 2 (APLIC domains forwarding interrupts as MSIs):
++
++    interrupt-controller@c000000 {
++      compatible = "qemu,aplic", "riscv,aplic";
++      msi-parent = <&imsic_mlevel>;
++      reg = <0xc000000 0x4000>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
++      riscv,num-sources = <63>;
++      riscv,children = <&aplic3>;
++      riscv,delegation = <&aplic3 1 63>;
++    };
++
++    aplic3: interrupt-controller@d000000 {
++      compatible = "qemu,aplic", "riscv,aplic";
++      msi-parent = <&imsic_slevel>;
++      reg = <0xd000000 0x4000>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
++      riscv,num-sources = <63>;
++    };
++...
+diff --git a/Documentation/devicetree/bindings/interrupt-controller/riscv,imsics.yaml b/Documentation/devicetree/bindings/interrupt-controller/riscv,imsics.yaml
+new file mode 100644
+index 000000000000..84976f17a4a1
+--- /dev/null
++++ b/Documentation/devicetree/bindings/interrupt-controller/riscv,imsics.yaml
+@@ -0,0 +1,172 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/interrupt-controller/riscv,imsics.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: RISC-V Incoming MSI Controller (IMSIC)
++
++maintainers:
++  - Anup Patel <anup@brainfault.org>
++
++description: |
++  The RISC-V advanced interrupt architecture (AIA) defines a per-CPU incoming
++  MSI controller (IMSIC) for handling MSIs in a RISC-V platform. The RISC-V
++  AIA specification can be found at https://github.com/riscv/riscv-aia.
++
++  The IMSIC is a per-CPU (or per-HART) device with separate interrupt file
++  for each privilege level (machine or supervisor). The configuration of
++  a IMSIC interrupt file is done using AIA CSRs and it also has a 4KB MMIO
++  space to receive MSIs from devices. Each IMSIC interrupt file supports a
++  fixed number of interrupt identities (to distinguish MSIs from devices)
++  which is same for given privilege level across CPUs (or HARTs).
++
++  The device tree of a RISC-V platform will have one IMSIC device tree node
++  for each privilege level (machine or supervisor) which collectively describe
++  IMSIC interrupt files at that privilege level across CPUs (or HARTs).
++
++  The arrangement of IMSIC interrupt files in MMIO space of a RISC-V platform
++  follows a particular scheme defined by the RISC-V AIA specification. A IMSIC
++  group is a set of IMSIC interrupt files co-located in MMIO space and we can
++  have multiple IMSIC groups (i.e. clusters, sockets, chiplets, etc) in a
++  RISC-V platform. The MSI target address of a IMSIC interrupt file at given
++  privilege level (machine or supervisor) encodes group index, HART index,
++  and guest index (shown below).
++
++  XLEN-1            > (HART Index MSB)                  12    0
++  |                  |                                  |     |
++  -------------------------------------------------------------
++  |xxxxxx|Group Index|xxxxxxxxxxx|HART Index|Guest Index|  0  |
++  -------------------------------------------------------------
++
++allOf:
++  - $ref: /schemas/interrupt-controller.yaml#
++  - $ref: /schemas/interrupt-controller/msi-controller.yaml#
++
++properties:
++  compatible:
++    items:
++      - enum:
++          - qemu,imsics
++      - const: riscv,imsics
++
++  reg:
++    minItems: 1
++    maxItems: 16384
++    description:
++      Base address of each IMSIC group.
++
++  interrupt-controller: true
++
++  "#interrupt-cells":
++    const: 0
++
++  msi-controller: true
++
++  "#msi-cells":
++    const: 0
++
++  interrupts-extended:
++    minItems: 1
++    maxItems: 16384
++    description:
++      This property represents the set of CPUs (or HARTs) for which given
++      device tree node describes the IMSIC interrupt files. Each node pointed
++      to should be a riscv,cpu-intc node, which has a CPU node (i.e. RISC-V
++      HART) as parent.
++
++  riscv,num-ids:
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 63
++    maximum: 2047
++    description:
++      Number of interrupt identities supported by IMSIC interrupt file.
++
++  riscv,num-guest-ids:
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 63
++    maximum: 2047
++    description:
++      Number of interrupt identities are supported by IMSIC guest interrupt
++      file. When not specified it is assumed to be same as specified by the
++      riscv,num-ids property.
++
++  riscv,guest-index-bits:
++    minimum: 0
++    maximum: 7
++    default: 0
++    description:
++      Number of guest index bits in the MSI target address.
++
++  riscv,hart-index-bits:
++    minimum: 0
++    maximum: 15
++    description:
++      Number of HART index bits in the MSI target address. When not
++      specified it is calculated based on the interrupts-extended property.
++
++  riscv,group-index-bits:
++    minimum: 0
++    maximum: 7
++    default: 0
++    description:
++      Number of group index bits in the MSI target address.
++
++  riscv,group-index-shift:
++    $ref: /schemas/types.yaml#/definitions/uint32
++    minimum: 0
++    maximum: 55
++    default: 24
++    description:
++      The least significant bit position of the group index bits in the
++      MSI target address.
++
++required:
++  - compatible
++  - reg
++  - interrupt-controller
++  - msi-controller
++  - "#msi-cells"
++  - interrupts-extended
++  - riscv,num-ids
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    // Example 1 (Machine-level IMSIC files with just one group):
++
++    interrupt-controller@24000000 {
++      compatible = "qemu,imsics", "riscv,imsics";
++      interrupts-extended = <&cpu1_intc 11>,
++                            <&cpu2_intc 11>,
++                            <&cpu3_intc 11>,
++                            <&cpu4_intc 11>;
++      reg = <0x28000000 0x4000>;
++      interrupt-controller;
++      #interrupt-cells = <0>;
++      msi-controller;
++      #msi-cells = <0>;
++      riscv,num-ids = <127>;
++    };
++
++  - |
++    // Example 2 (Supervisor-level IMSIC files with two groups):
++
++    interrupt-controller@28000000 {
++      compatible = "qemu,imsics", "riscv,imsics";
++      interrupts-extended = <&cpu1_intc 9>,
++                            <&cpu2_intc 9>,
++                            <&cpu3_intc 9>,
++                            <&cpu4_intc 9>;
++      reg = <0x28000000 0x2000>, /* Group0 IMSICs */
++            <0x29000000 0x2000>; /* Group1 IMSICs */
++      interrupt-controller;
++      #interrupt-cells = <0>;
++      msi-controller;
++      #msi-cells = <0>;
++      riscv,num-ids = <127>;
++      riscv,group-index-bits = <1>;
++      riscv,group-index-shift = <24>;
++    };
++...
+diff --git a/MAINTAINERS b/MAINTAINERS
+index ad67c8425a64..ed5cddde4ada 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -18424,6 +18424,20 @@ S:	Maintained
+ F:	drivers/mtd/nand/raw/r852.c
+ F:	drivers/mtd/nand/raw/r852.h
+ 
++RISC-V AIA DRIVERS
++M:	Anup Patel <anup@brainfault.org>
++L:	linux-riscv@lists.infradead.org
++S:	Maintained
++F:	Documentation/devicetree/bindings/interrupt-controller/riscv,aplic.yaml
++F:	Documentation/devicetree/bindings/interrupt-controller/riscv,imsics.yaml
++F:	drivers/irqchip/irq-riscv-aplic-*.c
++F:	drivers/irqchip/irq-riscv-aplic-*.h
++F:	drivers/irqchip/irq-riscv-imsic-*.c
++F:	drivers/irqchip/irq-riscv-imsic-*.h
++F:	drivers/irqchip/irq-riscv-intc.c
++F:	include/linux/irqchip/riscv-aplic.h
++F:	include/linux/irqchip/riscv-imsic.h
++
+ RISC-V ARCHITECTURE
+ M:	Paul Walmsley <paul.walmsley@sifive.com>
+ M:	Palmer Dabbelt <palmer@dabbelt.com>
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 752a8da4dd78..0f20495f1fba 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -153,6 +153,8 @@ config RISCV
+ 	select PCI_DOMAINS_GENERIC if PCI
+ 	select PCI_MSI if PCI
+ 	select RISCV_ALTERNATIVE if !XIP_KERNEL
++	select RISCV_APLIC
++	select RISCV_IMSIC
+ 	select RISCV_INTC
+ 	select RISCV_TIMER if RISCV_SBI
+ 	select SIFIVE_PLIC
+diff --git a/arch/riscv/boot/dts/andes/ae350-aplic.dts b/arch/riscv/boot/dts/andes/ae350-aplic.dts
+new file mode 100644
+index 000000000000..1ef78dddabdc
+--- /dev/null
++++ b/arch/riscv/boot/dts/andes/ae350-aplic.dts
+@@ -0,0 +1,236 @@
++/dts-v1/;
++
++/ {
++	#address-cells = <2>;
++	#size-cells = <2>;
++	compatible = "andestech,ae350";
++	model = "andestech,ax65";
++	serial-number = "7066729052";
++	aliases {
++		uart0 = &serial0;
++		spi0 = &spi;
++	};
++
++	chosen {
++		bootargs = "console=ttyS0,38400n8 debug loglevel=8 earlycon=sbi initcall_debug";
++		stdout-path = "uart0:38400n8";
++	};
++	cpus {
++		#address-cells = <1>;
++		#size-cells = <0>;
++		timebase-frequency = <60000000>;
++		CPU0: cpu@0 {
++			device_type = "cpu";
++			reg = <0>;
++			status = "okay";
++			compatible = "riscv";
++			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smaia_smepmp_smstateen_ssaia_sscofpmf_svinval_svnapot_svpbmt_xandes";
++			riscv,priv-major = <1>;
++			riscv,priv-minor = <10>;
++			riscv,cbom-block-size = <64>;
++			mmu-type = "riscv,sv48";
++			clock-frequency = <60000000>;
++			i-cache-size = <0x10000>;
++			i-cache-sets = <256>;
++			i-cache-line-size = <64>;
++			i-cache-block-size = <64>;
++			d-cache-size = <0x10000>;
++			d-cache-sets = <256>;
++			d-cache-line-size = <64>;
++			d-cache-block-size = <64>;
++			next-level-cache = <&L2>;
++			CPU0_intc: interrupt-controller {
++				#address-cells = <2>;
++				#interrupt-cells = <1>;
++				interrupt-controller;
++				compatible = "riscv,cpu-intc";
++			};
++		};
++	};
++	L2: l2-cache@e0500000 {
++		compatible = "cache";
++		cache-level = <2>;
++		cache-size = <0x200000>;
++		reg = <0x00000000 0xe0500000 0x00000000 0x00010000>;
++		andes,inst-prefetch = <3>;
++		andes,data-prefetch = <3>;
++		// The value format is <XRAMOCTL XRAMICTL>
++		andes,tag-ram-ctl = <0 0>;
++		andes,data-ram-ctl = <0 0>;
++	};
++	memory@0 {
++		reg = <0x00000000 0x00000000 0x00000000 0x80000000>;
++		device_type = "memory";
++	};
++	soc {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		compatible = "andestech,riscv-ae350-soc", "simple-bus";
++		ranges;
++
++		//APLIC domains forwarding interrupts as MSIs
++		aplic_m: interrupt-controller@e4400000 {
++			#address-cells = <2>;
++			compatible = "riscv,aplic";
++			msi-parent = <&imsic_mlevel>;
++			reg = <0x0 0xe4400000 0x0 0x8000>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			riscv,num-sources = <31>;
++			riscv,children = <&aplic_s>;
++			riscv,delegation = <&aplic_s 1 31>;
++		};
++		aplic_s: interrupt-controller@e4408000 {
++			#address-cells = <2>;
++			compatible =  "riscv,aplic";
++			msi-parent = <&imsic_slevel>;
++			reg = <0x0 0xe4408000 0x0 0x8000>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			riscv,num-sources = <31>;
++		};
++
++		// (Machine-level IMSIC files):
++		imsic_mlevel: interrupt-controller@c4000000 {
++			#address-cells = <2>;
++			compatible = "riscv,imsics";
++			interrupts-extended = <&CPU0_intc 11>;
++			reg = <0x0 0xc4000000 0x0 0x100000>;
++			interrupt-controller;
++			#interrupt-cells = <0>;
++			msi-controller;
++			#msi-cells = <0>;
++			riscv,num-ids = <63>;
++		};
++
++		//(Supervisor-level IMSIC files)
++		imsic_slevel: interrupt-controller@c4100000 {
++			#address-cells = <2>;
++			compatible = "riscv,imsics";
++			interrupts-extended = <&CPU0_intc 9>;
++			reg = <0x0 0xc4100000 0x0 0x100000>; /* Group IMSICs */
++			interrupt-controller;
++			#interrupt-cells = <0>;
++			msi-controller;
++			#msi-cells = <0>;
++			riscv,num-ids = <63>;
++			riscv,guest-index-bits = <2>; /* GEILEN=3 */
++		};
++		plmt0: plmt0@e6000000 {
++			compatible = "riscv,plmt0";
++			reg = <0x00000000 0xe6000000 0x00000000 0x00100000>;
++			interrupts-extended = < &CPU0_intc 7>;
++		};
++		spiclk: virt_100mhz {
++			compatible = "fixed-clock";
++			#clock-cells = <0>;
++			clock-frequency = <100000000>;
++		};
++		timer0: timer@f0400000 {
++			compatible = "andestech,atcpit100";
++			reg = <0x00000000 0xf0400000 0x00000000 0x00001000>;
++			interrupts = <3 4>;
++			interrupt-parent = <&aplic_s>;
++			clock-frequency = <60000000>;
++		};
++		pwm: pwm@f0400000 {
++			compatible = "andestech,atcpit100-pwm";
++			reg = <0x00000000 0xf0400000 0x00000000 0x00001000>;
++			interrupts = <3 4>;
++			interrupt-parent = <&aplic_s>;
++			clock-frequency = <60000000>;
++			pwm-cells = <2>;
++		};
++		wdt: wdt@f0500000 {
++			compatible = "andestech,atcwdt200";
++			reg = <0x00000000 0xf0500000 0x00000000 0x00001000>;
++			interrupts = <3 4>;
++			interrupt-parent = <&aplic_s>;
++			clock-frequency = <60000000>;
++		};
++		serial0: serial@f0300000 {
++			compatible = "andestech,uart16550", "ns16550a";
++			reg = <0x00000000 0xf0300000 0x00000000 0x00001000>;
++			interrupts = <9 4>;
++			interrupt-parent = <&aplic_s>;
++			clock-frequency = <19660800>;
++			current-speed = <38400>;
++			reg-shift = <2>;
++			reg-offset = <32>;
++			reg-io-width = <4>;
++			no-loopback-test = <1>;
++		};
++		rtc0: rtc@f0600000 {
++			compatible = "andestech,atcrtc100";
++			reg = <0x00000000 0xf0600000 0x00000000 0x00001000>;
++			interrupts = <1 4 2 4>;
++			interrupt-parent = <&aplic_s>;
++			wakeup-source;
++		};
++		gpio: gpio@f0700000 {
++			compatible = "andestech,atcgpio100";
++			reg = <0x00000000 0xf0700000 0x00000000 0x00001000>;
++			interrupts = <7 4>;
++			interrupt-parent = <&aplic_s>;
++			wakeup-source;
++		};
++		mac0: mac@e0100000 {
++			compatible = "andestech,atmac100";
++			reg = <0x00000000 0xe0100000 0x00000000 0x00001000>;
++			interrupts = <19 4>;
++			interrupt-parent = <&aplic_s>;
++			dma-coherent;
++		};
++		smu: smu@f0100000 {
++			compatible = "andestech,atcsmu";
++			reg = <0x00000000 0xf0100000 0x00000000 0x00001000>;
++		};
++		mmc0: mmc@f0e00000 {
++			compatible = "andestech,atfsdc010g";
++			reg = <0x00000000 0xf0e00000 0x00000000 0x00001000>;
++			interrupts = <18 4>;
++			interrupt-parent = <&aplic_s>;
++			clock-freq-min-max = <400000 100000000>;
++			max-frequency = <100000000>;
++			fifo-depth = <16>;
++			dmas = <&dma0 9>;
++			dma-names = "rxtx";
++			dma-coherent;
++		};
++		dma0: dma@f0c00000 {
++			compatible = "andestech,atcdmac300g";
++			reg = <0x00000000 0xf0c00000 0x00000000 0x00001000>;
++			interrupts = <10 4>;
++			interrupt-parent = <&aplic_s>;
++			dma-channels = <8>;
++			#dma-cells = <1>;
++			dma-coherent;
++		};
++		pmu: pmu {
++			compatible = "riscv,andes-pmu";
++			device_type = "pmu";
++		};
++		spi: spi@f0b00000 {
++			compatible = "andestech,atcspi200";
++			reg = <0x00000000 0xf0b00000 0x00000000 0x00001000>;
++			interrupts = <4 4>;
++			interrupt-parent = <&aplic_s>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			num-cs = <1>;
++			clocks = <&spiclk>;
++			flash@0 {
++				compatible = "jedec,spi-nor";
++				reg = <0x00000000>;
++				spi-max-frequency = <50000000>;
++				spi-cpol;
++				spi-cpha;
++			};
++		};
++		es100: es100@f0900000 {
++			compatible = "andestech,es100";
++			reg = <0x00000000 0xf0900000 0x00000000 0x00001000>;
++		};
++	};
++};
++
+diff --git a/arch/riscv/include/asm/kvm_aia_aplic.h b/arch/riscv/include/asm/kvm_aia_aplic.h
+deleted file mode 100644
+index 6dd1a4809ec1..000000000000
+--- a/arch/riscv/include/asm/kvm_aia_aplic.h
++++ /dev/null
+@@ -1,58 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/*
+- * Copyright (C) 2021 Western Digital Corporation or its affiliates.
+- * Copyright (C) 2022 Ventana Micro Systems Inc.
+- */
+-#ifndef __KVM_RISCV_AIA_IMSIC_H
+-#define __KVM_RISCV_AIA_IMSIC_H
+-
+-#include <linux/bitops.h>
+-
+-#define APLIC_MAX_IDC			BIT(14)
+-#define APLIC_MAX_SOURCE		1024
+-
+-#define APLIC_DOMAINCFG			0x0000
+-#define APLIC_DOMAINCFG_RDONLY		0x80000000
+-#define APLIC_DOMAINCFG_IE		BIT(8)
+-#define APLIC_DOMAINCFG_DM		BIT(2)
+-#define APLIC_DOMAINCFG_BE		BIT(0)
+-
+-#define APLIC_SOURCECFG_BASE		0x0004
+-#define APLIC_SOURCECFG_D		BIT(10)
+-#define APLIC_SOURCECFG_CHILDIDX_MASK	0x000003ff
+-#define APLIC_SOURCECFG_SM_MASK	0x00000007
+-#define APLIC_SOURCECFG_SM_INACTIVE	0x0
+-#define APLIC_SOURCECFG_SM_DETACH	0x1
+-#define APLIC_SOURCECFG_SM_EDGE_RISE	0x4
+-#define APLIC_SOURCECFG_SM_EDGE_FALL	0x5
+-#define APLIC_SOURCECFG_SM_LEVEL_HIGH	0x6
+-#define APLIC_SOURCECFG_SM_LEVEL_LOW	0x7
+-
+-#define APLIC_IRQBITS_PER_REG		32
+-
+-#define APLIC_SETIP_BASE		0x1c00
+-#define APLIC_SETIPNUM			0x1cdc
+-
+-#define APLIC_CLRIP_BASE		0x1d00
+-#define APLIC_CLRIPNUM			0x1ddc
+-
+-#define APLIC_SETIE_BASE		0x1e00
+-#define APLIC_SETIENUM			0x1edc
+-
+-#define APLIC_CLRIE_BASE		0x1f00
+-#define APLIC_CLRIENUM			0x1fdc
+-
+-#define APLIC_SETIPNUM_LE		0x2000
+-#define APLIC_SETIPNUM_BE		0x2004
+-
+-#define APLIC_GENMSI			0x3000
+-
+-#define APLIC_TARGET_BASE		0x3004
+-#define APLIC_TARGET_HART_IDX_SHIFT	18
+-#define APLIC_TARGET_HART_IDX_MASK	0x3fff
+-#define APLIC_TARGET_GUEST_IDX_SHIFT	12
+-#define APLIC_TARGET_GUEST_IDX_MASK	0x3f
+-#define APLIC_TARGET_IPRIO_MASK	0xff
+-#define APLIC_TARGET_EIID_MASK	0x7ff
+-
+-#endif
+diff --git a/arch/riscv/include/asm/kvm_aia_imsic.h b/arch/riscv/include/asm/kvm_aia_imsic.h
+deleted file mode 100644
+index da5881d2bde0..000000000000
+--- a/arch/riscv/include/asm/kvm_aia_imsic.h
++++ /dev/null
+@@ -1,38 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/*
+- * Copyright (C) 2021 Western Digital Corporation or its affiliates.
+- * Copyright (C) 2022 Ventana Micro Systems Inc.
+- */
+-#ifndef __KVM_RISCV_AIA_IMSIC_H
+-#define __KVM_RISCV_AIA_IMSIC_H
+-
+-#include <linux/types.h>
+-#include <asm/csr.h>
+-
+-#define IMSIC_MMIO_PAGE_SHIFT		12
+-#define IMSIC_MMIO_PAGE_SZ		(1UL << IMSIC_MMIO_PAGE_SHIFT)
+-#define IMSIC_MMIO_PAGE_LE		0x00
+-#define IMSIC_MMIO_PAGE_BE		0x04
+-
+-#define IMSIC_MIN_ID			63
+-#define IMSIC_MAX_ID			2048
+-
+-#define IMSIC_EIDELIVERY		0x70
+-
+-#define IMSIC_EITHRESHOLD		0x72
+-
+-#define IMSIC_EIP0			0x80
+-#define IMSIC_EIP63			0xbf
+-#define IMSIC_EIPx_BITS			32
+-
+-#define IMSIC_EIE0			0xc0
+-#define IMSIC_EIE63			0xff
+-#define IMSIC_EIEx_BITS			32
+-
+-#define IMSIC_FIRST			IMSIC_EIDELIVERY
+-#define IMSIC_LAST			IMSIC_EIE63
+-
+-#define IMSIC_MMIO_SETIPNUM_LE		0x00
+-#define IMSIC_MMIO_SETIPNUM_BE		0x04
+-
+-#endif
+diff --git a/arch/riscv/kvm/aia.c b/arch/riscv/kvm/aia.c
+index a944294f6f23..efeb95e9a461 100644
+--- a/arch/riscv/kvm/aia.c
++++ b/arch/riscv/kvm/aia.c
+@@ -10,12 +10,13 @@
+ #include <linux/kernel.h>
+ #include <linux/bitops.h>
+ #include <linux/irq.h>
++#include <linux/irqchip/riscv-imsic.h>
+ #include <linux/irqdomain.h>
+ #include <linux/kvm_host.h>
+ #include <linux/percpu.h>
+ #include <linux/spinlock.h>
+ #include <asm/cpufeature.h>
+-#include <asm/kvm_aia_imsic.h>
++#include <asm/hwcap.h>
+ 
+ struct aia_hgei_control {
+ 	raw_spinlock_t lock;
+@@ -394,6 +395,8 @@ int kvm_riscv_aia_alloc_hgei(int cpu, struct kvm_vcpu *owner,
+ {
+ 	int ret = -ENOENT;
+ 	unsigned long flags;
++	const struct imsic_global_config *gc;
++	const struct imsic_local_config *lc;
+ 	struct aia_hgei_control *hgctrl = per_cpu_ptr(&aia_hgei, cpu);
+ 
+ 	if (!kvm_riscv_aia_available() || !hgctrl)
+@@ -409,11 +412,14 @@ int kvm_riscv_aia_alloc_hgei(int cpu, struct kvm_vcpu *owner,
+ 
+ 	raw_spin_unlock_irqrestore(&hgctrl->lock, flags);
+ 
+-	/* TODO: To be updated later by AIA IMSIC HW guest file support */
+-	if (hgei_va)
+-		*hgei_va = NULL;
+-	if (hgei_pa)
+-		*hgei_pa = 0;
++	gc = imsic_get_global_config();
++	lc = (gc) ? per_cpu_ptr(gc->local, cpu) : NULL;
++	if (lc && ret > 0) {
++		if (hgei_va)
++			*hgei_va = lc->msi_va + (ret * IMSIC_MMIO_PAGE_SZ);
++		if (hgei_pa)
++			*hgei_pa = lc->msi_pa + (ret * IMSIC_MMIO_PAGE_SZ);
++	}
+ 
+ 	return ret;
+ }
+@@ -600,9 +606,11 @@ void kvm_riscv_aia_disable(void)
+ int kvm_riscv_aia_init(void)
+ {
+ 	int rc;
++	const struct imsic_global_config *gc;
+ 
+ 	if (!riscv_isa_extension_available(NULL, SxAIA))
+ 		return -ENODEV;
++	gc = imsic_get_global_config();
+ 
+ 	/* Figure-out number of bits in HGEIE */
+ 	csr_write(CSR_HGEIE, -1UL);
+@@ -614,17 +622,17 @@ int kvm_riscv_aia_init(void)
+ 	/*
+ 	 * Number of usable HGEI lines should be minimum of per-HART
+ 	 * IMSIC guest files and number of bits in HGEIE
+-	 *
+-	 * TODO: To be updated later by AIA IMSIC HW guest file support
+ 	 */
+-	kvm_riscv_aia_nr_hgei = 0;
++	if (gc)
++		kvm_riscv_aia_nr_hgei = min((ulong)kvm_riscv_aia_nr_hgei,
++					    BIT(gc->guest_index_bits) - 1);
++	else
++		kvm_riscv_aia_nr_hgei = 0;
+ 
+-	/*
+-	 * Find number of guest MSI IDs
+-	 *
+-	 * TODO: To be updated later by AIA IMSIC HW guest file support
+-	 */
++	/* Find number of guest MSI IDs */
+ 	kvm_riscv_aia_max_ids = IMSIC_MAX_ID;
++	if (gc && kvm_riscv_aia_nr_hgei)
++		kvm_riscv_aia_max_ids = gc->nr_guest_ids + 1;
+ 
+ 	/* Initialize guest external interrupt line management */
+ 	rc = aia_hgei_init();
+diff --git a/arch/riscv/kvm/aia_aplic.c b/arch/riscv/kvm/aia_aplic.c
+index b467ba5ed910..da6ff1bade0d 100644
+--- a/arch/riscv/kvm/aia_aplic.c
++++ b/arch/riscv/kvm/aia_aplic.c
+@@ -7,12 +7,12 @@
+  *	Anup Patel <apatel@ventanamicro.com>
+  */
+ 
++#include <linux/irqchip/riscv-aplic.h>
+ #include <linux/kvm_host.h>
+ #include <linux/math.h>
+ #include <linux/spinlock.h>
+ #include <linux/swab.h>
+ #include <kvm/iodev.h>
+-#include <asm/kvm_aia_aplic.h>
+ 
+ struct aplic_irq {
+ 	raw_spinlock_t lock;
+diff --git a/arch/riscv/kvm/aia_device.c b/arch/riscv/kvm/aia_device.c
+index 5cd407c6a8e4..39cd26af5a69 100644
+--- a/arch/riscv/kvm/aia_device.c
++++ b/arch/riscv/kvm/aia_device.c
+@@ -8,9 +8,9 @@
+  */
+ 
+ #include <linux/bits.h>
++#include <linux/irqchip/riscv-imsic.h>
+ #include <linux/kvm_host.h>
+ #include <linux/uaccess.h>
+-#include <asm/kvm_aia_imsic.h>
+ 
+ static void unlock_vcpus(struct kvm *kvm, int vcpu_lock_idx)
+ {
+diff --git a/arch/riscv/kvm/aia_imsic.c b/arch/riscv/kvm/aia_imsic.c
+index e808723a85f1..a8085cd8215e 100644
+--- a/arch/riscv/kvm/aia_imsic.c
++++ b/arch/riscv/kvm/aia_imsic.c
+@@ -9,13 +9,13 @@
+ 
+ #include <linux/atomic.h>
+ #include <linux/bitmap.h>
++#include <linux/irqchip/riscv-imsic.h>
+ #include <linux/kvm_host.h>
+ #include <linux/math.h>
+ #include <linux/spinlock.h>
+ #include <linux/swab.h>
+ #include <kvm/iodev.h>
+ #include <asm/csr.h>
+-#include <asm/kvm_aia_imsic.h>
+ 
+ #define IMSIC_MAX_EIX	(IMSIC_MAX_ID / BITS_PER_TYPE(u64))
+ 
+@@ -55,7 +55,7 @@ struct imsic {
+ 	/* IMSIC SW-file */
+ 	struct imsic_mrif *swfile;
+ 	phys_addr_t swfile_pa;
+-	spinlock_t swfile_extirq_lock;
++	raw_spinlock_t swfile_extirq_lock;
+ };
+ 
+ #define imsic_vs_csr_read(__c)			\
+@@ -622,7 +622,7 @@ static void imsic_swfile_extirq_update(struct kvm_vcpu *vcpu)
+ 	 * interruptions between reading topei and updating pending status.
+ 	 */
+ 
+-	spin_lock_irqsave(&imsic->swfile_extirq_lock, flags);
++	raw_spin_lock_irqsave(&imsic->swfile_extirq_lock, flags);
+ 
+ 	if (imsic_mrif_atomic_read(mrif, &mrif->eidelivery) &&
+ 	    imsic_mrif_topei(mrif, imsic->nr_eix, imsic->nr_msis))
+@@ -630,7 +630,7 @@ static void imsic_swfile_extirq_update(struct kvm_vcpu *vcpu)
+ 	else
+ 		kvm_riscv_vcpu_unset_interrupt(vcpu, IRQ_VS_EXT);
+ 
+-	spin_unlock_irqrestore(&imsic->swfile_extirq_lock, flags);
++	raw_spin_unlock_irqrestore(&imsic->swfile_extirq_lock, flags);
+ }
+ 
+ static void imsic_swfile_read(struct kvm_vcpu *vcpu, bool clear,
+@@ -1051,7 +1051,7 @@ int kvm_riscv_vcpu_aia_imsic_init(struct kvm_vcpu *vcpu)
+ 	}
+ 	imsic->swfile = page_to_virt(swfile_page);
+ 	imsic->swfile_pa = page_to_phys(swfile_page);
+-	spin_lock_init(&imsic->swfile_extirq_lock);
++	raw_spin_lock_init(&imsic->swfile_extirq_lock);
+ 
+ 	/* Setup IO device */
+ 	kvm_iodevice_init(&imsic->iodev, &imsic_iodoev_ops);
+diff --git a/arch/x86/include/asm/hw_irq.h b/arch/x86/include/asm/hw_irq.h
+index 551829884734..dcfaa3812306 100644
+--- a/arch/x86/include/asm/hw_irq.h
++++ b/arch/x86/include/asm/hw_irq.h
+@@ -16,8 +16,6 @@
+ 
+ #include <asm/irq_vectors.h>
+ 
+-#define IRQ_MATRIX_BITS		NR_VECTORS
+-
+ #ifndef __ASSEMBLY__
+ 
+ #include <linux/percpu.h>
+diff --git a/drivers/base/platform-msi.c b/drivers/base/platform-msi.c
+index f37ad34c80ec..0d01890160f3 100644
+--- a/drivers/base/platform-msi.c
++++ b/drivers/base/platform-msi.c
+@@ -13,6 +13,8 @@
+ #include <linux/msi.h>
+ #include <linux/slab.h>
+ 
++/* Begin of removal area. Once everything is converted over. Cleanup the includes too! */
++
+ #define DEV_ID_SHIFT	21
+ #define MAX_DEV_MSIS	(1 << (32 - DEV_ID_SHIFT))
+ 
+@@ -204,8 +206,8 @@ static void platform_msi_free_priv_data(struct device *dev)
+  * Returns:
+  * Zero for success, or an error code in case of failure
+  */
+-int platform_msi_domain_alloc_irqs(struct device *dev, unsigned int nvec,
+-				   irq_write_msi_msg_t write_msi_msg)
++static int platform_msi_domain_alloc_irqs(struct device *dev, unsigned int nvec,
++					  irq_write_msi_msg_t write_msi_msg)
+ {
+ 	int err;
+ 
+@@ -219,18 +221,6 @@ int platform_msi_domain_alloc_irqs(struct device *dev, unsigned int nvec,
+ 
+ 	return err;
+ }
+-EXPORT_SYMBOL_GPL(platform_msi_domain_alloc_irqs);
+-
+-/**
+- * platform_msi_domain_free_irqs - Free MSI interrupts for @dev
+- * @dev:	The device for which to free interrupts
+- */
+-void platform_msi_domain_free_irqs(struct device *dev)
+-{
+-	msi_domain_free_irqs_all(dev, MSI_DEFAULT_DOMAIN);
+-	platform_msi_free_priv_data(dev);
+-}
+-EXPORT_SYMBOL_GPL(platform_msi_domain_free_irqs);
+ 
+ /**
+  * platform_msi_get_host_data - Query the private data associated with
+@@ -350,3 +340,104 @@ int platform_msi_device_domain_alloc(struct irq_domain *domain, unsigned int vir
+ 
+ 	return msi_domain_populate_irqs(domain->parent, dev, virq, nr_irqs, &data->arg);
+ }
++
++/* End of removal area */
++
++/* Real per device domain interfaces */
++
++/*
++ * This indirection can go when platform_device_msi_init_and_alloc_irqs()
++ * is switched to a proper irq_chip::irq_write_msi_msg() callback. Keep it
++ * simple for now.
++ */
++static void platform_msi_write_msi_msg(struct irq_data *d, struct msi_msg *msg)
++{
++	irq_write_msi_msg_t cb = d->chip_data;
++
++	cb(irq_data_get_msi_desc(d), msg);
++}
++
++static void platform_msi_set_desc_byindex(msi_alloc_info_t *arg, struct msi_desc *desc)
++{
++	arg->desc = desc;
++	arg->hwirq = desc->msi_index;
++}
++
++static const struct msi_domain_template platform_msi_template = {
++	.chip = {
++		.name			= "pMSI",
++		.irq_mask		= irq_chip_mask_parent,
++		.irq_unmask		= irq_chip_unmask_parent,
++		.irq_write_msi_msg	= platform_msi_write_msi_msg,
++		/* The rest is filled in by the platform MSI parent */
++	},
++
++	.ops = {
++		.set_desc		= platform_msi_set_desc_byindex,
++	},
++
++	.info = {
++		.bus_token		= DOMAIN_BUS_DEVICE_MSI,
++	},
++};
++
++/**
++ * platform_device_msi_init_and_alloc_irqs - Initialize platform device MSI
++ *					     and allocate interrupts for @dev
++ * @dev:		The device for which to allocate interrupts
++ * @nvec:		The number of interrupts to allocate
++ * @write_msi_msg:	Callback to write an interrupt message for @dev
++ *
++ * Returns:
++ * Zero for success, or an error code in case of failure
++ *
++ * This creates a MSI domain on @dev which has @dev->msi.domain as
++ * parent. The parent domain sets up the new domain. The domain has
++ * a fixed size of @nvec. The domain is managed by devres and will
++ * be removed when the device is removed.
++ *
++ * Note: For migration purposes this falls back to the original platform_msi code
++ *	 up to the point where all platforms have been converted to the MSI
++ *	 parent model.
++ */
++int platform_device_msi_init_and_alloc_irqs(struct device *dev, unsigned int nvec,
++					    irq_write_msi_msg_t write_msi_msg)
++{
++	struct irq_domain *domain = dev->msi.domain;
++
++	if (!domain || !write_msi_msg)
++		return -EINVAL;
++
++	/* Migration support. Will go away once everything is converted */
++	if (!irq_domain_is_msi_parent(domain))
++		return platform_msi_domain_alloc_irqs(dev, nvec, write_msi_msg);
++
++	/*
++	 * @write_msi_msg is stored in the resulting msi_domain_info::data.
++	 * The underlying domain creation mechanism will assign that
++	 * callback to the resulting irq chip.
++	 */
++	if (!msi_create_device_irq_domain(dev, MSI_DEFAULT_DOMAIN,
++					  &platform_msi_template,
++					  nvec, NULL, write_msi_msg))
++		return -ENODEV;
++
++	return msi_domain_alloc_irqs_range(dev, MSI_DEFAULT_DOMAIN, 0, nvec - 1);
++}
++EXPORT_SYMBOL_GPL(platform_device_msi_init_and_alloc_irqs);
++
++/**
++ * platform_device_msi_free_irqs_all - Free all interrupts for @dev
++ * @dev:	The device for which to free interrupts
++ */
++void platform_device_msi_free_irqs_all(struct device *dev)
++{
++	struct irq_domain *domain = dev->msi.domain;
++
++	msi_domain_free_irqs_all(dev, MSI_DEFAULT_DOMAIN);
++
++	/* Migration support. Will go away once everything is converted */
++	if (!irq_domain_is_msi_parent(domain))
++		platform_msi_free_priv_data(dev);
++}
++EXPORT_SYMBOL_GPL(platform_device_msi_free_irqs_all);
+diff --git a/drivers/cache/andes_cache.c b/drivers/cache/andes_cache.c
+index 5abec04ec185..d80bc21e0e72 100644
+--- a/drivers/cache/andes_cache.c
++++ b/drivers/cache/andes_cache.c
+@@ -332,4 +332,4 @@ static int __init andes_cache_init(void)
+ 
+ 	return 0;
+ }
+-early_initcall(andes_cache_init);
++late_initcall(andes_cache_init);
+diff --git a/drivers/dma/atcdmac300.c b/drivers/dma/atcdmac300.c
+index 7b16b369fccd..abf0d0964bb8 100644
+--- a/drivers/dma/atcdmac300.c
++++ b/drivers/dma/atcdmac300.c
+@@ -1202,7 +1202,7 @@ static void v5_dma_off(struct v5_dma *v5dma)
+ 		cpu_relax();
+ }
+ 
+-static int __init v5_dma_probe(struct platform_device *pdev)
++static int v5_dma_probe(struct platform_device *pdev)
+ {
+ 	struct resource		*io;
+ 	struct v5_dma		*v5dma;
+@@ -1410,6 +1410,7 @@ static void v5_dma_shutdown(struct platform_device *pdev)
+ }
+ 
+ static struct platform_driver v5_dma_driver = {
++	.probe		= v5_dma_probe,
+ 	.remove		= v5_dma_remove,
+ 	.shutdown	= v5_dma_shutdown,
+ 	.id_table	= v5dma_devtypes,
+@@ -1419,18 +1420,8 @@ static struct platform_driver v5_dma_driver = {
+ 	},
+ };
+ 
+-static int __init v5_dma_init(void)
+-{
+-	return platform_driver_probe(&v5_dma_driver, v5_dma_probe);
+-}
+-
+-subsys_initcall(v5_dma_init);
++module_platform_driver(v5_dma_driver);
+ 
+-static void __exit v5_dma_exit(void)
+-{
+-	platform_driver_unregister(&v5_dma_driver);
+-}
+-module_exit(v5_dma_exit);
+ MODULE_DESCRIPTION("Andes DMA Controller driver");
+ MODULE_AUTHOR("Rick Chen <rick@andestech.com>");
+ MODULE_LICENSE("GPL");
+diff --git a/drivers/dma/mv_xor_v2.c b/drivers/dma/mv_xor_v2.c
+index 0e1e9ca1c005..cd2b9a6ab621 100644
+--- a/drivers/dma/mv_xor_v2.c
++++ b/drivers/dma/mv_xor_v2.c
+@@ -747,8 +747,8 @@ static int mv_xor_v2_probe(struct platform_device *pdev)
+ 	if (IS_ERR(xor_dev->clk))
+ 		return PTR_ERR(xor_dev->clk);
+ 
+-	ret = platform_msi_domain_alloc_irqs(&pdev->dev, 1,
+-					     mv_xor_v2_set_msi_msg);
++	ret = platform_device_msi_init_and_alloc_irqs(&pdev->dev, 1,
++						      mv_xor_v2_set_msi_msg);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -851,7 +851,7 @@ static int mv_xor_v2_probe(struct platform_device *pdev)
+ 			  xor_dev->desc_size * MV_XOR_V2_DESC_NUM,
+ 			  xor_dev->hw_desq_virt, xor_dev->hw_desq);
+ free_msi_irqs:
+-	platform_msi_domain_free_irqs(&pdev->dev);
++	platform_device_msi_free_irqs_all(&pdev->dev);
+ 	return ret;
+ }
+ 
+@@ -867,7 +867,7 @@ static int mv_xor_v2_remove(struct platform_device *pdev)
+ 
+ 	devm_free_irq(&pdev->dev, xor_dev->irq, xor_dev);
+ 
+-	platform_msi_domain_free_irqs(&pdev->dev);
++	platform_device_msi_free_irqs_all(&pdev->dev);
+ 
+ 	tasklet_kill(&xor_dev->irq_tasklet);
+ 
+diff --git a/drivers/dma/qcom/hidma.c b/drivers/dma/qcom/hidma.c
+index 834ae519c15d..f2b299c23b1e 100644
+--- a/drivers/dma/qcom/hidma.c
++++ b/drivers/dma/qcom/hidma.c
+@@ -696,7 +696,7 @@ static void hidma_free_msis(struct hidma_dev *dmadev)
+ 			devm_free_irq(dev, virq, &dmadev->lldev);
+ 	}
+ 
+-	platform_msi_domain_free_irqs(dev);
++	platform_device_msi_free_irqs_all(dev);
+ #endif
+ }
+ 
+@@ -706,8 +706,8 @@ static int hidma_request_msi(struct hidma_dev *dmadev,
+ #ifdef CONFIG_GENERIC_MSI_IRQ
+ 	int rc, i, virq;
+ 
+-	rc = platform_msi_domain_alloc_irqs(&pdev->dev, HIDMA_MSI_INTS,
+-					    hidma_write_msi_msg);
++	rc = platform_device_msi_init_and_alloc_irqs(&pdev->dev, HIDMA_MSI_INTS,
++						     hidma_write_msi_msg);
+ 	if (rc)
+ 		return rc;
+ 
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+index 68b81f9c2f4b..435eee52e033 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+@@ -3141,7 +3141,8 @@ static int arm_smmu_update_gbpa(struct arm_smmu_device *smmu, u32 set, u32 clr)
+ static void arm_smmu_free_msis(void *data)
+ {
+ 	struct device *dev = data;
+-	platform_msi_domain_free_irqs(dev);
++
++	platform_device_msi_free_irqs_all(dev);
+ }
+ 
+ static void arm_smmu_write_msi_msg(struct msi_desc *desc, struct msi_msg *msg)
+@@ -3182,7 +3183,7 @@ static void arm_smmu_setup_msis(struct arm_smmu_device *smmu)
+ 	}
+ 
+ 	/* Allocate MSIs for evtq, gerror and priq. Ignore cmdq */
+-	ret = platform_msi_domain_alloc_irqs(dev, nvec, arm_smmu_write_msi_msg);
++	ret = platform_device_msi_init_and_alloc_irqs(dev, nvec, arm_smmu_write_msi_msg);
+ 	if (ret) {
+ 		dev_warn(dev, "failed to allocate MSIs - falling back to wired irqs\n");
+ 		return;
+diff --git a/drivers/irqchip/Kconfig b/drivers/irqchip/Kconfig
+index e7b736800dd0..ab10394a3cb6 100644
+--- a/drivers/irqchip/Kconfig
++++ b/drivers/irqchip/Kconfig
+@@ -540,6 +540,31 @@ config RISCV_INTC
+ 	depends on RISCV
+ 	select IRQ_DOMAIN_HIERARCHY
+ 
++config RISCV_APLIC
++	bool
++	depends on RISCV
++	select IRQ_DOMAIN_HIERARCHY
++
++config RISCV_APLIC_MSI
++	bool
++	depends on RISCV_APLIC
++	select GENERIC_MSI_IRQ
++	default RISCV_APLIC
++
++config RISCV_IMSIC
++	bool
++	depends on RISCV
++	select IRQ_DOMAIN_HIERARCHY
++	select GENERIC_IRQ_MATRIX_ALLOCATOR
++	select GENERIC_MSI_IRQ
++
++config RISCV_IMSIC_PCI
++	bool
++	depends on RISCV_IMSIC
++	depends on PCI
++	depends on PCI_MSI
++	default RISCV_IMSIC
++
+ config SIFIVE_PLIC
+ 	bool
+ 	depends on RISCV
+diff --git a/drivers/irqchip/Makefile b/drivers/irqchip/Makefile
+index ffd945fe71aa..47995fdb2c60 100644
+--- a/drivers/irqchip/Makefile
++++ b/drivers/irqchip/Makefile
+@@ -95,6 +95,9 @@ obj-$(CONFIG_QCOM_MPM)			+= irq-qcom-mpm.o
+ obj-$(CONFIG_CSKY_MPINTC)		+= irq-csky-mpintc.o
+ obj-$(CONFIG_CSKY_APB_INTC)		+= irq-csky-apb-intc.o
+ obj-$(CONFIG_RISCV_INTC)		+= irq-riscv-intc.o
++obj-$(CONFIG_RISCV_APLIC)		+= irq-riscv-aplic-main.o irq-riscv-aplic-direct.o
++obj-$(CONFIG_RISCV_APLIC_MSI)		+= irq-riscv-aplic-msi.o
++obj-$(CONFIG_RISCV_IMSIC)		+= irq-riscv-imsic-state.o irq-riscv-imsic-early.o irq-riscv-imsic-platform.o
+ obj-$(CONFIG_SIFIVE_PLIC)		+= irq-sifive-plic.o
+ obj-$(CONFIG_IMX_IRQSTEER)		+= irq-imx-irqsteer.o
+ obj-$(CONFIG_IMX_INTMUX)		+= irq-imx-intmux.o
+diff --git a/drivers/irqchip/irq-gic-v3.c b/drivers/irqchip/irq-gic-v3.c
+index f59ac9586b7b..ad3250a90a08 100644
+--- a/drivers/irqchip/irq-gic-v3.c
++++ b/drivers/irqchip/irq-gic-v3.c
+@@ -1691,9 +1691,13 @@ static int gic_irq_domain_select(struct irq_domain *d,
+ 	irq_hw_number_t hwirq;
+ 
+ 	/* Not for us */
+-        if (fwspec->fwnode != d->fwnode)
++	if (fwspec->fwnode != d->fwnode)
+ 		return 0;
+ 
++	/* Handle pure domain searches */
++	if (!fwspec->param_count)
++		return d->bus_token == bus_token;
++
+ 	/* If this is not DT, then we have a single domain */
+ 	if (!is_of_node(fwspec->fwnode))
+ 		return 1;
+diff --git a/drivers/irqchip/irq-riscv-aplic-direct.c b/drivers/irqchip/irq-riscv-aplic-direct.c
+new file mode 100644
+index 000000000000..06bace9b7497
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-aplic-direct.c
+@@ -0,0 +1,326 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#include <linux/bitfield.h>
++#include <linux/bitops.h>
++#include <linux/cpu.h>
++#include <linux/interrupt.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/irqchip/riscv-aplic.h>
++#include <linux/module.h>
++#include <linux/of_address.h>
++#include <linux/printk.h>
++#include <linux/smp.h>
++
++#include "irq-riscv-aplic-main.h"
++
++#define APLIC_DISABLE_IDELIVERY		0
++#define APLIC_ENABLE_IDELIVERY		1
++#define APLIC_DISABLE_ITHRESHOLD	1
++#define APLIC_ENABLE_ITHRESHOLD		0
++
++struct aplic_direct {
++	struct aplic_priv	priv;
++	struct irq_domain	*irqdomain;
++	struct cpumask		lmask;
++};
++
++struct aplic_idc {
++	unsigned int		hart_index;
++	void __iomem		*regs;
++	struct aplic_direct	*direct;
++};
++
++static unsigned int aplic_direct_parent_irq;
++static DEFINE_PER_CPU(struct aplic_idc, aplic_idcs);
++
++static void aplic_direct_irq_eoi(struct irq_data *d)
++{
++	/*
++	 * The fasteoi_handler requires irq_eoi() callback hence
++	 * provide a dummy handler.
++	 */
++}
++
++#ifdef CONFIG_SMP
++static int aplic_direct_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
++				     bool force)
++{
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++	struct aplic_direct *direct = container_of(priv, struct aplic_direct, priv);
++	struct aplic_idc *idc;
++	unsigned int cpu, val;
++	struct cpumask amask;
++	void __iomem *target;
++
++	cpumask_and(&amask, &direct->lmask, mask_val);
++
++	if (force)
++		cpu = cpumask_first(&amask);
++	else
++		cpu = cpumask_any_and(&amask, cpu_online_mask);
++
++	if (cpu >= nr_cpu_ids)
++		return -EINVAL;
++
++	idc = per_cpu_ptr(&aplic_idcs, cpu);
++	target = priv->regs + APLIC_TARGET_BASE + (d->hwirq - 1) * sizeof(u32);
++	val = FIELD_PREP(APLIC_TARGET_HART_IDX, idc->hart_index);
++	val |= FIELD_PREP(APLIC_TARGET_IPRIO, APLIC_DEFAULT_PRIORITY);
++	writel(val, target);
++
++	irq_data_update_effective_affinity(d, cpumask_of(cpu));
++
++	return IRQ_SET_MASK_OK_DONE;
++}
++#endif
++
++static struct irq_chip aplic_direct_chip = {
++	.name		= "APLIC-DIRECT",
++	.irq_mask	= aplic_irq_mask,
++	.irq_unmask	= aplic_irq_unmask,
++	.irq_set_type	= aplic_irq_set_type,
++	.irq_eoi	= aplic_direct_irq_eoi,
++#ifdef CONFIG_SMP
++	.irq_set_affinity = aplic_direct_set_affinity,
++#endif
++	.flags		= IRQCHIP_SET_TYPE_MASKED |
++			  IRQCHIP_SKIP_SET_WAKE |
++			  IRQCHIP_MASK_ON_SUSPEND,
++};
++
++static int aplic_direct_irqdomain_translate(struct irq_domain *d, struct irq_fwspec *fwspec,
++					    unsigned long *hwirq, unsigned int *type)
++{
++	struct aplic_priv *priv = d->host_data;
++
++	return aplic_irqdomain_translate(fwspec, priv->gsi_base, hwirq, type);
++}
++
++static int aplic_direct_irqdomain_alloc(struct irq_domain *domain, unsigned int virq,
++					unsigned int nr_irqs, void *arg)
++{
++	struct aplic_priv *priv = domain->host_data;
++	struct aplic_direct *direct = container_of(priv, struct aplic_direct, priv);
++	struct irq_fwspec *fwspec = arg;
++	irq_hw_number_t hwirq;
++	unsigned int type;
++	int i, ret;
++
++	ret = aplic_irqdomain_translate(fwspec, priv->gsi_base, &hwirq, &type);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < nr_irqs; i++) {
++		irq_domain_set_info(domain, virq + i, hwirq + i, &aplic_direct_chip,
++				    priv, handle_fasteoi_irq, NULL, NULL);
++		irq_set_affinity(virq + i, &direct->lmask);
++	}
++
++	return 0;
++}
++
++static const struct irq_domain_ops aplic_direct_irqdomain_ops = {
++	.translate	= aplic_direct_irqdomain_translate,
++	.alloc		= aplic_direct_irqdomain_alloc,
++	.free		= irq_domain_free_irqs_top,
++};
++
++/*
++ * To handle an APLIC direct interrupts, we just read the CLAIMI register
++ * which will return highest priority pending interrupt and clear the
++ * pending bit of the interrupt. This process is repeated until CLAIMI
++ * register return zero value.
++ */
++static void aplic_direct_handle_irq(struct irq_desc *desc)
++{
++	struct aplic_idc *idc = this_cpu_ptr(&aplic_idcs);
++	struct irq_domain *irqdomain = idc->direct->irqdomain;
++	struct irq_chip *chip = irq_desc_get_chip(desc);
++	irq_hw_number_t hw_irq;
++	int irq;
++
++	chained_irq_enter(chip, desc);
++
++	while ((hw_irq = readl(idc->regs + APLIC_IDC_CLAIMI))) {
++		hw_irq = hw_irq >> APLIC_IDC_TOPI_ID_SHIFT;
++		irq = irq_find_mapping(irqdomain, hw_irq);
++
++		if (unlikely(irq <= 0)) {
++			dev_warn_ratelimited(idc->direct->priv.dev,
++					     "hw_irq %lu mapping not found\n", hw_irq);
++		} else {
++			generic_handle_irq(irq);
++		}
++	}
++
++	chained_irq_exit(chip, desc);
++}
++
++static void aplic_idc_set_delivery(struct aplic_idc *idc, bool en)
++{
++	u32 de = (en) ? APLIC_ENABLE_IDELIVERY : APLIC_DISABLE_IDELIVERY;
++	u32 th = (en) ? APLIC_ENABLE_ITHRESHOLD : APLIC_DISABLE_ITHRESHOLD;
++
++	/* Priority must be less than threshold for interrupt triggering */
++	writel(th, idc->regs + APLIC_IDC_ITHRESHOLD);
++
++	/* Delivery must be set to 1 for interrupt triggering */
++	writel(de, idc->regs + APLIC_IDC_IDELIVERY);
++}
++
++static int aplic_direct_dying_cpu(unsigned int cpu)
++{
++	if (aplic_direct_parent_irq)
++		disable_percpu_irq(aplic_direct_parent_irq);
++
++	return 0;
++}
++
++static int aplic_direct_starting_cpu(unsigned int cpu)
++{
++	if (aplic_direct_parent_irq) {
++		enable_percpu_irq(aplic_direct_parent_irq,
++				  irq_get_trigger_type(aplic_direct_parent_irq));
++	}
++
++	return 0;
++}
++
++static int aplic_direct_parse_parent_hwirq(struct device *dev, u32 index,
++					   u32 *parent_hwirq, unsigned long *parent_hartid)
++{
++	struct of_phandle_args parent;
++	int rc;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(dev->fwnode))
++		return -EINVAL;
++
++	rc = of_irq_parse_one(to_of_node(dev->fwnode), index, &parent);
++	if (rc)
++		return rc;
++
++	rc = riscv_of_parent_hartid(parent.np, parent_hartid);
++	if (rc)
++		return rc;
++
++	*parent_hwirq = parent.args[0];
++	return 0;
++}
++
++int aplic_direct_setup(struct device *dev, void __iomem *regs)
++{
++	int i, j, rc, cpu, current_cpu, setup_count = 0;
++	struct aplic_direct *direct;
++	struct irq_domain *domain;
++	struct aplic_priv *priv;
++	struct aplic_idc *idc;
++	unsigned long hartid;
++	u32 v, hwirq;
++
++	direct = devm_kzalloc(dev, sizeof(*direct), GFP_KERNEL);
++	if (!direct)
++		return -ENOMEM;
++	priv = &direct->priv;
++
++	rc = aplic_setup_priv(priv, dev, regs);
++	if (rc) {
++		dev_err(dev, "failed to create APLIC context\n");
++		return rc;
++	}
++
++	/* Setup per-CPU IDC and target CPU mask */
++	current_cpu = get_cpu();
++	for (i = 0; i < priv->nr_idcs; i++) {
++		rc = aplic_direct_parse_parent_hwirq(dev, i, &hwirq, &hartid);
++		if (rc) {
++			dev_warn(dev, "parent irq for IDC%d not found\n", i);
++			continue;
++		}
++
++		/*
++		 * Skip interrupts other than external interrupts for
++		 * current privilege level.
++		 */
++		if (hwirq != RV_IRQ_EXT)
++			continue;
++
++		cpu = riscv_hartid_to_cpuid(hartid);
++		if (cpu < 0) {
++			dev_warn(dev, "invalid cpuid for IDC%d\n", i);
++			continue;
++		}
++
++		cpumask_set_cpu(cpu, &direct->lmask);
++
++		idc = per_cpu_ptr(&aplic_idcs, cpu);
++		idc->hart_index = i;
++		idc->regs = priv->regs + APLIC_IDC_BASE + i * APLIC_IDC_SIZE;
++		idc->direct = direct;
++
++		aplic_idc_set_delivery(idc, true);
++
++		/*
++		 * Boot cpu might not have APLIC hart_index = 0 so check
++		 * and update target registers of all interrupts.
++		 */
++		if (cpu == current_cpu && idc->hart_index) {
++			v = FIELD_PREP(APLIC_TARGET_HART_IDX, idc->hart_index);
++			v |= FIELD_PREP(APLIC_TARGET_IPRIO, APLIC_DEFAULT_PRIORITY);
++			for (j = 1; j <= priv->nr_irqs; j++)
++				writel(v, priv->regs + APLIC_TARGET_BASE + (j - 1) * sizeof(u32));
++		}
++
++		setup_count++;
++	}
++	put_cpu();
++
++	/* Find parent domain and register chained handler */
++	domain = irq_find_matching_fwnode(riscv_get_intc_hwnode(),
++					  DOMAIN_BUS_ANY);
++	if (!aplic_direct_parent_irq && domain) {
++		aplic_direct_parent_irq = irq_create_mapping(domain, RV_IRQ_EXT);
++		if (aplic_direct_parent_irq) {
++			irq_set_chained_handler(aplic_direct_parent_irq,
++						aplic_direct_handle_irq);
++
++			/*
++			 * Setup CPUHP notifier to enable parent
++			 * interrupt on all CPUs
++			 */
++			cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
++					  "irqchip/riscv/aplic:starting",
++					  aplic_direct_starting_cpu,
++					  aplic_direct_dying_cpu);
++		}
++	}
++
++	/* Fail if we were not able to setup IDC for any CPU */
++	if (!setup_count)
++		return -ENODEV;
++
++	/* Setup global config and interrupt delivery */
++	aplic_init_hw_global(priv, false);
++
++	/* Create irq domain instance for the APLIC */
++	direct->irqdomain = irq_domain_create_linear(dev->fwnode, priv->nr_irqs + 1,
++						     &aplic_direct_irqdomain_ops, priv);
++	if (!direct->irqdomain) {
++		dev_err(dev, "failed to create direct irq domain\n");
++		return -ENOMEM;
++	}
++
++	/* Advertise the interrupt controller */
++	dev_info(dev, "%d interrupts directly connected to %d CPUs\n",
++		 priv->nr_irqs, priv->nr_idcs);
++
++	return 0;
++}
+diff --git a/drivers/irqchip/irq-riscv-aplic-main.c b/drivers/irqchip/irq-riscv-aplic-main.c
+new file mode 100644
+index 000000000000..362db30ed775
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-aplic-main.c
+@@ -0,0 +1,211 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#include <linux/bitfield.h>
++#include <linux/irqchip/riscv-aplic.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_irq.h>
++#include <linux/platform_device.h>
++#include <linux/printk.h>
++
++#include "irq-riscv-aplic-main.h"
++
++void aplic_irq_unmask(struct irq_data *d)
++{
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++
++	writel(d->hwirq, priv->regs + APLIC_SETIENUM);
++}
++
++void aplic_irq_mask(struct irq_data *d)
++{
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++
++	writel(d->hwirq, priv->regs + APLIC_CLRIENUM);
++}
++
++int aplic_irq_set_type(struct irq_data *d, unsigned int type)
++{
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++	void __iomem *sourcecfg;
++	u32 val = 0;
++
++	switch (type) {
++	case IRQ_TYPE_NONE:
++		val = APLIC_SOURCECFG_SM_INACTIVE;
++		break;
++	case IRQ_TYPE_LEVEL_LOW:
++		val = APLIC_SOURCECFG_SM_LEVEL_LOW;
++		break;
++	case IRQ_TYPE_LEVEL_HIGH:
++		val = APLIC_SOURCECFG_SM_LEVEL_HIGH;
++		break;
++	case IRQ_TYPE_EDGE_FALLING:
++		val = APLIC_SOURCECFG_SM_EDGE_FALL;
++		break;
++	case IRQ_TYPE_EDGE_RISING:
++		val = APLIC_SOURCECFG_SM_EDGE_RISE;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	sourcecfg = priv->regs + APLIC_SOURCECFG_BASE;
++	sourcecfg += (d->hwirq - 1) * sizeof(u32);
++	writel(val, sourcecfg);
++
++	return 0;
++}
++
++int aplic_irqdomain_translate(struct irq_fwspec *fwspec, u32 gsi_base,
++			      unsigned long *hwirq, unsigned int *type)
++{
++	if (WARN_ON(fwspec->param_count < 2))
++		return -EINVAL;
++	if (WARN_ON(!fwspec->param[0]))
++		return -EINVAL;
++
++	/* For DT, gsi_base is always zero. */
++	*hwirq = fwspec->param[0] - gsi_base;
++	*type = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
++
++	WARN_ON(*type == IRQ_TYPE_NONE);
++
++	return 0;
++}
++
++void aplic_init_hw_global(struct aplic_priv *priv, bool msi_mode)
++{
++	u32 val;
++#ifdef CONFIG_RISCV_M_MODE
++	u32 valh;
++
++	if (msi_mode) {
++		val = lower_32_bits(priv->msicfg.base_ppn);
++		valh = FIELD_PREP(APLIC_xMSICFGADDRH_BAPPN, upper_32_bits(priv->msicfg.base_ppn));
++		valh |= FIELD_PREP(APLIC_xMSICFGADDRH_LHXW, priv->msicfg.lhxw);
++		valh |= FIELD_PREP(APLIC_xMSICFGADDRH_HHXW, priv->msicfg.hhxw);
++		valh |= FIELD_PREP(APLIC_xMSICFGADDRH_LHXS, priv->msicfg.lhxs);
++		valh |= FIELD_PREP(APLIC_xMSICFGADDRH_HHXS, priv->msicfg.hhxs);
++		writel(val, priv->regs + APLIC_xMSICFGADDR);
++		writel(valh, priv->regs + APLIC_xMSICFGADDRH);
++	}
++#endif
++
++	/* Setup APLIC domaincfg register */
++	val = readl(priv->regs + APLIC_DOMAINCFG);
++	val |= APLIC_DOMAINCFG_IE;
++	if (msi_mode)
++		val |= APLIC_DOMAINCFG_DM;
++	writel(val, priv->regs + APLIC_DOMAINCFG);
++	if (readl(priv->regs + APLIC_DOMAINCFG) != val)
++		dev_warn(priv->dev, "unable to write 0x%x in domaincfg\n", val);
++}
++
++static void aplic_init_hw_irqs(struct aplic_priv *priv)
++{
++	int i;
++
++	/* Disable all interrupts */
++	for (i = 0; i <= priv->nr_irqs; i += 32)
++		writel(-1U, priv->regs + APLIC_CLRIE_BASE + (i / 32) * sizeof(u32));
++
++	/* Set interrupt type and default priority for all interrupts */
++	for (i = 1; i <= priv->nr_irqs; i++) {
++		writel(0, priv->regs + APLIC_SOURCECFG_BASE + (i - 1) * sizeof(u32));
++		writel(APLIC_DEFAULT_PRIORITY,
++		       priv->regs + APLIC_TARGET_BASE + (i - 1) * sizeof(u32));
++	}
++
++	/* Clear APLIC domaincfg */
++	writel(0, priv->regs + APLIC_DOMAINCFG);
++}
++
++int aplic_setup_priv(struct aplic_priv *priv, struct device *dev, void __iomem *regs)
++{
++	struct of_phandle_args parent;
++	int rc;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(dev->fwnode))
++		return -EINVAL;
++
++	/* Save device pointer and register base */
++	priv->dev = dev;
++	priv->regs = regs;
++
++	/* Find out number of interrupt sources */
++	rc = of_property_read_u32(to_of_node(dev->fwnode), "riscv,num-sources",
++				  &priv->nr_irqs);
++	if (rc) {
++		dev_err(dev, "failed to get number of interrupt sources\n");
++		return rc;
++	}
++
++	/*
++	 * Find out number of IDCs based on parent interrupts
++	 *
++	 * If "msi-parent" property is present then we ignore the
++	 * APLIC IDCs which forces the APLIC driver to use MSI mode.
++	 */
++	if (!of_property_present(to_of_node(dev->fwnode), "msi-parent")) {
++		while (!of_irq_parse_one(to_of_node(dev->fwnode), priv->nr_idcs, &parent))
++			priv->nr_idcs++;
++	}
++
++	/* Setup initial state APLIC interrupts */
++	aplic_init_hw_irqs(priv);
++
++	return 0;
++}
++
++static int aplic_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	bool msi_mode = false;
++	void __iomem *regs;
++	int rc;
++
++	/* Map the MMIO registers */
++	regs = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(regs)) {
++		dev_err(dev, "failed map MMIO registers\n");
++		return PTR_ERR(regs);
++	}
++
++	/*
++	 * If msi-parent property is present then setup APLIC MSI
++	 * mode otherwise setup APLIC direct mode.
++	 */
++	if (is_of_node(dev->fwnode))
++		msi_mode = of_property_present(to_of_node(dev->fwnode), "msi-parent");
++	if (msi_mode)
++		rc = aplic_msi_setup(dev, regs);
++	else
++		rc = aplic_direct_setup(dev, regs);
++	if (rc)
++		dev_err(dev, "failed to setup APLIC in %s mode\n", msi_mode ? "MSI" : "direct");
++
++	return rc;
++}
++
++static const struct of_device_id aplic_match[] = {
++	{ .compatible = "riscv,aplic" },
++	{}
++};
++
++static struct platform_driver aplic_driver = {
++	.driver = {
++		.name		= "riscv-aplic",
++		.of_match_table	= aplic_match,
++	},
++	.probe = aplic_probe,
++};
++builtin_platform_driver(aplic_driver);
+diff --git a/drivers/irqchip/irq-riscv-aplic-main.h b/drivers/irqchip/irq-riscv-aplic-main.h
+new file mode 100644
+index 000000000000..4393927d8c80
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-aplic-main.h
+@@ -0,0 +1,52 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#ifndef _IRQ_RISCV_APLIC_MAIN_H
++#define _IRQ_RISCV_APLIC_MAIN_H
++
++#include <linux/device.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/irqdomain.h>
++#include <linux/fwnode.h>
++
++#define APLIC_DEFAULT_PRIORITY		1
++
++struct aplic_msicfg {
++	phys_addr_t		base_ppn;
++	u32			hhxs;
++	u32			hhxw;
++	u32			lhxs;
++	u32			lhxw;
++};
++
++struct aplic_priv {
++	struct device		*dev;
++	u32			gsi_base;
++	u32			nr_irqs;
++	u32			nr_idcs;
++	void __iomem		*regs;
++	struct aplic_msicfg	msicfg;
++};
++
++void aplic_irq_unmask(struct irq_data *d);
++void aplic_irq_mask(struct irq_data *d);
++int aplic_irq_set_type(struct irq_data *d, unsigned int type);
++int aplic_irqdomain_translate(struct irq_fwspec *fwspec, u32 gsi_base,
++			      unsigned long *hwirq, unsigned int *type);
++void aplic_init_hw_global(struct aplic_priv *priv, bool msi_mode);
++int aplic_setup_priv(struct aplic_priv *priv, struct device *dev, void __iomem *regs);
++int aplic_direct_setup(struct device *dev, void __iomem *regs);
++#ifdef CONFIG_RISCV_APLIC_MSI
++int aplic_msi_setup(struct device *dev, void __iomem *regs);
++#else
++static inline int aplic_msi_setup(struct device *dev, void __iomem *regs)
++{
++	return -ENODEV;
++}
++#endif
++
++#endif
+diff --git a/drivers/irqchip/irq-riscv-aplic-msi.c b/drivers/irqchip/irq-riscv-aplic-msi.c
+new file mode 100644
+index 000000000000..d7773f76e5d0
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-aplic-msi.c
+@@ -0,0 +1,275 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#include <linux/bitfield.h>
++#include <linux/bitops.h>
++#include <linux/cpu.h>
++#include <linux/interrupt.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/riscv-aplic.h>
++#include <linux/irqchip/riscv-imsic.h>
++#include <linux/module.h>
++#include <linux/msi.h>
++#include <linux/of_irq.h>
++#include <linux/platform_device.h>
++#include <linux/printk.h>
++#include <linux/smp.h>
++
++#include "irq-riscv-aplic-main.h"
++
++static void aplic_msi_irq_mask(struct irq_data *d)
++{
++	aplic_irq_mask(d);
++	irq_chip_mask_parent(d);
++}
++
++static void aplic_msi_irq_unmask(struct irq_data *d)
++{
++	irq_chip_unmask_parent(d);
++	aplic_irq_unmask(d);
++}
++
++static void aplic_msi_irq_retrigger_level(struct irq_data *d)
++{
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++
++	switch (irqd_get_trigger_type(d)) {
++	case IRQ_TYPE_LEVEL_LOW:
++	case IRQ_TYPE_LEVEL_HIGH:
++		/*
++		 * The section "4.9.2 Special consideration for level-sensitive interrupt
++		 * sources" of the RISC-V AIA specification says:
++		 *
++		 * A second option is for the interrupt service routine to write the
++		 * APLIC’s source identity number for the interrupt to the domain’s
++		 * setipnum register just before exiting. This will cause the interrupt’s
++		 * pending bit to be set to one again if the source is still asserting
++		 * an interrupt, but not if the source is not asserting an interrupt.
++		 */
++		writel(d->hwirq, priv->regs + APLIC_SETIPNUM_LE);
++		break;
++	}
++}
++
++static void aplic_msi_irq_eoi(struct irq_data *d)
++{
++	/*
++	 * EOI handling is required only for level-triggered interrupts
++	 * when APLIC is in MSI mode.
++	 */
++	aplic_msi_irq_retrigger_level(d);
++}
++
++static int aplic_msi_irq_set_type(struct irq_data *d, unsigned int type)
++{
++	int rc = aplic_irq_set_type(d, type);
++
++	if (rc)
++		return rc;
++	/*
++	 * Updating sourcecfg register for level-triggered interrupts
++	 * requires interrupt retriggering when APLIC is in MSI mode.
++	 */
++	aplic_msi_irq_retrigger_level(d);
++	return 0;
++}
++
++static void aplic_msi_write_msg(struct irq_data *d, struct msi_msg *msg)
++{
++	unsigned int group_index, hart_index, guest_index, val;
++	struct aplic_priv *priv = irq_data_get_irq_chip_data(d);
++	struct aplic_msicfg *mc = &priv->msicfg;
++	phys_addr_t tppn, tbppn, msg_addr;
++	void __iomem *target;
++
++	/* For zeroed MSI, simply write zero into the target register */
++	if (!msg->address_hi && !msg->address_lo && !msg->data) {
++		target = priv->regs + APLIC_TARGET_BASE;
++		target += (d->hwirq - 1) * sizeof(u32);
++		writel(0, target);
++		return;
++	}
++
++	/* Sanity check on message data */
++	WARN_ON(msg->data > APLIC_TARGET_EIID_MASK);
++
++	/* Compute target MSI address */
++	msg_addr = (((u64)msg->address_hi) << 32) | msg->address_lo;
++	tppn = msg_addr >> APLIC_xMSICFGADDR_PPN_SHIFT;
++
++	/* Compute target HART Base PPN */
++	tbppn = tppn;
++	tbppn &= ~APLIC_xMSICFGADDR_PPN_HART(mc->lhxs);
++	tbppn &= ~APLIC_xMSICFGADDR_PPN_LHX(mc->lhxw, mc->lhxs);
++	tbppn &= ~APLIC_xMSICFGADDR_PPN_HHX(mc->hhxw, mc->hhxs);
++	WARN_ON(tbppn != mc->base_ppn);
++
++	/* Compute target group and hart indexes */
++	group_index = (tppn >> APLIC_xMSICFGADDR_PPN_HHX_SHIFT(mc->hhxs)) &
++		     APLIC_xMSICFGADDR_PPN_HHX_MASK(mc->hhxw);
++	hart_index = (tppn >> APLIC_xMSICFGADDR_PPN_LHX_SHIFT(mc->lhxs)) &
++		     APLIC_xMSICFGADDR_PPN_LHX_MASK(mc->lhxw);
++	hart_index |= (group_index << mc->lhxw);
++	WARN_ON(hart_index > APLIC_TARGET_HART_IDX_MASK);
++
++	/* Compute target guest index */
++	guest_index = tppn & APLIC_xMSICFGADDR_PPN_HART(mc->lhxs);
++	WARN_ON(guest_index > APLIC_TARGET_GUEST_IDX_MASK);
++
++	/* Update IRQ TARGET register */
++	target = priv->regs + APLIC_TARGET_BASE;
++	target += (d->hwirq - 1) * sizeof(u32);
++	val = FIELD_PREP(APLIC_TARGET_HART_IDX, hart_index);
++	val |= FIELD_PREP(APLIC_TARGET_GUEST_IDX, guest_index);
++	val |= FIELD_PREP(APLIC_TARGET_EIID, msg->data);
++	writel(val, target);
++}
++
++static void aplic_msi_set_desc(msi_alloc_info_t *arg, struct msi_desc *desc)
++{
++	arg->desc = desc;
++	arg->hwirq = (u32)desc->data.icookie.value;
++}
++
++static int aplic_msi_translate(struct irq_domain *d, struct irq_fwspec *fwspec,
++			       unsigned long *hwirq, unsigned int *type)
++{
++	struct msi_domain_info *info = d->host_data;
++	struct aplic_priv *priv = info->data;
++
++	return aplic_irqdomain_translate(fwspec, priv->gsi_base, hwirq, type);
++}
++
++static const struct msi_domain_template aplic_msi_template = {
++	.chip = {
++		.name			= "APLIC-MSI",
++		.irq_mask		= aplic_msi_irq_mask,
++		.irq_unmask		= aplic_msi_irq_unmask,
++		.irq_set_type		= aplic_msi_irq_set_type,
++		.irq_eoi		= aplic_msi_irq_eoi,
++#ifdef CONFIG_SMP
++		.irq_set_affinity	= irq_chip_set_affinity_parent,
++#endif
++		.irq_write_msi_msg	= aplic_msi_write_msg,
++		.flags			= IRQCHIP_SET_TYPE_MASKED |
++					  IRQCHIP_SKIP_SET_WAKE |
++					  IRQCHIP_MASK_ON_SUSPEND,
++	},
++
++	.ops = {
++		.set_desc		= aplic_msi_set_desc,
++		.msi_translate		= aplic_msi_translate,
++	},
++
++	.info = {
++		.bus_token		= DOMAIN_BUS_WIRED_TO_MSI,
++		.flags			= MSI_FLAG_USE_DEV_FWNODE,
++		.handler		= handle_fasteoi_irq,
++		.handler_name		= "fasteoi",
++	},
++};
++
++int aplic_msi_setup(struct device *dev, void __iomem *regs)
++{
++	const struct imsic_global_config *imsic_global;
++	struct aplic_priv *priv;
++	struct aplic_msicfg *mc;
++	phys_addr_t pa;
++	int rc;
++
++	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
++	if (!priv)
++		return -ENOMEM;
++
++	rc = aplic_setup_priv(priv, dev, regs);
++	if (rc) {
++		dev_err(dev, "failed to create APLIC context\n");
++		return rc;
++	}
++	mc = &priv->msicfg;
++
++	/*
++	 * The APLIC outgoing MSI config registers assume target MSI
++	 * controller to be RISC-V AIA IMSIC controller.
++	 */
++	imsic_global = imsic_get_global_config();
++	if (!imsic_global) {
++		dev_err(dev, "IMSIC global config not found\n");
++		return -ENODEV;
++	}
++
++	/* Find number of guest index bits (LHXS) */
++	mc->lhxs = imsic_global->guest_index_bits;
++	if (APLIC_xMSICFGADDRH_LHXS_MASK < mc->lhxs) {
++		dev_err(dev, "IMSIC guest index bits big for APLIC LHXS\n");
++		return -EINVAL;
++	}
++
++	/* Find number of HART index bits (LHXW) */
++	mc->lhxw = imsic_global->hart_index_bits;
++	if (APLIC_xMSICFGADDRH_LHXW_MASK < mc->lhxw) {
++		dev_err(dev, "IMSIC hart index bits big for APLIC LHXW\n");
++		return -EINVAL;
++	}
++
++	/* Find number of group index bits (HHXW) */
++	mc->hhxw = imsic_global->group_index_bits;
++	if (APLIC_xMSICFGADDRH_HHXW_MASK < mc->hhxw) {
++		dev_err(dev, "IMSIC group index bits big for APLIC HHXW\n");
++		return -EINVAL;
++	}
++
++	/* Find first bit position of group index (HHXS) */
++	mc->hhxs = imsic_global->group_index_shift;
++	if (mc->hhxs < (2 * APLIC_xMSICFGADDR_PPN_SHIFT)) {
++		dev_err(dev, "IMSIC group index shift should be >= %d\n",
++			(2 * APLIC_xMSICFGADDR_PPN_SHIFT));
++		return -EINVAL;
++	}
++	mc->hhxs -= (2 * APLIC_xMSICFGADDR_PPN_SHIFT);
++	if (APLIC_xMSICFGADDRH_HHXS_MASK < mc->hhxs) {
++		dev_err(dev, "IMSIC group index shift big for APLIC HHXS\n");
++		return -EINVAL;
++	}
++
++	/* Compute PPN base */
++	mc->base_ppn = imsic_global->base_addr >> APLIC_xMSICFGADDR_PPN_SHIFT;
++	mc->base_ppn &= ~APLIC_xMSICFGADDR_PPN_HART(mc->lhxs);
++	mc->base_ppn &= ~APLIC_xMSICFGADDR_PPN_LHX(mc->lhxw, mc->lhxs);
++	mc->base_ppn &= ~APLIC_xMSICFGADDR_PPN_HHX(mc->hhxw, mc->hhxs);
++
++	/* Setup global config and interrupt delivery */
++	aplic_init_hw_global(priv, true);
++
++	/* Set the APLIC device MSI domain if not available */
++	if (!dev_get_msi_domain(dev)) {
++		/*
++		 * The device MSI domain for OF devices is only set at the
++		 * time of populating/creating OF device. If the device MSI
++		 * domain is discovered later after the OF device is created
++		 * then we need to set it explicitly before using any platform
++		 * MSI functions.
++		 *
++		 * In case of APLIC device, the parent MSI domain is always
++		 * IMSIC and the IMSIC MSI domains are created later through
++		 * the platform driver probing so we set it explicitly here.
++		 */
++		if (is_of_node(dev->fwnode))
++			of_msi_configure(dev, to_of_node(dev->fwnode));
++	}
++
++	if (!msi_create_device_irq_domain(dev, MSI_DEFAULT_DOMAIN, &aplic_msi_template,
++					  priv->nr_irqs + 1, priv, priv)) {
++		dev_err(dev, "failed to create MSI irq domain\n");
++		return -ENOMEM;
++	}
++
++	/* Advertise the interrupt controller */
++	pa = priv->msicfg.base_ppn << APLIC_xMSICFGADDR_PPN_SHIFT;
++	dev_info(dev, "%d interrupts forwarded to MSI base %pa\n", priv->nr_irqs, &pa);
++
++	return 0;
++}
+diff --git a/drivers/irqchip/irq-riscv-imsic-early.c b/drivers/irqchip/irq-riscv-imsic-early.c
+new file mode 100644
+index 000000000000..886418ec06cb
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-imsic-early.c
+@@ -0,0 +1,201 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#define pr_fmt(fmt) "riscv-imsic: " fmt
++#include <linux/cpu.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/module.h>
++#include <linux/spinlock.h>
++#include <linux/smp.h>
++
++#include "irq-riscv-imsic-state.h"
++
++static int imsic_parent_irq;
++
++#ifdef CONFIG_SMP
++static void imsic_ipi_send(unsigned int cpu)
++{
++	struct imsic_local_config *local = per_cpu_ptr(imsic->global.local, cpu);
++
++	writel_relaxed(IMSIC_IPI_ID, local->msi_va);
++}
++
++static void imsic_ipi_starting_cpu(void)
++{
++	/* Enable IPIs for current CPU. */
++	__imsic_id_set_enable(IMSIC_IPI_ID);
++}
++
++static void imsic_ipi_dying_cpu(void)
++{
++	/* Disable IPIs for current CPU. */
++	__imsic_id_clear_enable(IMSIC_IPI_ID);
++}
++
++static int __init imsic_ipi_domain_init(void)
++{
++	int virq;
++
++	/* Create IMSIC IPI multiplexing */
++	virq = ipi_mux_create(IMSIC_NR_IPI, imsic_ipi_send);
++	if (virq <= 0)
++		return virq < 0 ? virq : -ENOMEM;
++
++	/* Set vIRQ range */
++	riscv_ipi_set_virq_range(virq, IMSIC_NR_IPI, true);
++
++	/* Announce that IMSIC is providing IPIs */
++	pr_info("%pfwP: providing IPIs using interrupt %d\n", imsic->fwnode, IMSIC_IPI_ID);
++
++	return 0;
++}
++#else
++static void imsic_ipi_starting_cpu(void) { }
++static void imsic_ipi_dying_cpu(void) { }
++static int __init imsic_ipi_domain_init(void) { return 0; }
++#endif
++
++/*
++ * To handle an interrupt, we read the TOPEI CSR and write zero in one
++ * instruction. If TOPEI CSR is non-zero then we translate TOPEI.ID to
++ * Linux interrupt number and let Linux IRQ subsystem handle it.
++ */
++static void imsic_handle_irq(struct irq_desc *desc)
++{
++	struct irq_chip *chip = irq_desc_get_chip(desc);
++	int err, cpu = smp_processor_id();
++	struct imsic_vector *vec;
++	unsigned long local_id;
++
++	chained_irq_enter(chip, desc);
++
++	while ((local_id = csr_swap(CSR_TOPEI, 0))) {
++		local_id >>= TOPEI_ID_SHIFT;
++
++		if (local_id == IMSIC_IPI_ID) {
++			if (IS_ENABLED(CONFIG_SMP))
++				ipi_mux_process();
++			continue;
++		}
++
++		if (unlikely(!imsic->base_domain))
++			continue;
++
++		vec = imsic_vector_from_local_id(cpu, local_id);
++		if (!vec) {
++			pr_warn_ratelimited("vector not found for local ID 0x%lx\n", local_id);
++			continue;
++		}
++
++		err = generic_handle_domain_irq(imsic->base_domain, vec->hwirq);
++		if (unlikely(err))
++			pr_warn_ratelimited("hwirq 0x%x mapping not found\n", vec->hwirq);
++	}
++
++	chained_irq_exit(chip, desc);
++}
++
++static int imsic_starting_cpu(unsigned int cpu)
++{
++	/* Mark per-CPU IMSIC state as online */
++	imsic_state_online();
++
++	/* Enable per-CPU parent interrupt */
++	enable_percpu_irq(imsic_parent_irq, irq_get_trigger_type(imsic_parent_irq));
++
++	/* Setup IPIs */
++	imsic_ipi_starting_cpu();
++
++	/*
++	 * Interrupts identities might have been enabled/disabled while
++	 * this CPU was not running so sync-up local enable/disable state.
++	 */
++	imsic_local_sync_all();
++
++	/* Enable local interrupt delivery */
++	imsic_local_delivery(true);
++
++	return 0;
++}
++
++static int imsic_dying_cpu(unsigned int cpu)
++{
++	/* Cleanup IPIs */
++	imsic_ipi_dying_cpu();
++
++	/* Mark per-CPU IMSIC state as offline */
++	imsic_state_offline();
++
++	return 0;
++}
++
++static int __init imsic_early_probe(struct fwnode_handle *fwnode)
++{
++	struct irq_domain *domain;
++	int rc;
++
++	/* Find parent domain and register chained handler */
++	domain = irq_find_matching_fwnode(riscv_get_intc_hwnode(), DOMAIN_BUS_ANY);
++	if (!domain) {
++		pr_err("%pfwP: Failed to find INTC domain\n", fwnode);
++		return -ENOENT;
++	}
++	imsic_parent_irq = irq_create_mapping(domain, RV_IRQ_EXT);
++	if (!imsic_parent_irq) {
++		pr_err("%pfwP: Failed to create INTC mapping\n", fwnode);
++		return -ENOENT;
++	}
++
++	/* Initialize IPI domain */
++	rc = imsic_ipi_domain_init();
++	if (rc) {
++		pr_err("%pfwP: Failed to initialize IPI domain\n", fwnode);
++		return rc;
++	}
++
++	/* Setup chained handler to the parent domain interrupt */
++	irq_set_chained_handler(imsic_parent_irq, imsic_handle_irq);
++
++	/*
++	 * Setup cpuhp state (must be done after setting imsic_parent_irq)
++	 *
++	 * Don't disable per-CPU IMSIC file when CPU goes offline
++	 * because this affects IPI and the masking/unmasking of
++	 * virtual IPIs is done via generic IPI-Mux
++	 */
++	cpuhp_setup_state(CPUHP_AP_IRQ_RISCV_IMSIC_STARTING, "irqchip/riscv/imsic:starting",
++			  imsic_starting_cpu, imsic_dying_cpu);
++
++	return 0;
++}
++
++static int __init imsic_early_dt_init(struct device_node *node, struct device_node *parent)
++{
++	struct fwnode_handle *fwnode = &node->fwnode;
++	int rc;
++
++	/* Setup IMSIC state */
++	rc = imsic_setup_state(fwnode);
++	if (rc) {
++		pr_err("%pfwP: failed to setup state (error %d)\n", fwnode, rc);
++		return rc;
++	}
++
++	/* Do early setup of IPIs */
++	rc = imsic_early_probe(fwnode);
++	if (rc)
++		return rc;
++
++	/* Ensure that OF platform device gets probed */
++	of_node_clear_flag(node, OF_POPULATED);
++	return 0;
++}
++
++IRQCHIP_DECLARE(riscv_imsic, "riscv,imsics", imsic_early_dt_init);
+diff --git a/drivers/irqchip/irq-riscv-imsic-platform.c b/drivers/irqchip/irq-riscv-imsic-platform.c
+new file mode 100644
+index 000000000000..11723a763c10
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-imsic-platform.c
+@@ -0,0 +1,375 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#define pr_fmt(fmt) "riscv-imsic: " fmt
++#include <linux/bitmap.h>
++#include <linux/cpu.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqdomain.h>
++#include <linux/module.h>
++#include <linux/msi.h>
++#include <linux/pci.h>
++#include <linux/platform_device.h>
++#include <linux/spinlock.h>
++#include <linux/smp.h>
++
++#include "irq-riscv-imsic-state.h"
++
++static bool imsic_cpu_page_phys(unsigned int cpu, unsigned int guest_index,
++				phys_addr_t *out_msi_pa)
++{
++	struct imsic_global_config *global;
++	struct imsic_local_config *local;
++
++	global = &imsic->global;
++	local = per_cpu_ptr(global->local, cpu);
++
++	if (BIT(global->guest_index_bits) <= guest_index)
++		return false;
++
++	if (out_msi_pa)
++		*out_msi_pa = local->msi_pa + (guest_index * IMSIC_MMIO_PAGE_SZ);
++
++	return true;
++}
++
++static void imsic_irq_mask(struct irq_data *d)
++{
++	imsic_vector_mask(irq_data_get_irq_chip_data(d));
++}
++
++static void imsic_irq_unmask(struct irq_data *d)
++{
++	imsic_vector_unmask(irq_data_get_irq_chip_data(d));
++}
++
++static int imsic_irq_retrigger(struct irq_data *d)
++{
++	struct imsic_vector *vec = irq_data_get_irq_chip_data(d);
++	struct imsic_local_config *local;
++
++	if (WARN_ON(!vec))
++		return -ENOENT;
++
++	local = per_cpu_ptr(imsic->global.local, vec->cpu);
++	writel_relaxed(vec->local_id, local->msi_va);
++	return 0;
++}
++
++static void imsic_irq_compose_vector_msg(struct imsic_vector *vec, struct msi_msg *msg)
++{
++	phys_addr_t msi_addr;
++
++	if (WARN_ON(!vec))
++		return;
++
++	if (WARN_ON(!imsic_cpu_page_phys(vec->cpu, 0, &msi_addr)))
++		return;
++
++	msg->address_hi = upper_32_bits(msi_addr);
++	msg->address_lo = lower_32_bits(msi_addr);
++	msg->data = vec->local_id;
++}
++
++static void imsic_irq_compose_msg(struct irq_data *d, struct msi_msg *msg)
++{
++	imsic_irq_compose_vector_msg(irq_data_get_irq_chip_data(d), msg);
++}
++
++#ifdef CONFIG_SMP
++static void imsic_msi_update_msg(struct irq_data *d, struct imsic_vector *vec)
++{
++	struct msi_msg msg = { };
++
++	imsic_irq_compose_vector_msg(vec, &msg);
++	irq_data_get_irq_chip(d)->irq_write_msi_msg(d, &msg);
++}
++
++static int imsic_irq_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
++				  bool force)
++{
++	struct imsic_vector *old_vec, *new_vec;
++	struct irq_data *pd = d->parent_data;
++
++	old_vec = irq_data_get_irq_chip_data(pd);
++	if (WARN_ON(!old_vec))
++		return -ENOENT;
++
++	/* If old vector cpu belongs to the target cpumask then do nothing */
++	if (cpumask_test_cpu(old_vec->cpu, mask_val))
++		return IRQ_SET_MASK_OK_DONE;
++
++	/* If move is already in-flight then return failure */
++	if (imsic_vector_get_move(old_vec))
++		return -EBUSY;
++
++	/* Get a new vector on the desired set of CPUs */
++	new_vec = imsic_vector_alloc(old_vec->hwirq, mask_val);
++	if (!new_vec)
++		return -ENOSPC;
++
++	/* Point device to the new vector */
++	imsic_msi_update_msg(d, new_vec);
++
++	/* Update irq descriptors with the new vector */
++	pd->chip_data = new_vec;
++
++	/* Update effective affinity of parent irq data */
++	irq_data_update_effective_affinity(pd, cpumask_of(new_vec->cpu));
++
++	/* Move state of the old vector to the new vector */
++	imsic_vector_move(old_vec, new_vec);
++
++	return IRQ_SET_MASK_OK_DONE;
++}
++#endif
++
++static struct irq_chip imsic_irq_base_chip = {
++	.name			= "IMSIC",
++	.irq_mask		= imsic_irq_mask,
++	.irq_unmask		= imsic_irq_unmask,
++	.irq_retrigger		= imsic_irq_retrigger,
++	.irq_compose_msi_msg	= imsic_irq_compose_msg,
++	.flags			= IRQCHIP_SKIP_SET_WAKE |
++				  IRQCHIP_MASK_ON_SUSPEND,
++};
++
++static int imsic_irq_domain_alloc(struct irq_domain *domain, unsigned int virq,
++				  unsigned int nr_irqs, void *args)
++{
++	struct imsic_vector *vec;
++
++	/* Multi-MSI is not supported yet. */
++	if (nr_irqs > 1)
++		return -EOPNOTSUPP;
++
++	vec = imsic_vector_alloc(virq, cpu_online_mask);
++	if (!vec)
++		return -ENOSPC;
++
++	irq_domain_set_info(domain, virq, virq, &imsic_irq_base_chip, vec,
++			    handle_simple_irq, NULL, NULL);
++	irq_set_noprobe(virq);
++	irq_set_affinity(virq, cpu_online_mask);
++	irq_data_update_effective_affinity(irq_get_irq_data(virq), cpumask_of(vec->cpu));
++
++	return 0;
++}
++
++static void imsic_irq_domain_free(struct irq_domain *domain, unsigned int virq,
++				  unsigned int nr_irqs)
++{
++	struct irq_data *d = irq_domain_get_irq_data(domain, virq);
++
++	imsic_vector_free(irq_data_get_irq_chip_data(d));
++	irq_domain_free_irqs_parent(domain, virq, nr_irqs);
++}
++
++static int imsic_irq_domain_select(struct irq_domain *domain, struct irq_fwspec *fwspec,
++				   enum irq_domain_bus_token bus_token)
++{
++	const struct msi_parent_ops *ops = domain->msi_parent_ops;
++	u32 busmask = BIT(bus_token);
++
++	if (fwspec->fwnode != domain->fwnode || fwspec->param_count != 0)
++		return 0;
++
++	/* Handle pure domain searches */
++	if (bus_token == ops->bus_select_token)
++		return 1;
++
++	return !!(ops->bus_select_mask & busmask);
++}
++
++#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
++static void imsic_irq_debug_show(struct seq_file *m, struct irq_domain *d,
++				 struct irq_data *irqd, int ind)
++{
++	if (!irqd) {
++		imsic_vector_debug_show_summary(m, ind);
++		return;
++	}
++
++	imsic_vector_debug_show(m, irq_data_get_irq_chip_data(irqd), ind);
++}
++#endif
++
++static const struct irq_domain_ops imsic_base_domain_ops = {
++	.alloc		= imsic_irq_domain_alloc,
++	.free		= imsic_irq_domain_free,
++	.select		= imsic_irq_domain_select,
++#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
++	.debug_show	= imsic_irq_debug_show,
++#endif
++};
++
++#ifdef CONFIG_RISCV_IMSIC_PCI
++
++static void imsic_pci_mask_irq(struct irq_data *d)
++{
++	pci_msi_mask_irq(d);
++	irq_chip_mask_parent(d);
++}
++
++static void imsic_pci_unmask_irq(struct irq_data *d)
++{
++	irq_chip_unmask_parent(d);
++	pci_msi_unmask_irq(d);
++}
++
++#define MATCH_PCI_MSI		BIT(DOMAIN_BUS_PCI_MSI)
++
++#else
++
++#define MATCH_PCI_MSI		0
++
++#endif
++
++static bool imsic_init_dev_msi_info(struct device *dev,
++				    struct irq_domain *domain,
++				    struct irq_domain *real_parent,
++				    struct msi_domain_info *info)
++{
++	const struct msi_parent_ops *pops = real_parent->msi_parent_ops;
++
++	/* MSI parent domain specific settings */
++	switch (real_parent->bus_token) {
++	case DOMAIN_BUS_NEXUS:
++		if (WARN_ON_ONCE(domain != real_parent))
++			return false;
++#ifdef CONFIG_SMP
++		info->chip->irq_set_affinity = imsic_irq_set_affinity;
++#endif
++		break;
++	default:
++		WARN_ON_ONCE(1);
++		return false;
++	}
++
++	/* Is the target supported? */
++	switch (info->bus_token) {
++#ifdef CONFIG_RISCV_IMSIC_PCI
++	case DOMAIN_BUS_PCI_DEVICE_MSI:
++	case DOMAIN_BUS_PCI_DEVICE_MSIX:
++		info->chip->irq_mask = imsic_pci_mask_irq;
++		info->chip->irq_unmask = imsic_pci_unmask_irq;
++		break;
++#endif
++	case DOMAIN_BUS_DEVICE_MSI:
++		/*
++		 * Per-device MSI should never have any MSI feature bits
++		 * set. It's sole purpose is to create a dumb interrupt
++		 * chip which has a device specific irq_write_msi_msg()
++		 * callback.
++		 */
++		if (WARN_ON_ONCE(info->flags))
++			return false;
++
++		/* Core managed MSI descriptors */
++		info->flags |= MSI_FLAG_ALLOC_SIMPLE_MSI_DESCS |
++			       MSI_FLAG_FREE_MSI_DESCS;
++		break;
++	case DOMAIN_BUS_WIRED_TO_MSI:
++		break;
++	default:
++		WARN_ON_ONCE(1);
++		return false;
++	}
++
++	/* Use hierarchial chip operations re-trigger */
++	info->chip->irq_retrigger = irq_chip_retrigger_hierarchy;
++
++	/*
++	 * Mask out the domain specific MSI feature flags which are not
++	 * supported by the real parent.
++	 */
++	info->flags &= pops->supported_flags;
++
++	/* Enforce the required flags */
++	info->flags |= pops->required_flags;
++
++	return true;
++}
++
++#define MATCH_PLATFORM_MSI		BIT(DOMAIN_BUS_PLATFORM_MSI)
++
++static const struct msi_parent_ops imsic_msi_parent_ops = {
++	.supported_flags	= MSI_GENERIC_FLAGS_MASK |
++				  MSI_FLAG_PCI_MSIX,
++	.required_flags		= MSI_FLAG_USE_DEF_DOM_OPS |
++				  MSI_FLAG_USE_DEF_CHIP_OPS,
++	.bus_select_token	= DOMAIN_BUS_NEXUS,
++	.bus_select_mask	= MATCH_PCI_MSI | MATCH_PLATFORM_MSI,
++	.init_dev_msi_info	= imsic_init_dev_msi_info,
++};
++
++int imsic_irqdomain_init(void)
++{
++	struct imsic_global_config *global;
++
++	if (!imsic || !imsic->fwnode) {
++		pr_err("early driver not probed\n");
++		return -ENODEV;
++	}
++
++	if (imsic->base_domain) {
++		pr_err("%pfwP: irq domain already created\n", imsic->fwnode);
++		return -ENODEV;
++	}
++
++	/* Create Base IRQ domain */
++	imsic->base_domain = irq_domain_create_tree(imsic->fwnode,
++						    &imsic_base_domain_ops, imsic);
++	if (!imsic->base_domain) {
++		pr_err("%pfwP: failed to create IMSIC base domain\n", imsic->fwnode);
++		return -ENOMEM;
++	}
++	imsic->base_domain->flags |= IRQ_DOMAIN_FLAG_MSI_PARENT;
++	imsic->base_domain->msi_parent_ops = &imsic_msi_parent_ops;
++
++	irq_domain_update_bus_token(imsic->base_domain, DOMAIN_BUS_NEXUS);
++
++	global = &imsic->global;
++	pr_info("%pfwP:  hart-index-bits: %d,  guest-index-bits: %d\n",
++		imsic->fwnode, global->hart_index_bits, global->guest_index_bits);
++	pr_info("%pfwP: group-index-bits: %d, group-index-shift: %d\n",
++		imsic->fwnode, global->group_index_bits, global->group_index_shift);
++	pr_info("%pfwP: per-CPU IDs %d at base PPN %pa\n",
++		imsic->fwnode, global->nr_ids, &global->base_addr);
++	pr_info("%pfwP: total %d interrupts available\n",
++		imsic->fwnode, num_possible_cpus() * (global->nr_ids - 1));
++
++	return 0;
++}
++
++static int imsic_platform_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++
++	if (imsic && imsic->fwnode != dev->fwnode) {
++		dev_err(dev, "fwnode mismatch\n");
++		return -ENODEV;
++	}
++
++	return imsic_irqdomain_init();
++}
++
++static const struct of_device_id imsic_platform_match[] = {
++	{ .compatible = "riscv,imsics" },
++	{}
++};
++
++static struct platform_driver imsic_platform_driver = {
++	.driver = {
++		.name		= "riscv-imsic",
++		.of_match_table	= imsic_platform_match,
++	},
++	.probe = imsic_platform_probe,
++};
++builtin_platform_driver(imsic_platform_driver);
+diff --git a/drivers/irqchip/irq-riscv-imsic-state.c b/drivers/irqchip/irq-riscv-imsic-state.c
+new file mode 100644
+index 000000000000..5479f872e62b
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-imsic-state.c
+@@ -0,0 +1,865 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#define pr_fmt(fmt) "riscv-imsic: " fmt
++#include <linux/cpu.h>
++#include <linux/bitmap.h>
++#include <linux/interrupt.h>
++#include <linux/irq.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/seq_file.h>
++#include <linux/spinlock.h>
++#include <linux/smp.h>
++#include <asm/hwcap.h>
++
++#include "irq-riscv-imsic-state.h"
++
++#define IMSIC_DISABLE_EIDELIVERY		0
++#define IMSIC_ENABLE_EIDELIVERY			1
++#define IMSIC_DISABLE_EITHRESHOLD		1
++#define IMSIC_ENABLE_EITHRESHOLD		0
++
++static inline void imsic_csr_write(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_ISELECT, reg);
++	csr_write(CSR_IREG, val);
++}
++
++static inline unsigned long imsic_csr_read(unsigned long reg)
++{
++	csr_write(CSR_ISELECT, reg);
++	return csr_read(CSR_IREG);
++}
++
++static inline unsigned long imsic_csr_read_clear(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_ISELECT, reg);
++	return csr_read_clear(CSR_IREG, val);
++}
++
++static inline void imsic_csr_set(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_ISELECT, reg);
++	csr_set(CSR_IREG, val);
++}
++
++static inline void imsic_csr_clear(unsigned long reg, unsigned long val)
++{
++	csr_write(CSR_ISELECT, reg);
++	csr_clear(CSR_IREG, val);
++}
++
++struct imsic_priv *imsic;
++
++const struct imsic_global_config *imsic_get_global_config(void)
++{
++	return imsic ? &imsic->global : NULL;
++}
++EXPORT_SYMBOL_GPL(imsic_get_global_config);
++
++static bool __imsic_eix_read_clear(unsigned long id, bool pend)
++{
++	unsigned long isel, imask;
++
++	isel = id / BITS_PER_LONG;
++	isel *= BITS_PER_LONG / IMSIC_EIPx_BITS;
++	isel += pend ? IMSIC_EIP0 : IMSIC_EIE0;
++	imask = BIT(id & (__riscv_xlen - 1));
++
++	return !!(imsic_csr_read_clear(isel, imask) & imask);
++}
++
++static inline bool __imsic_id_read_clear_enabled(unsigned long id)
++{
++	return __imsic_eix_read_clear(id, false);
++}
++
++static inline bool __imsic_id_read_clear_pending(unsigned long id)
++{
++	return __imsic_eix_read_clear(id, true);
++}
++
++void __imsic_eix_update(unsigned long base_id, unsigned long num_id, bool pend, bool val)
++{
++	unsigned long id = base_id, last_id = base_id + num_id;
++	unsigned long i, isel, ireg;
++
++	while (id < last_id) {
++		isel = id / BITS_PER_LONG;
++		isel *= BITS_PER_LONG / IMSIC_EIPx_BITS;
++		isel += pend ? IMSIC_EIP0 : IMSIC_EIE0;
++
++		/*
++		 * Prepare the ID mask to be programmed in the
++		 * IMSIC EIEx and EIPx registers. These registers
++		 * are XLEN-wide and we must not touch IDs which
++		 * are < base_id and >= (base_id + num_id).
++		 */
++		ireg = 0;
++		for (i = id & (__riscv_xlen - 1); id < last_id && i < __riscv_xlen; i++) {
++			ireg |= BIT(i);
++			id++;
++		}
++
++		/*
++		 * The IMSIC EIEx and EIPx registers are indirectly
++		 * accessed via using ISELECT and IREG CSRs so we
++		 * need to access these CSRs without getting preempted.
++		 *
++		 * All existing users of this function call this
++		 * function with local IRQs disabled so we don't
++		 * need to do anything special here.
++		 */
++		if (val)
++			imsic_csr_set(isel, ireg);
++		else
++			imsic_csr_clear(isel, ireg);
++	}
++}
++
++static void __imsic_local_sync(struct imsic_local_priv *lpriv)
++{
++	struct imsic_local_config *mlocal;
++	struct imsic_vector *vec, *mvec;
++	int i;
++
++	lockdep_assert_held(&lpriv->lock);
++
++	for_each_set_bit(i, lpriv->dirty_bitmap, imsic->global.nr_ids + 1) {
++		if (!i || i == IMSIC_IPI_ID)
++			goto skip;
++		vec = &lpriv->vectors[i];
++
++		if (READ_ONCE(vec->enable))
++			__imsic_id_set_enable(i);
++		else
++			__imsic_id_clear_enable(i);
++
++		/*
++		 * If the ID was being moved to a new ID on some other CPU
++		 * then we can get a MSI during the movement so check the
++		 * ID pending bit and re-trigger the new ID on other CPU
++		 * using MMIO write.
++		 */
++		mvec = READ_ONCE(vec->move);
++		WRITE_ONCE(vec->move, NULL);
++		if (mvec && mvec != vec) {
++			if (__imsic_id_read_clear_pending(i)) {
++				mlocal = per_cpu_ptr(imsic->global.local, mvec->cpu);
++				writel_relaxed(mvec->local_id, mlocal->msi_va);
++			}
++
++			imsic_vector_free(&lpriv->vectors[i]);
++		}
++
++skip:
++		bitmap_clear(lpriv->dirty_bitmap, i, 1);
++	}
++}
++
++void imsic_local_sync_all(void)
++{
++	struct imsic_local_priv *lpriv = this_cpu_ptr(imsic->lpriv);
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&lpriv->lock, flags);
++	bitmap_fill(lpriv->dirty_bitmap, imsic->global.nr_ids + 1);
++	__imsic_local_sync(lpriv);
++	raw_spin_unlock_irqrestore(&lpriv->lock, flags);
++}
++
++void imsic_local_delivery(bool enable)
++{
++	if (enable) {
++		imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_ENABLE_EITHRESHOLD);
++		imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_ENABLE_EIDELIVERY);
++		return;
++	}
++
++	imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_DISABLE_EIDELIVERY);
++	imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_DISABLE_EITHRESHOLD);
++}
++
++#ifdef CONFIG_SMP
++static void imsic_local_timer_callback(struct timer_list *timer)
++{
++	struct imsic_local_priv *lpriv = this_cpu_ptr(imsic->lpriv);
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&lpriv->lock, flags);
++	__imsic_local_sync(lpriv);
++	raw_spin_unlock_irqrestore(&lpriv->lock, flags);
++}
++
++static void __imsic_remote_sync(struct imsic_local_priv *lpriv, unsigned int cpu)
++{
++	lockdep_assert_held(&lpriv->lock);
++
++	/*
++	 * The spinlock acquire/release semantics ensure that changes
++	 * to vector enable, vector move and dirty bitmap are visible
++	 * to the target CPU.
++	 */
++
++	/*
++	 * We schedule a timer on the target CPU if the target CPU is not
++	 * same as the current CPU. An offline CPU will unconditionally
++	 * synchronize IDs through imsic_starting_cpu() when the
++	 * CPU is brought up.
++	 */
++	if (cpu_online(cpu)) {
++		if (cpu == smp_processor_id()) {
++			__imsic_local_sync(lpriv);
++			return;
++		}
++
++		if (!timer_pending(&lpriv->timer)) {
++			lpriv->timer.expires = jiffies + 1;
++			add_timer_on(&lpriv->timer, cpu);
++		}
++	}
++}
++#else
++static void __imsic_remote_sync(struct imsic_local_priv *lpriv, unsigned int cpu)
++{
++	lockdep_assert_held(&lpriv->lock);
++	__imsic_local_sync(lpriv);
++}
++#endif
++
++void imsic_vector_mask(struct imsic_vector *vec)
++{
++	struct imsic_local_priv *lpriv;
++
++	lpriv = per_cpu_ptr(imsic->lpriv, vec->cpu);
++	if (WARN_ON_ONCE(&lpriv->vectors[vec->local_id] != vec))
++		return;
++
++	/*
++	 * This function is called through Linux irq subsystem with
++	 * irqs disabled so no need to save/restore irq flags.
++	 */
++
++	raw_spin_lock(&lpriv->lock);
++
++	WRITE_ONCE(vec->enable, false);
++	bitmap_set(lpriv->dirty_bitmap, vec->local_id, 1);
++	__imsic_remote_sync(lpriv, vec->cpu);
++
++	raw_spin_unlock(&lpriv->lock);
++}
++
++void imsic_vector_unmask(struct imsic_vector *vec)
++{
++	struct imsic_local_priv *lpriv;
++
++	lpriv = per_cpu_ptr(imsic->lpriv, vec->cpu);
++	if (WARN_ON_ONCE(&lpriv->vectors[vec->local_id] != vec))
++		return;
++
++	/*
++	 * This function is called through Linux irq subsystem with
++	 * irqs disabled so no need to save/restore irq flags.
++	 */
++
++	raw_spin_lock(&lpriv->lock);
++
++	WRITE_ONCE(vec->enable, true);
++	bitmap_set(lpriv->dirty_bitmap, vec->local_id, 1);
++	__imsic_remote_sync(lpriv, vec->cpu);
++
++	raw_spin_unlock(&lpriv->lock);
++}
++
++static bool imsic_vector_move_update(struct imsic_local_priv *lpriv, struct imsic_vector *vec,
++				     bool new_enable, struct imsic_vector *new_move)
++{
++	unsigned long flags;
++	bool enabled;
++
++	raw_spin_lock_irqsave(&lpriv->lock, flags);
++
++	/* Update enable and move details */
++	enabled = READ_ONCE(vec->enable);
++	WRITE_ONCE(vec->enable, new_enable);
++	WRITE_ONCE(vec->move, new_move);
++
++	/* Mark the vector as dirty and synchronize */
++	bitmap_set(lpriv->dirty_bitmap, vec->local_id, 1);
++	__imsic_remote_sync(lpriv, vec->cpu);
++
++	raw_spin_unlock_irqrestore(&lpriv->lock, flags);
++
++	return enabled;
++}
++
++void imsic_vector_move(struct imsic_vector *old_vec, struct imsic_vector *new_vec)
++{
++	struct imsic_local_priv *old_lpriv, *new_lpriv;
++	bool enabled;
++
++	if (WARN_ON_ONCE(old_vec->cpu == new_vec->cpu))
++		return;
++
++	old_lpriv = per_cpu_ptr(imsic->lpriv, old_vec->cpu);
++	if (WARN_ON_ONCE(&old_lpriv->vectors[old_vec->local_id] != old_vec))
++		return;
++
++	new_lpriv = per_cpu_ptr(imsic->lpriv, new_vec->cpu);
++	if (WARN_ON_ONCE(&new_lpriv->vectors[new_vec->local_id] != new_vec))
++		return;
++
++	/*
++	 * Move and re-trigger the new vector based on the pending
++	 * state of the old vector because we might get a device
++	 * interrupt on the old vector while device was being moved
++	 * to the new vector.
++	 */
++	enabled = imsic_vector_move_update(old_lpriv, old_vec, false, new_vec);
++	imsic_vector_move_update(new_lpriv, new_vec, enabled, new_vec);
++}
++
++#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
++void imsic_vector_debug_show(struct seq_file *m, struct imsic_vector *vec, int ind)
++{
++	struct imsic_local_priv *lpriv;
++	struct imsic_vector *mvec;
++	bool is_enabled;
++
++	lpriv = per_cpu_ptr(imsic->lpriv, vec->cpu);
++	if (WARN_ON_ONCE(&lpriv->vectors[vec->local_id] != vec))
++		return;
++
++	is_enabled = imsic_vector_isenabled(vec);
++	mvec = imsic_vector_get_move(vec);
++
++	seq_printf(m, "%*starget_cpu      : %5u\n", ind, "", vec->cpu);
++	seq_printf(m, "%*starget_local_id : %5u\n", ind, "", vec->local_id);
++	seq_printf(m, "%*sis_reserved     : %5u\n", ind, "",
++		   (vec->local_id <= IMSIC_IPI_ID) ? 1 : 0);
++	seq_printf(m, "%*sis_enabled      : %5u\n", ind, "", is_enabled ? 1 : 0);
++	seq_printf(m, "%*sis_move_pending : %5u\n", ind, "", mvec ? 1 : 0);
++	if (mvec) {
++		seq_printf(m, "%*smove_cpu        : %5u\n", ind, "", mvec->cpu);
++		seq_printf(m, "%*smove_local_id   : %5u\n", ind, "", mvec->local_id);
++	}
++}
++
++void imsic_vector_debug_show_summary(struct seq_file *m, int ind)
++{
++	irq_matrix_debug_show(m, imsic->matrix, ind);
++}
++#endif
++
++struct imsic_vector *imsic_vector_from_local_id(unsigned int cpu, unsigned int local_id)
++{
++	struct imsic_local_priv *lpriv = per_cpu_ptr(imsic->lpriv, cpu);
++
++	if (!lpriv || imsic->global.nr_ids < local_id)
++		return NULL;
++
++	return &lpriv->vectors[local_id];
++}
++
++struct imsic_vector *imsic_vector_alloc(unsigned int hwirq, const struct cpumask *mask)
++{
++	struct imsic_vector *vec = NULL;
++	struct imsic_local_priv *lpriv;
++	unsigned long flags;
++	unsigned int cpu;
++	int local_id;
++
++	raw_spin_lock_irqsave(&imsic->matrix_lock, flags);
++	local_id = irq_matrix_alloc(imsic->matrix, mask, false, &cpu);
++	raw_spin_unlock_irqrestore(&imsic->matrix_lock, flags);
++	if (local_id < 0)
++		return NULL;
++
++	lpriv = per_cpu_ptr(imsic->lpriv, cpu);
++	vec = &lpriv->vectors[local_id];
++	vec->hwirq = hwirq;
++	vec->enable = false;
++	vec->move = NULL;
++
++	return vec;
++}
++
++void imsic_vector_free(struct imsic_vector *vec)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&imsic->matrix_lock, flags);
++	vec->hwirq = UINT_MAX;
++	irq_matrix_free(imsic->matrix, vec->cpu, vec->local_id, false);
++	raw_spin_unlock_irqrestore(&imsic->matrix_lock, flags);
++}
++
++static void __init imsic_local_cleanup(void)
++{
++	struct imsic_local_priv *lpriv;
++	int cpu;
++
++	for_each_possible_cpu(cpu) {
++		lpriv = per_cpu_ptr(imsic->lpriv, cpu);
++
++		bitmap_free(lpriv->dirty_bitmap);
++		kfree(lpriv->vectors);
++	}
++
++	free_percpu(imsic->lpriv);
++}
++
++static int __init imsic_local_init(void)
++{
++	struct imsic_global_config *global = &imsic->global;
++	struct imsic_local_priv *lpriv;
++	struct imsic_vector *vec;
++	int cpu, i;
++
++	/* Allocate per-CPU private state */
++	imsic->lpriv = alloc_percpu(typeof(*imsic->lpriv));
++	if (!imsic->lpriv)
++		return -ENOMEM;
++
++	/* Setup per-CPU private state */
++	for_each_possible_cpu(cpu) {
++		lpriv = per_cpu_ptr(imsic->lpriv, cpu);
++
++		raw_spin_lock_init(&lpriv->lock);
++
++		/* Allocate dirty bitmap */
++		lpriv->dirty_bitmap = bitmap_zalloc(global->nr_ids + 1, GFP_KERNEL);
++		if (!lpriv->dirty_bitmap)
++			goto fail_local_cleanup;
++
++#ifdef CONFIG_SMP
++		/* Setup lazy timer for synchronization */
++		timer_setup(&lpriv->timer, imsic_local_timer_callback, TIMER_PINNED);
++#endif
++
++		/* Allocate vector array */
++		lpriv->vectors = kcalloc(global->nr_ids + 1, sizeof(*lpriv->vectors),
++					 GFP_KERNEL);
++		if (!lpriv->vectors)
++			goto fail_local_cleanup;
++
++		/* Setup vector array */
++		for (i = 0; i <= global->nr_ids; i++) {
++			vec = &lpriv->vectors[i];
++			vec->cpu = cpu;
++			vec->local_id = i;
++			vec->hwirq = UINT_MAX;
++		}
++	}
++
++	return 0;
++
++fail_local_cleanup:
++	imsic_local_cleanup();
++	return -ENOMEM;
++}
++
++void imsic_state_online(void)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&imsic->matrix_lock, flags);
++	irq_matrix_online(imsic->matrix);
++	raw_spin_unlock_irqrestore(&imsic->matrix_lock, flags);
++}
++
++void imsic_state_offline(void)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&imsic->matrix_lock, flags);
++	irq_matrix_offline(imsic->matrix);
++	raw_spin_unlock_irqrestore(&imsic->matrix_lock, flags);
++
++#ifdef CONFIG_SMP
++	struct imsic_local_priv *lpriv = this_cpu_ptr(imsic->lpriv);
++
++	raw_spin_lock_irqsave(&lpriv->lock, flags);
++	WARN_ON_ONCE(try_to_del_timer_sync(&lpriv->timer) < 0);
++	raw_spin_unlock_irqrestore(&lpriv->lock, flags);
++#endif
++}
++
++static int __init imsic_matrix_init(void)
++{
++	struct imsic_global_config *global = &imsic->global;
++
++	raw_spin_lock_init(&imsic->matrix_lock);
++	imsic->matrix = irq_alloc_matrix(global->nr_ids + 1,
++					 0, global->nr_ids + 1);
++	if (!imsic->matrix)
++		return -ENOMEM;
++
++	/* Reserve ID#0 because it is special and never implemented */
++	irq_matrix_assign_system(imsic->matrix, 0, false);
++
++	/* Reserve IPI ID because it is special and used internally */
++	irq_matrix_assign_system(imsic->matrix, IMSIC_IPI_ID, false);
++
++	return 0;
++}
++
++static int __init imsic_get_parent_hartid(struct fwnode_handle *fwnode,
++					  u32 index, unsigned long *hartid)
++{
++	struct of_phandle_args parent;
++	int rc;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(fwnode))
++		return -EINVAL;
++
++	rc = of_irq_parse_one(to_of_node(fwnode), index, &parent);
++	if (rc)
++		return rc;
++
++	/*
++	 * Skip interrupts other than external interrupts for
++	 * current privilege level.
++	 */
++	if (parent.args[0] != RV_IRQ_EXT)
++		return -EINVAL;
++
++	return riscv_of_parent_hartid(parent.np, hartid);
++}
++
++static int __init imsic_get_mmio_resource(struct fwnode_handle *fwnode,
++					  u32 index, struct resource *res)
++{
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(fwnode))
++		return -EINVAL;
++
++	return of_address_to_resource(to_of_node(fwnode), index, res);
++}
++
++static int __init imsic_parse_fwnode(struct fwnode_handle *fwnode,
++				     struct imsic_global_config *global,
++				     u32 *nr_parent_irqs,
++				     u32 *nr_mmios)
++{
++	unsigned long hartid;
++	struct resource res;
++	int rc;
++	u32 i;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(fwnode))
++		return -EINVAL;
++
++	*nr_parent_irqs = 0;
++	*nr_mmios = 0;
++
++	/* Find number of parent interrupts */
++	while (!imsic_get_parent_hartid(fwnode, *nr_parent_irqs, &hartid))
++		(*nr_parent_irqs)++;
++	if (!*nr_parent_irqs) {
++		pr_err("%pfwP: no parent irqs available\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Find number of guest index bits in MSI address */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,guest-index-bits",
++				  &global->guest_index_bits);
++	if (rc)
++		global->guest_index_bits = 0;
++
++	/* Find number of HART index bits */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,hart-index-bits",
++				  &global->hart_index_bits);
++	if (rc) {
++		/* Assume default value */
++		global->hart_index_bits = __fls(*nr_parent_irqs);
++		if (BIT(global->hart_index_bits) < *nr_parent_irqs)
++			global->hart_index_bits++;
++	}
++
++	/* Find number of group index bits */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,group-index-bits",
++				  &global->group_index_bits);
++	if (rc)
++		global->group_index_bits = 0;
++
++	/*
++	 * Find first bit position of group index.
++	 * If not specified assumed the default APLIC-IMSIC configuration.
++	 */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,group-index-shift",
++				  &global->group_index_shift);
++	if (rc)
++		global->group_index_shift = IMSIC_MMIO_PAGE_SHIFT * 2;
++
++	/* Find number of interrupt identities */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,num-ids",
++				  &global->nr_ids);
++	if (rc) {
++		pr_err("%pfwP: number of interrupt identities not found\n", fwnode);
++		return rc;
++	}
++
++	/* Find number of guest interrupt identities */
++	rc = of_property_read_u32(to_of_node(fwnode), "riscv,num-guest-ids",
++				  &global->nr_guest_ids);
++	if (rc)
++		global->nr_guest_ids = global->nr_ids;
++
++	/* Sanity check guest index bits */
++	i = BITS_PER_LONG - IMSIC_MMIO_PAGE_SHIFT;
++	if (i < global->guest_index_bits) {
++		pr_err("%pfwP: guest index bits too big\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Sanity check HART index bits */
++	i = BITS_PER_LONG - IMSIC_MMIO_PAGE_SHIFT - global->guest_index_bits;
++	if (i < global->hart_index_bits) {
++		pr_err("%pfwP: HART index bits too big\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Sanity check group index bits */
++	i = BITS_PER_LONG - IMSIC_MMIO_PAGE_SHIFT -
++	    global->guest_index_bits - global->hart_index_bits;
++	if (i < global->group_index_bits) {
++		pr_err("%pfwP: group index bits too big\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Sanity check group index shift */
++	i = global->group_index_bits + global->group_index_shift - 1;
++	if (i >= BITS_PER_LONG) {
++		pr_err("%pfwP: group index shift too big\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Sanity check number of interrupt identities */
++	if (global->nr_ids < IMSIC_MIN_ID ||
++	    global->nr_ids >= IMSIC_MAX_ID ||
++	    (global->nr_ids & IMSIC_MIN_ID) != IMSIC_MIN_ID) {
++		pr_err("%pfwP: invalid number of interrupt identities\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Sanity check number of guest interrupt identities */
++	if (global->nr_guest_ids < IMSIC_MIN_ID ||
++	    global->nr_guest_ids >= IMSIC_MAX_ID ||
++	    (global->nr_guest_ids & IMSIC_MIN_ID) != IMSIC_MIN_ID) {
++		pr_err("%pfwP: invalid number of guest interrupt identities\n", fwnode);
++		return -EINVAL;
++	}
++
++	/* Compute base address */
++	rc = imsic_get_mmio_resource(fwnode, 0, &res);
++	if (rc) {
++		pr_err("%pfwP: first MMIO resource not found\n", fwnode);
++		return -EINVAL;
++	}
++	global->base_addr = res.start;
++	global->base_addr &= ~(BIT(global->guest_index_bits +
++				   global->hart_index_bits +
++				   IMSIC_MMIO_PAGE_SHIFT) - 1);
++	global->base_addr &= ~((BIT(global->group_index_bits) - 1) <<
++			       global->group_index_shift);
++
++	/* Find number of MMIO register sets */
++	while (!imsic_get_mmio_resource(fwnode, *nr_mmios, &res))
++		(*nr_mmios)++;
++
++	return 0;
++}
++
++int __init imsic_setup_state(struct fwnode_handle *fwnode)
++{
++	u32 i, j, index, nr_parent_irqs, nr_mmios, nr_handlers = 0;
++	struct imsic_global_config *global;
++	struct imsic_local_config *local;
++	void __iomem **mmios_va = NULL;
++	struct resource *mmios = NULL;
++	unsigned long reloff, hartid;
++	phys_addr_t base_addr;
++	int rc, cpu;
++
++	/*
++	 * Only one IMSIC instance allowed in a platform for clean
++	 * implementation of SMP IRQ affinity and per-CPU IPIs.
++	 *
++	 * This means on a multi-socket (or multi-die) platform we
++	 * will have multiple MMIO regions for one IMSIC instance.
++	 */
++	if (imsic) {
++		pr_err("%pfwP: already initialized hence ignoring\n", fwnode);
++		return -EALREADY;
++	}
++
++	if (!riscv_isa_extension_available(NULL, SxAIA)) {
++		pr_err("%pfwP: AIA support not available\n", fwnode);
++		return -ENODEV;
++	}
++
++	imsic = kzalloc(sizeof(*imsic), GFP_KERNEL);
++	if (!imsic)
++		return -ENOMEM;
++	imsic->fwnode = fwnode;
++	global = &imsic->global;
++
++	global->local = alloc_percpu(typeof(*global->local));
++	if (!global->local) {
++		rc = -ENOMEM;
++		goto out_free_priv;
++	}
++
++	/* Parse IMSIC fwnode */
++	rc = imsic_parse_fwnode(fwnode, global, &nr_parent_irqs, &nr_mmios);
++	if (rc)
++		goto out_free_local;
++
++	/* Allocate MMIO resource array */
++	mmios = kcalloc(nr_mmios, sizeof(*mmios), GFP_KERNEL);
++	if (!mmios) {
++		rc = -ENOMEM;
++		goto out_free_local;
++	}
++
++	/* Allocate MMIO virtual address array */
++	mmios_va = kcalloc(nr_mmios, sizeof(*mmios_va), GFP_KERNEL);
++	if (!mmios_va) {
++		rc = -ENOMEM;
++		goto out_iounmap;
++	}
++
++	/* Parse and map MMIO register sets */
++	for (i = 0; i < nr_mmios; i++) {
++		rc = imsic_get_mmio_resource(fwnode, i, &mmios[i]);
++		if (rc) {
++			pr_err("%pfwP: unable to parse MMIO regset %d\n", fwnode, i);
++			goto out_iounmap;
++		}
++
++		base_addr = mmios[i].start;
++		base_addr &= ~(BIT(global->guest_index_bits +
++				   global->hart_index_bits +
++				   IMSIC_MMIO_PAGE_SHIFT) - 1);
++		base_addr &= ~((BIT(global->group_index_bits) - 1) <<
++			       global->group_index_shift);
++		if (base_addr != global->base_addr) {
++			rc = -EINVAL;
++			pr_err("%pfwP: address mismatch for regset %d\n", fwnode, i);
++			goto out_iounmap;
++		}
++
++		mmios_va[i] = ioremap(mmios[i].start, resource_size(&mmios[i]));
++		if (!mmios_va[i]) {
++			rc = -EIO;
++			pr_err("%pfwP: unable to map MMIO regset %d\n", fwnode, i);
++			goto out_iounmap;
++		}
++	}
++
++	/* Initialize local (or per-CPU )state */
++	rc = imsic_local_init();
++	if (rc) {
++		pr_err("%pfwP: failed to initialize local state\n",
++		       fwnode);
++		goto out_iounmap;
++	}
++
++	/* Configure handlers for target CPUs */
++	for (i = 0; i < nr_parent_irqs; i++) {
++		rc = imsic_get_parent_hartid(fwnode, i, &hartid);
++		if (rc) {
++			pr_warn("%pfwP: hart ID for parent irq%d not found\n", fwnode, i);
++			continue;
++		}
++
++		cpu = riscv_hartid_to_cpuid(hartid);
++		if (cpu < 0) {
++			pr_warn("%pfwP: invalid cpuid for parent irq%d\n", fwnode, i);
++			continue;
++		}
++
++		/* Find MMIO location of MSI page */
++		index = nr_mmios;
++		reloff = i * BIT(global->guest_index_bits) *
++			 IMSIC_MMIO_PAGE_SZ;
++		for (j = 0; nr_mmios; j++) {
++			if (reloff < resource_size(&mmios[j])) {
++				index = j;
++				break;
++			}
++
++			/*
++			 * MMIO region size may not be aligned to
++			 * BIT(global->guest_index_bits) * IMSIC_MMIO_PAGE_SZ
++			 * if holes are present.
++			 */
++			reloff -= ALIGN(resource_size(&mmios[j]),
++			BIT(global->guest_index_bits) * IMSIC_MMIO_PAGE_SZ);
++		}
++		if (index >= nr_mmios) {
++			pr_warn("%pfwP: MMIO not found for parent irq%d\n", fwnode, i);
++			continue;
++		}
++
++		local = per_cpu_ptr(global->local, cpu);
++		local->msi_pa = mmios[index].start + reloff;
++		local->msi_va = mmios_va[index] + reloff;
++
++		nr_handlers++;
++	}
++
++	/* If no CPU handlers found then can't take interrupts */
++	if (!nr_handlers) {
++		pr_err("%pfwP: No CPU handlers found\n", fwnode);
++		rc = -ENODEV;
++		goto out_local_cleanup;
++	}
++
++	/* Initialize matrix allocator */
++	rc = imsic_matrix_init();
++	if (rc) {
++		pr_err("%pfwP: failed to create matrix allocator\n", fwnode);
++		goto out_local_cleanup;
++	}
++
++	/* We don't need MMIO arrays anymore so let's free-up */
++	kfree(mmios_va);
++	kfree(mmios);
++
++	return 0;
++
++out_local_cleanup:
++	imsic_local_cleanup();
++out_iounmap:
++	for (i = 0; i < nr_mmios; i++) {
++		if (mmios_va[i])
++			iounmap(mmios_va[i]);
++	}
++	kfree(mmios_va);
++	kfree(mmios);
++out_free_local:
++	free_percpu(imsic->global.local);
++out_free_priv:
++	kfree(imsic);
++	imsic = NULL;
++	return rc;
++}
+diff --git a/drivers/irqchip/irq-riscv-imsic-state.h b/drivers/irqchip/irq-riscv-imsic-state.h
+new file mode 100644
+index 000000000000..5ae2f69b035b
+--- /dev/null
++++ b/drivers/irqchip/irq-riscv-imsic-state.h
+@@ -0,0 +1,108 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++
++#ifndef _IRQ_RISCV_IMSIC_STATE_H
++#define _IRQ_RISCV_IMSIC_STATE_H
++
++#include <linux/irqchip/riscv-imsic.h>
++#include <linux/irqdomain.h>
++#include <linux/fwnode.h>
++#include <linux/timer.h>
++
++#define IMSIC_IPI_ID				1
++#define IMSIC_NR_IPI				8
++
++struct imsic_vector {
++	/* Fixed details of the vector */
++	unsigned int				cpu;
++	unsigned int				local_id;
++	/* Details saved by driver in the vector */
++	unsigned int				hwirq;
++	/* Details accessed using local lock held */
++	bool					enable;
++	struct imsic_vector			*move;
++};
++
++struct imsic_local_priv {
++	/* Local lock to protect vector enable/move variables and dirty bitmap */
++	raw_spinlock_t				lock;
++
++	/* Local dirty bitmap for synchronization */
++	unsigned long				*dirty_bitmap;
++
++#ifdef CONFIG_SMP
++	/* Local timer for synchronization */
++	struct timer_list			timer;
++#endif
++
++	/* Local vector table */
++	struct imsic_vector			*vectors;
++};
++
++struct imsic_priv {
++	/* Device details */
++	struct fwnode_handle			*fwnode;
++
++	/* Global configuration common for all HARTs */
++	struct imsic_global_config		global;
++
++	/* Per-CPU state */
++	struct imsic_local_priv __percpu	*lpriv;
++
++	/* State of IRQ matrix allocator */
++	raw_spinlock_t				matrix_lock;
++	struct irq_matrix			*matrix;
++
++	/* IRQ domains (created by platform driver) */
++	struct irq_domain			*base_domain;
++};
++
++extern struct imsic_priv *imsic;
++
++void __imsic_eix_update(unsigned long base_id, unsigned long num_id, bool pend, bool val);
++
++static inline void __imsic_id_set_enable(unsigned long id)
++{
++	__imsic_eix_update(id, 1, false, true);
++}
++
++static inline void __imsic_id_clear_enable(unsigned long id)
++{
++	__imsic_eix_update(id, 1, false, false);
++}
++
++void imsic_local_sync_all(void);
++void imsic_local_delivery(bool enable);
++
++void imsic_vector_mask(struct imsic_vector *vec);
++void imsic_vector_unmask(struct imsic_vector *vec);
++
++static inline bool imsic_vector_isenabled(struct imsic_vector *vec)
++{
++	return READ_ONCE(vec->enable);
++}
++
++static inline struct imsic_vector *imsic_vector_get_move(struct imsic_vector *vec)
++{
++	return READ_ONCE(vec->move);
++}
++
++void imsic_vector_move(struct imsic_vector *old_vec, struct imsic_vector *new_vec);
++
++struct imsic_vector *imsic_vector_from_local_id(unsigned int cpu, unsigned int local_id);
++
++struct imsic_vector *imsic_vector_alloc(unsigned int hwirq, const struct cpumask *mask);
++void imsic_vector_free(struct imsic_vector *vector);
++
++void imsic_vector_debug_show(struct seq_file *m, struct imsic_vector *vec, int ind);
++void imsic_vector_debug_show_summary(struct seq_file *m, int ind);
++
++void imsic_state_online(void);
++void imsic_state_offline(void);
++int imsic_setup_state(struct fwnode_handle *fwnode);
++int imsic_irqdomain_init(void);
++
++#endif
+diff --git a/drivers/irqchip/irq-riscv-intc.c b/drivers/irqchip/irq-riscv-intc.c
+index 627beae9649a..4f3a12383a1e 100644
+--- a/drivers/irqchip/irq-riscv-intc.c
++++ b/drivers/irqchip/irq-riscv-intc.c
+@@ -19,6 +19,8 @@
+ #include <linux/smp.h>
+ #include <linux/soc/andes/irq.h>
+ 
++#include <asm/hwcap.h>
++
+ static struct irq_domain *intc_domain;
+ static unsigned int riscv_intc_nr_irqs __ro_after_init = BITS_PER_LONG;
+ static unsigned int riscv_intc_custom_base __ro_after_init = BITS_PER_LONG;
+@@ -32,6 +34,14 @@ static asmlinkage void riscv_intc_irq(struct pt_regs *regs)
+ 		pr_warn_ratelimited("Failed to handle interrupt (cause: %ld)\n", cause);
+ }
+ 
++static asmlinkage void riscv_intc_aia_irq(struct pt_regs *regs)
++{
++	unsigned long topi;
++
++	while ((topi = csr_read(CSR_TOPI)))
++		generic_handle_domain_irq(intc_domain, topi >> TOPI_IID_SHIFT);
++}
++
+ /*
+  * On RISC-V systems local interrupts are masked or unmasked by writing
+  * the SIE (Supervisor Interrupt Enable) CSR.  As CSRs can only be written
+@@ -41,12 +51,18 @@ static asmlinkage void riscv_intc_irq(struct pt_regs *regs)
+ 
+ static void riscv_intc_irq_mask(struct irq_data *d)
+ {
+-	csr_clear(CSR_IE, BIT(d->hwirq));
++	if (IS_ENABLED(CONFIG_32BIT) && d->hwirq >= BITS_PER_LONG)
++		csr_clear(CSR_IEH, BIT(d->hwirq - BITS_PER_LONG));
++	else
++		csr_clear(CSR_IE, BIT(d->hwirq));
+ }
+ 
+ static void riscv_intc_irq_unmask(struct irq_data *d)
+ {
+-	csr_set(CSR_IE, BIT(d->hwirq));
++	if (IS_ENABLED(CONFIG_32BIT) && d->hwirq >= BITS_PER_LONG)
++		csr_set(CSR_IEH, BIT(d->hwirq - BITS_PER_LONG));
++	else
++		csr_set(CSR_IE, BIT(d->hwirq));
+ }
+ 
+ static void andes_intc_irq_mask(struct irq_data *d)
+@@ -133,8 +149,9 @@ static int riscv_intc_domain_alloc(struct irq_domain *domain,
+ 	 * Only allow hwirq for which we have corresponding standard or
+ 	 * custom interrupt enable register.
+ 	 */
+-	if ((hwirq >= riscv_intc_nr_irqs && hwirq < riscv_intc_custom_base) ||
+-	    (hwirq >= riscv_intc_custom_base + riscv_intc_custom_nr_irqs))
++	if (hwirq >= riscv_intc_nr_irqs &&
++	    (hwirq < riscv_intc_custom_base ||
++	     hwirq >= riscv_intc_custom_base + riscv_intc_custom_nr_irqs))
+ 		return -EINVAL;
+ 
+ 	for (i = 0; i < nr_irqs; i++) {
+@@ -157,8 +174,7 @@ static struct fwnode_handle *riscv_intc_hwnode(void)
+ 	return intc_domain->fwnode;
+ }
+ 
+-static int __init riscv_intc_init_common(struct fwnode_handle *fn,
+-					 struct irq_chip *chip)
++static int __init riscv_intc_init_common(struct fwnode_handle *fn, struct irq_chip *chip)
+ {
+ 	int rc;
+ 
+@@ -168,7 +184,12 @@ static int __init riscv_intc_init_common(struct fwnode_handle *fn,
+ 		return -ENXIO;
+ 	}
+ 
+-	rc = set_handle_irq(&riscv_intc_irq);
++	if (riscv_isa_extension_available(NULL, SxAIA)) {
++		riscv_intc_nr_irqs = 64;
++		rc = set_handle_irq(&riscv_intc_aia_irq);
++	} else {
++		rc = set_handle_irq(&riscv_intc_irq);
++	}
+ 	if (rc) {
+ 		pr_err("failed to set irq handler\n");
+ 		return rc;
+@@ -176,11 +197,11 @@ static int __init riscv_intc_init_common(struct fwnode_handle *fn,
+ 
+ 	riscv_set_intc_hwnode_fn(riscv_intc_hwnode);
+ 
+-	pr_info("%d local interrupts mapped\n", riscv_intc_nr_irqs);
+-	if (riscv_intc_custom_nr_irqs) {
+-		pr_info("%d custom local interrupts mapped\n",
+-			riscv_intc_custom_nr_irqs);
+-	}
++	pr_info("%d local interrupts mapped%s\n",
++		riscv_intc_nr_irqs,
++		riscv_isa_extension_available(NULL, SxAIA) ? " using AIA" : "");
++	if (riscv_intc_custom_nr_irqs)
++		pr_info("%d custom local interrupts mapped\n", riscv_intc_custom_nr_irqs);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/irqchip/irq-sifive-plic.c b/drivers/irqchip/irq-sifive-plic.c
+index 9ccf989b945c..2b48b5f18259 100644
+--- a/drivers/irqchip/irq-sifive-plic.c
++++ b/drivers/irqchip/irq-sifive-plic.c
+@@ -3,7 +3,6 @@
+  * Copyright (C) 2017 SiFive
+  * Copyright (C) 2018 Christoph Hellwig
+  */
+-#define pr_fmt(fmt) "plic: " fmt
+ #include <linux/cpu.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -66,6 +65,7 @@
+ unsigned long *andes_wake_event;
+ 
+ struct plic_priv {
++	struct device *dev;
+ 	struct cpumask lmask;
+ 	struct irq_domain *irqdomain;
+ 	void __iomem *regs;
+@@ -105,9 +105,11 @@ static void __plic_toggle(void __iomem *enable_base, int hwirq, int enable)
+ 
+ static void plic_toggle(struct plic_handler *handler, int hwirq, int enable)
+ {
+-	raw_spin_lock(&handler->enable_lock);
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&handler->enable_lock, flags);
+ 	__plic_toggle(handler->enable_base, hwirq, enable);
+-	raw_spin_unlock(&handler->enable_lock);
++	raw_spin_unlock_irqrestore(&handler->enable_lock, flags);
+ }
+ 
+ static inline void plic_irq_toggle(const struct cpumask *mask,
+@@ -254,6 +256,7 @@ static int plic_irq_set_type(struct irq_data *d, unsigned int type)
+ static int plic_irq_suspend(void)
+ {
+ 	unsigned int i, cpu;
++	unsigned long flags;
+ 	u32 __iomem *reg;
+ 	struct plic_priv *priv;
+ 
+@@ -271,12 +274,12 @@ static int plic_irq_suspend(void)
+ 		if (!handler->present)
+ 			continue;
+ 
+-		raw_spin_lock(&handler->enable_lock);
++		raw_spin_lock_irqsave(&handler->enable_lock, flags);
+ 		for (i = 0; i < DIV_ROUND_UP(priv->nr_irqs, 32); i++) {
+ 			reg = handler->enable_base + i * sizeof(u32);
+ 			handler->enable_save[i] = readl(reg);
+ 		}
+-		raw_spin_unlock(&handler->enable_lock);
++		raw_spin_unlock_irqrestore(&handler->enable_lock, flags);
+ 	}
+ 
+ 	return 0;
+@@ -285,6 +288,7 @@ static int plic_irq_suspend(void)
+ static void plic_irq_resume(void)
+ {
+ 	unsigned int i, index, cpu;
++	unsigned long flags;
+ 	u32 __iomem *reg;
+ 	struct plic_priv *priv;
+ 
+@@ -302,12 +306,12 @@ static void plic_irq_resume(void)
+ 		if (!handler->present)
+ 			continue;
+ 
+-		raw_spin_lock(&handler->enable_lock);
++		raw_spin_lock_irqsave(&handler->enable_lock, flags);
+ 		for (i = 0; i < DIV_ROUND_UP(priv->nr_irqs, 32); i++) {
+ 			reg = handler->enable_base + i * sizeof(u32);
+ 			writel(handler->enable_save[i], reg);
+ 		}
+-		raw_spin_unlock(&handler->enable_lock);
++		raw_spin_unlock_irqrestore(&handler->enable_lock, flags);
+ 	}
+ }
+ 
+@@ -388,9 +392,10 @@ static void plic_handle_irq(struct irq_desc *desc)
+ 	while ((hwirq = readl(claim))) {
+ 		int err = generic_handle_domain_irq(handler->priv->irqdomain,
+ 						    hwirq);
+-		if (unlikely(err))
+-			pr_warn_ratelimited("can't find mapping for hwirq %lu\n",
+-					hwirq);
++		if (unlikely(err)) {
++			dev_warn_ratelimited(handler->priv->dev,
++					     "can't find mapping for hwirq %lu\n", hwirq);
++		}
+ 	}
+ 
+ 	chained_irq_exit(chip, desc);
+@@ -418,67 +423,126 @@ static int plic_starting_cpu(unsigned int cpu)
+ 		enable_percpu_irq(plic_parent_irq,
+ 				  irq_get_trigger_type(plic_parent_irq));
+ 	else
+-		pr_warn("cpu%d: parent irq not available\n", cpu);
++		dev_warn(handler->priv->dev, "cpu%d: parent irq not available\n", cpu);
+ 	plic_set_threshold(handler, PLIC_ENABLE_THRESHOLD);
+ 
+ 	return 0;
+ }
+ 
+-static int __init __plic_init(struct device_node *node,
+-			      struct device_node *parent,
+-			      unsigned long plic_quirks)
++static const struct of_device_id plic_match[] = {
++	{ .compatible = "sifive,plic-1.0.0" },
++	{ .compatible = "riscv,plic0" },
++	{ .compatible = "andestech,nceplic100",
++	  .data = (const void *)BIT(PLIC_QUIRK_EDGE_INTERRUPT) },
++	{ .compatible = "thead,c900-plic",
++	  .data = (const void *)BIT(PLIC_QUIRK_EDGE_INTERRUPT) },
++	{}
++};
++
++static int plic_parse_nr_irqs_and_contexts(struct platform_device *pdev,
++					   u32 *nr_irqs, u32 *nr_contexts)
+ {
+-	int error = 0, nr_contexts, nr_handlers = 0, i;
+-	u32 nr_irqs;
+-	struct plic_priv *priv;
++	struct device *dev = &pdev->dev;
++	int rc;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(dev->fwnode))
++		return -EINVAL;
++
++	rc = of_property_read_u32(to_of_node(dev->fwnode), "riscv,ndev", nr_irqs);
++	if (rc) {
++		dev_err(dev, "riscv,ndev property not available\n");
++		return rc;
++	}
++
++	*nr_contexts = of_irq_count(to_of_node(dev->fwnode));
++	if (WARN_ON(!(*nr_contexts))) {
++		dev_err(dev, "no PLIC context available\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static int plic_parse_context_parent(struct platform_device *pdev, u32 context,
++				     u32 *parent_hwirq, int *parent_cpu)
++{
++	struct device *dev = &pdev->dev;
++	struct of_phandle_args parent;
++	unsigned long hartid;
++	int rc;
++
++	/*
++	 * Currently, only OF fwnode is supported so extend this
++	 * function for ACPI support.
++	 */
++	if (!is_of_node(dev->fwnode))
++		return -EINVAL;
++
++	rc = of_irq_parse_one(to_of_node(dev->fwnode), context, &parent);
++	if (rc)
++		return rc;
++
++	rc = riscv_of_parent_hartid(parent.np, &hartid);
++	if (rc)
++		return rc;
++
++	*parent_hwirq = parent.args[0];
++	*parent_cpu = riscv_hartid_to_cpuid(hartid);
++	return 0;
++}
++
++static int plic_probe(struct platform_device *pdev)
++{
++	int error = 0, nr_contexts, nr_handlers = 0, cpu, i;
++	struct device *dev = &pdev->dev;
++	unsigned long plic_quirks = 0;
+ 	struct plic_handler *handler;
+-	unsigned int cpu;
++	u32 nr_irqs, parent_hwirq;
++	struct irq_domain *domain;
++	struct plic_priv *priv;
++	irq_hw_number_t hwirq;
++	bool cpuhp_setup;
++
++	if (is_of_node(dev->fwnode)) {
++		const struct of_device_id *id;
++
++		id = of_match_node(plic_match, to_of_node(dev->fwnode));
++		if (id)
++			plic_quirks = (unsigned long)id->data;
++	}
+ 
+ 	andes_wake_event = kzalloc(sizeof(unsigned long), GFP_KERNEL);
+ 	if (WARN_ON(!andes_wake_event))
+ 		return -ENOMEM;
+ 
+-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
++	error = plic_parse_nr_irqs_and_contexts(pdev, &nr_irqs, &nr_contexts);
++	if (error)
++		return error;
++
++	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+ 	if (!priv)
+ 		return -ENOMEM;
+ 
++	priv->dev = dev;
+ 	priv->plic_quirks = plic_quirks;
+-
+-	priv->regs = of_iomap(node, 0);
+-	if (WARN_ON(!priv->regs)) {
+-		error = -EIO;
+-		goto out_free_priv;
+-	}
+-
+-	error = -EINVAL;
+-	of_property_read_u32(node, "riscv,ndev", &nr_irqs);
+-	if (WARN_ON(!nr_irqs))
+-		goto out_iounmap;
+-
+ 	priv->nr_irqs = nr_irqs;
+ 
+-	priv->prio_save = bitmap_alloc(nr_irqs, GFP_KERNEL);
+-	if (!priv->prio_save)
+-		goto out_free_priority_reg;
+-
+-	nr_contexts = of_irq_count(node);
+-	if (WARN_ON(!nr_contexts))
+-		goto out_free_priority_reg;
++	priv->regs = devm_platform_ioremap_resource(pdev, 0);
++	if (WARN_ON(!priv->regs))
++		return -EIO;
+ 
+-	error = -ENOMEM;
+-	priv->irqdomain = irq_domain_add_linear(node, nr_irqs + 1,
+-			&plic_irqdomain_ops, priv);
+-	if (WARN_ON(!priv->irqdomain))
+-		goto out_free_priority_reg;
++	priv->prio_save = devm_bitmap_zalloc(dev, nr_irqs, GFP_KERNEL);
++	if (!priv->prio_save)
++		return -ENOMEM;
+ 
+ 	for (i = 0; i < nr_contexts; i++) {
+-		struct of_phandle_args parent;
+-		irq_hw_number_t hwirq;
+-		int cpu;
+-		unsigned long hartid;
+-
+-		if (of_irq_parse_one(node, i, &parent)) {
+-			pr_err("failed to parse parent for context %d.\n", i);
++		error = plic_parse_context_parent(pdev, i, &parent_hwirq, &cpu);
++		if (error) {
++			dev_warn(dev, "hwirq for context%d not found\n", i);
+ 			continue;
+ 		}
+ 
+@@ -486,7 +550,7 @@ static int __init __plic_init(struct device_node *node,
+ 		 * Skip contexts other than external interrupts for our
+ 		 * privilege level.
+ 		 */
+-		if (parent.args[0] != RV_IRQ_EXT) {
++		if (parent_hwirq != RV_IRQ_EXT) {
+ 			/* Disable S-mode enable bits if running in M-mode. */
+ 			if (IS_ENABLED(CONFIG_RISCV_M_MODE)) {
+ 				void __iomem *enable_base = priv->regs +
+@@ -499,24 +563,17 @@ static int __init __plic_init(struct device_node *node,
+ 			continue;
+ 		}
+ 
+-		error = riscv_of_parent_hartid(parent.np, &hartid);
+-		if (error < 0) {
+-			pr_warn("failed to parse hart ID for context %d.\n", i);
+-			continue;
+-		}
+-
+-		cpu = riscv_hartid_to_cpuid(hartid);
+ 		if (cpu < 0) {
+-			pr_warn("Invalid cpuid for context %d\n", i);
++			dev_warn(dev, "Invalid cpuid for context %d\n", i);
+ 			continue;
+ 		}
+ 
+ 		/* Find parent domain and register chained handler */
+-		if (!plic_parent_irq && irq_find_host(parent.np)) {
+-			plic_parent_irq = irq_of_parse_and_map(node, i);
++		domain = irq_find_matching_fwnode(riscv_get_intc_hwnode(), DOMAIN_BUS_ANY);
++		if (!plic_parent_irq && domain) {
++			plic_parent_irq = irq_create_mapping(domain, RV_IRQ_EXT);
+ 			if (plic_parent_irq)
+-				irq_set_chained_handler(plic_parent_irq,
+-							plic_handle_irq);
++				irq_set_chained_handler(plic_parent_irq, plic_handle_irq);
+ 		}
+ 
+ 		/*
+@@ -526,7 +583,7 @@ static int __init __plic_init(struct device_node *node,
+ 		 */
+ 		handler = per_cpu_ptr(&plic_handlers, cpu);
+ 		if (handler->present) {
+-			pr_warn("handler already present for context %d.\n", i);
++			dev_warn(dev, "handler already present for context %d.\n", i);
+ 			plic_set_threshold(handler, PLIC_DISABLE_THRESHOLD);
+ 			goto done;
+ 		}
+@@ -540,10 +597,10 @@ static int __init __plic_init(struct device_node *node,
+ 			i * CONTEXT_ENABLE_SIZE;
+ 		handler->priv = priv;
+ 
+-		handler->enable_save =  kcalloc(DIV_ROUND_UP(nr_irqs, 32),
+-						sizeof(*handler->enable_save), GFP_KERNEL);
++		handler->enable_save = devm_kcalloc(dev, DIV_ROUND_UP(nr_irqs, 32),
++						    sizeof(*handler->enable_save), GFP_KERNEL);
+ 		if (!handler->enable_save)
+-			goto out_free_enable_reg;
++			goto fail_cleanup_contexts;
+ done:
+ 		for (hwirq = 1; hwirq <= nr_irqs; hwirq++) {
+ 			plic_toggle(handler, hwirq, 0);
+@@ -553,52 +610,60 @@ static int __init __plic_init(struct device_node *node,
+ 		nr_handlers++;
+ 	}
+ 
++	priv->irqdomain = irq_domain_add_linear(to_of_node(dev->fwnode), nr_irqs + 1,
++						&plic_irqdomain_ops, priv);
++	if (WARN_ON(!priv->irqdomain))
++		goto fail_cleanup_contexts;
++
+ 	/*
+ 	 * We can have multiple PLIC instances so setup cpuhp state
+-	 * and register syscore operations only when context handler
+-	 * for current/boot CPU is present.
++	 * and register syscore operations only once after context
++	 * handlers of all online CPUs are initialized.
+ 	 */
+-	handler = this_cpu_ptr(&plic_handlers);
+-	if (handler->present && !plic_cpuhp_setup_done) {
+-		cpuhp_setup_state(CPUHP_AP_IRQ_SIFIVE_PLIC_STARTING,
+-				  "irqchip/sifive/plic:starting",
+-				  plic_starting_cpu, plic_dying_cpu);
+-		register_syscore_ops(&plic_irq_syscore_ops);
+-		plic_cpuhp_setup_done = true;
++	if (!plic_cpuhp_setup_done) {
++		cpuhp_setup = true;
++		for_each_online_cpu(cpu) {
++			handler = per_cpu_ptr(&plic_handlers, cpu);
++			if (!handler->present) {
++				cpuhp_setup = false;
++				break;
++			}
++		}
++		if (cpuhp_setup) {
++			cpuhp_setup_state(CPUHP_AP_IRQ_SIFIVE_PLIC_STARTING,
++					  "irqchip/sifive/plic:starting",
++					  plic_starting_cpu, plic_dying_cpu);
++			register_syscore_ops(&plic_irq_syscore_ops);
++			plic_cpuhp_setup_done = true;
++		}
+ 	}
+ 
+-	pr_info("%pOFP: mapped %d interrupts with %d handlers for"
+-		" %d contexts.\n", node, nr_irqs, nr_handlers, nr_contexts);
++	dev_info(dev, "mapped %d interrupts with %d handlers for %d contexts.\n",
++		 nr_irqs, nr_handlers, nr_contexts);
+ 	return 0;
+ 
+-out_free_enable_reg:
+-	for_each_cpu(cpu, cpu_present_mask) {
++fail_cleanup_contexts:
++	for (i = 0; i < nr_contexts; i++) {
++		if (plic_parse_context_parent(pdev, i, &parent_hwirq, &cpu))
++			continue;
++		if (parent_hwirq != RV_IRQ_EXT || cpu < 0)
++			continue;
++
+ 		handler = per_cpu_ptr(&plic_handlers, cpu);
+-		kfree(handler->enable_save);
++		handler->present = false;
++		handler->hart_base = NULL;
++		handler->enable_base = NULL;
++		handler->enable_save = NULL;
++		handler->priv = NULL;
+ 	}
+-out_free_priority_reg:
+-	kfree(priv->prio_save);
+-out_iounmap:
+-	iounmap(priv->regs);
+-out_free_priv:
+-	kfree(priv);
+-	return error;
++	return -ENOMEM;
+ }
+ 
+-static int __init plic_init(struct device_node *node,
+-			    struct device_node *parent)
+-{
+-	return __plic_init(node, parent, 0);
+-}
+-
+-IRQCHIP_DECLARE(sifive_plic, "sifive,plic-1.0.0", plic_init);
+-IRQCHIP_DECLARE(riscv_plic0, "riscv,plic0", plic_init); /* for legacy systems */
+-
+-static int __init plic_edge_init(struct device_node *node,
+-				 struct device_node *parent)
+-{
+-	return __plic_init(node, parent, BIT(PLIC_QUIRK_EDGE_INTERRUPT));
+-}
+-
+-IRQCHIP_DECLARE(andestech_nceplic100, "andestech,nceplic100", plic_edge_init);
+-IRQCHIP_DECLARE(thead_c900_plic, "thead,c900-plic", plic_edge_init);
++static struct platform_driver plic_driver = {
++	.driver = {
++		.name		= "riscv-plic",
++		.of_match_table	= plic_match,
++	},
++	.probe = plic_probe,
++};
++builtin_platform_driver(plic_driver);
+diff --git a/drivers/mailbox/bcm-flexrm-mailbox.c b/drivers/mailbox/bcm-flexrm-mailbox.c
+index a2b8839d4e7c..7094d44869a8 100644
+--- a/drivers/mailbox/bcm-flexrm-mailbox.c
++++ b/drivers/mailbox/bcm-flexrm-mailbox.c
+@@ -1587,8 +1587,8 @@ static int flexrm_mbox_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	/* Allocate platform MSIs for each ring */
+-	ret = platform_msi_domain_alloc_irqs(dev, mbox->num_rings,
+-						flexrm_mbox_msi_write);
++	ret = platform_device_msi_init_and_alloc_irqs(dev, mbox->num_rings,
++						      flexrm_mbox_msi_write);
+ 	if (ret)
+ 		goto fail_destroy_cmpl_pool;
+ 
+@@ -1641,7 +1641,7 @@ static int flexrm_mbox_probe(struct platform_device *pdev)
+ 
+ fail_free_debugfs_root:
+ 	debugfs_remove_recursive(mbox->root);
+-	platform_msi_domain_free_irqs(dev);
++	platform_device_msi_free_irqs_all(dev);
+ fail_destroy_cmpl_pool:
+ 	dma_pool_destroy(mbox->cmpl_pool);
+ fail_destroy_bd_pool:
+@@ -1657,7 +1657,7 @@ static int flexrm_mbox_remove(struct platform_device *pdev)
+ 
+ 	debugfs_remove_recursive(mbox->root);
+ 
+-	platform_msi_domain_free_irqs(dev);
++	platform_device_msi_free_irqs_all(dev);
+ 
+ 	dma_pool_destroy(mbox->cmpl_pool);
+ 	dma_pool_destroy(mbox->bd_pool);
+diff --git a/drivers/mmc/host/ftsdc010.c b/drivers/mmc/host/ftsdc010.c
+index 8d41b16c97e8..1bee6fcdbfc7 100644
+--- a/drivers/mmc/host/ftsdc010.c
++++ b/drivers/mmc/host/ftsdc010.c
+@@ -1387,7 +1387,7 @@ static struct ftsdc_mmc_config
+ 	return pdata;
+ }
+ 
+-static int __init ftsdc_probe(struct platform_device *pdev)
++static int ftsdc_probe(struct platform_device *pdev)
+ {
+ 	int (*read_fixup)(void __iomem *addr, unsigned int val,
+ 		unsigned int shift_bits);
+@@ -1424,7 +1424,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	ret = -ENOMEM;
+ 	mmc = mmc_alloc_host(sizeof(struct ftsdc_host), &pdev->dev);
+ 	if (!mmc)
+-		goto probe_out;
++		goto probe_free_mem_region;
+ 
+ 	host = mmc_priv(mmc);
+ 	host->mmc = mmc;
+@@ -1448,7 +1448,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	host->base = (void __iomem *) ioremap(mem->start, mem_size);
+ 	if (IS_ERR(host->base)) {
+ 		ret = PTR_ERR(host->base);
+-		goto probe_free_mem_region;
++		goto probe_free_host;
+ 	}
+ 
+ 	/* Check revision register */
+@@ -1461,7 +1461,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 		dev_err(&pdev->dev,
+ 			"bitmap revision mismatch(ftsdc)\n");
+ 		ret = -ENXIO;
+-		goto probe_free_mem_region;
++		goto probe_free_host;
+ 	}
+ 
+ 	host->irq = irq;
+@@ -1470,7 +1470,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	if (ret) {
+ 		dev_err(&pdev->dev, "failed to request mci interrupt.\n");
+ 		ret = -ENOENT;
+-		goto probe_free_mem_region;
++		goto probe_free_host;
+ 	}
+ 	host->irq_enabled = true;
+ 	/* enable card change interruption */
+@@ -1520,15 +1520,15 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+  probe_free_irq:
+ 	free_irq(host->irq, host);
+ 
+- probe_free_mem_region:
+-	release_mem_region(host->mem->start, resource_size(host->mem));
+-	destroy_workqueue(mywq);
+-
+  probe_free_host:
+ 	if (!IS_ERR(host->dma.chan))
+ 		dma_release_channel(host->dma.chan);
+ 	mmc_free_host(mmc);
+ 
++ probe_free_mem_region:
++	release_mem_region(host->mem->start, resource_size(host->mem));
++	destroy_workqueue(mywq);
++
+  probe_out:
+ 	return ret;
+ }
+@@ -1612,9 +1612,10 @@ static struct platform_driver ftsdc_driver = {
+ 	.shutdown	= ftsdc_shutdown,
+ 	.suspend	= ftsdc_suspend,
+ 	.resume		= ftsdc_resume,
++	.probe		= ftsdc_probe,
+ };
+ 
+-module_platform_driver_probe(ftsdc_driver, ftsdc_probe);
++module_platform_driver(ftsdc_driver);
+ MODULE_DESCRIPTION("Andes MMC/SD Card driver");
+ MODULE_AUTHOR("Rick Chen <rick@andestech.com>");
+ MODULE_LICENSE("GPL v2");
+diff --git a/drivers/of/property.c b/drivers/of/property.c
+index b3f0285e401c..15d115684325 100644
+--- a/drivers/of/property.c
++++ b/drivers/of/property.c
+@@ -1238,6 +1238,7 @@ DEFINE_SIMPLE_PROP(resets, "resets", "#reset-cells")
+ DEFINE_SIMPLE_PROP(leds, "leds", NULL)
+ DEFINE_SIMPLE_PROP(backlight, "backlight", NULL)
+ DEFINE_SIMPLE_PROP(panel, "panel", NULL)
++DEFINE_SIMPLE_PROP(msi_parent, "msi-parent", "#msi-cells")
+ DEFINE_SUFFIX_PROP(regulators, "-supply", NULL)
+ DEFINE_SUFFIX_PROP(gpio, "-gpio", "#gpio-cells")
+ 
+@@ -1341,6 +1342,7 @@ static const struct supplier_bindings of_supplier_bindings[] = {
+ 	{ .parse_prop = parse_leds, },
+ 	{ .parse_prop = parse_backlight, },
+ 	{ .parse_prop = parse_panel, },
++	{ .parse_prop = parse_msi_parent, },
+ 	{ .parse_prop = parse_gpio_compat, },
+ 	{ .parse_prop = parse_interrupts, },
+ 	{ .parse_prop = parse_regulators, },
+diff --git a/drivers/perf/arm_smmuv3_pmu.c b/drivers/perf/arm_smmuv3_pmu.c
+index 6303b82566f9..9e5d7fa647b6 100644
+--- a/drivers/perf/arm_smmuv3_pmu.c
++++ b/drivers/perf/arm_smmuv3_pmu.c
+@@ -716,7 +716,7 @@ static void smmu_pmu_free_msis(void *data)
+ {
+ 	struct device *dev = data;
+ 
+-	platform_msi_domain_free_irqs(dev);
++	platform_device_msi_free_irqs_all(dev);
+ }
+ 
+ static void smmu_pmu_write_msi_msg(struct msi_desc *desc, struct msi_msg *msg)
+@@ -746,7 +746,7 @@ static void smmu_pmu_setup_msi(struct smmu_pmu *pmu)
+ 	if (!(readl(pmu->reg_base + SMMU_PMCG_CFGR) & SMMU_PMCG_CFGR_MSI))
+ 		return;
+ 
+-	ret = platform_msi_domain_alloc_irqs(dev, 1, smmu_pmu_write_msi_msg);
++	ret = platform_device_msi_init_and_alloc_irqs(dev, 1, smmu_pmu_write_msi_msg);
+ 	if (ret) {
+ 		dev_warn(dev, "failed to allocate MSIs\n");
+ 		return;
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+index 922ae1d76d90..44f290ad3bb0 100644
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -1816,8 +1816,8 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
+ 	 * 2. Poll queues do not need ESI.
+ 	 */
+ 	nr_irqs = hba->nr_hw_queues - hba->nr_queues[HCTX_TYPE_POLL];
+-	ret = platform_msi_domain_alloc_irqs(hba->dev, nr_irqs,
+-					     ufs_qcom_write_msi_msg);
++	ret = platform_device_msi_init_and_alloc_irqs(hba->dev, nr_irqs,
++						      ufs_qcom_write_msi_msg);
+ 	if (ret) {
+ 		dev_err(hba->dev, "Failed to request Platform MSI %d\n", ret);
+ 		goto out;
+@@ -1846,7 +1846,7 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
+ 			devm_free_irq(hba->dev, desc->irq, hba);
+ 		}
+ 		msi_unlock_descs(hba->dev);
+-		platform_msi_domain_free_irqs(hba->dev);
++		platform_device_msi_free_irqs_all(hba->dev);
+ 	} else {
+ 		if (host->hw_ver.major == 6 && host->hw_ver.minor == 0 &&
+ 		    host->hw_ver.step == 0) {
+@@ -1926,7 +1926,7 @@ static int ufs_qcom_remove(struct platform_device *pdev)
+ 
+ 	pm_runtime_get_sync(&(pdev)->dev);
+ 	ufshcd_remove(hba);
+-	platform_msi_domain_free_irqs(hba->dev);
++	platform_device_msi_free_irqs_all(hba->dev);
+ 	return 0;
+ }
+ 
+diff --git a/include/linux/cpuhotplug.h b/include/linux/cpuhotplug.h
+index 624d4a38c358..c66f4c65e4bd 100644
+--- a/include/linux/cpuhotplug.h
++++ b/include/linux/cpuhotplug.h
+@@ -154,6 +154,7 @@ enum cpuhp_state {
+ 	CPUHP_AP_IRQ_RISCV_STARTING,
+ 	CPUHP_AP_IRQ_LOONGARCH_STARTING,
+ 	CPUHP_AP_IRQ_SIFIVE_PLIC_STARTING,
++	CPUHP_AP_IRQ_RISCV_IMSIC_STARTING,
+ 	CPUHP_AP_ARM_MVEBU_COHERENCY,
+ 	CPUHP_AP_MICROCODE_LOADER,
+ 	CPUHP_AP_PERF_X86_AMD_UNCORE_STARTING,
+diff --git a/include/linux/irqchip/riscv-aplic.h b/include/linux/irqchip/riscv-aplic.h
+new file mode 100644
+index 000000000000..ec8f7df50583
+--- /dev/null
++++ b/include/linux/irqchip/riscv-aplic.h
+@@ -0,0 +1,145 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++#ifndef __LINUX_IRQCHIP_RISCV_APLIC_H
++#define __LINUX_IRQCHIP_RISCV_APLIC_H
++
++#include <linux/bitops.h>
++
++#define APLIC_MAX_IDC			BIT(14)
++#define APLIC_MAX_SOURCE		1024
++
++#define APLIC_DOMAINCFG			0x0000
++#define APLIC_DOMAINCFG_RDONLY		0x80000000
++#define APLIC_DOMAINCFG_IE		BIT(8)
++#define APLIC_DOMAINCFG_DM		BIT(2)
++#define APLIC_DOMAINCFG_BE		BIT(0)
++
++#define APLIC_SOURCECFG_BASE		0x0004
++#define APLIC_SOURCECFG_D		BIT(10)
++#define APLIC_SOURCECFG_CHILDIDX_MASK	0x000003ff
++#define APLIC_SOURCECFG_SM_MASK	0x00000007
++#define APLIC_SOURCECFG_SM_INACTIVE	0x0
++#define APLIC_SOURCECFG_SM_DETACH	0x1
++#define APLIC_SOURCECFG_SM_EDGE_RISE	0x4
++#define APLIC_SOURCECFG_SM_EDGE_FALL	0x5
++#define APLIC_SOURCECFG_SM_LEVEL_HIGH	0x6
++#define APLIC_SOURCECFG_SM_LEVEL_LOW	0x7
++
++#define APLIC_MMSICFGADDR		0x1bc0
++#define APLIC_MMSICFGADDRH		0x1bc4
++#define APLIC_SMSICFGADDR		0x1bc8
++#define APLIC_SMSICFGADDRH		0x1bcc
++
++#ifdef CONFIG_RISCV_M_MODE
++#define APLIC_xMSICFGADDR		APLIC_MMSICFGADDR
++#define APLIC_xMSICFGADDRH		APLIC_MMSICFGADDRH
++#else
++#define APLIC_xMSICFGADDR		APLIC_SMSICFGADDR
++#define APLIC_xMSICFGADDRH		APLIC_SMSICFGADDRH
++#endif
++
++#define APLIC_xMSICFGADDRH_L		BIT(31)
++#define APLIC_xMSICFGADDRH_HHXS_MASK	0x1f
++#define APLIC_xMSICFGADDRH_HHXS_SHIFT	24
++#define APLIC_xMSICFGADDRH_HHXS		(APLIC_xMSICFGADDRH_HHXS_MASK << \
++					 APLIC_xMSICFGADDRH_HHXS_SHIFT)
++#define APLIC_xMSICFGADDRH_LHXS_MASK	0x7
++#define APLIC_xMSICFGADDRH_LHXS_SHIFT	20
++#define APLIC_xMSICFGADDRH_LHXS		(APLIC_xMSICFGADDRH_LHXS_MASK << \
++					 APLIC_xMSICFGADDRH_LHXS_SHIFT)
++#define APLIC_xMSICFGADDRH_HHXW_MASK	0x7
++#define APLIC_xMSICFGADDRH_HHXW_SHIFT	16
++#define APLIC_xMSICFGADDRH_HHXW		(APLIC_xMSICFGADDRH_HHXW_MASK << \
++					 APLIC_xMSICFGADDRH_HHXW_SHIFT)
++#define APLIC_xMSICFGADDRH_LHXW_MASK	0xf
++#define APLIC_xMSICFGADDRH_LHXW_SHIFT	12
++#define APLIC_xMSICFGADDRH_LHXW		(APLIC_xMSICFGADDRH_LHXW_MASK << \
++					 APLIC_xMSICFGADDRH_LHXW_SHIFT)
++#define APLIC_xMSICFGADDRH_BAPPN_MASK	0xfff
++#define APLIC_xMSICFGADDRH_BAPPN_SHIFT	0
++#define APLIC_xMSICFGADDRH_BAPPN	(APLIC_xMSICFGADDRH_BAPPN_MASK << \
++					 APLIC_xMSICFGADDRH_BAPPN_SHIFT)
++
++#define APLIC_xMSICFGADDR_PPN_SHIFT	12
++
++#define APLIC_xMSICFGADDR_PPN_HART(__lhxs) \
++	(BIT(__lhxs) - 1)
++
++#define APLIC_xMSICFGADDR_PPN_LHX_MASK(__lhxw) \
++	(BIT(__lhxw) - 1)
++#define APLIC_xMSICFGADDR_PPN_LHX_SHIFT(__lhxs) \
++	((__lhxs))
++#define APLIC_xMSICFGADDR_PPN_LHX(__lhxw, __lhxs) \
++	(APLIC_xMSICFGADDR_PPN_LHX_MASK(__lhxw) << \
++	 APLIC_xMSICFGADDR_PPN_LHX_SHIFT(__lhxs))
++
++#define APLIC_xMSICFGADDR_PPN_HHX_MASK(__hhxw) \
++	(BIT(__hhxw) - 1)
++#define APLIC_xMSICFGADDR_PPN_HHX_SHIFT(__hhxs) \
++	((__hhxs) + APLIC_xMSICFGADDR_PPN_SHIFT)
++#define APLIC_xMSICFGADDR_PPN_HHX(__hhxw, __hhxs) \
++	(APLIC_xMSICFGADDR_PPN_HHX_MASK(__hhxw) << \
++	 APLIC_xMSICFGADDR_PPN_HHX_SHIFT(__hhxs))
++
++#define APLIC_IRQBITS_PER_REG		32
++
++#define APLIC_SETIP_BASE		0x1c00
++#define APLIC_SETIPNUM			0x1cdc
++
++#define APLIC_CLRIP_BASE		0x1d00
++#define APLIC_CLRIPNUM			0x1ddc
++
++#define APLIC_SETIE_BASE		0x1e00
++#define APLIC_SETIENUM			0x1edc
++
++#define APLIC_CLRIE_BASE		0x1f00
++#define APLIC_CLRIENUM			0x1fdc
++
++#define APLIC_SETIPNUM_LE		0x2000
++#define APLIC_SETIPNUM_BE		0x2004
++
++#define APLIC_GENMSI			0x3000
++
++#define APLIC_TARGET_BASE		0x3004
++#define APLIC_TARGET_HART_IDX_SHIFT	18
++#define APLIC_TARGET_HART_IDX_MASK	0x3fff
++#define APLIC_TARGET_HART_IDX		(APLIC_TARGET_HART_IDX_MASK << \
++					 APLIC_TARGET_HART_IDX_SHIFT)
++#define APLIC_TARGET_GUEST_IDX_SHIFT	12
++#define APLIC_TARGET_GUEST_IDX_MASK	0x3f
++#define APLIC_TARGET_GUEST_IDX		(APLIC_TARGET_GUEST_IDX_MASK << \
++					 APLIC_TARGET_GUEST_IDX_SHIFT)
++#define APLIC_TARGET_IPRIO_SHIFT	0
++#define APLIC_TARGET_IPRIO_MASK		0xff
++#define APLIC_TARGET_IPRIO		(APLIC_TARGET_IPRIO_MASK << \
++					 APLIC_TARGET_IPRIO_SHIFT)
++#define APLIC_TARGET_EIID_SHIFT		0
++#define APLIC_TARGET_EIID_MASK		0x7ff
++#define APLIC_TARGET_EIID		(APLIC_TARGET_EIID_MASK << \
++					 APLIC_TARGET_EIID_SHIFT)
++
++#define APLIC_IDC_BASE			0x4000
++#define APLIC_IDC_SIZE			32
++
++#define APLIC_IDC_IDELIVERY		0x00
++
++#define APLIC_IDC_IFORCE		0x04
++
++#define APLIC_IDC_ITHRESHOLD		0x08
++
++#define APLIC_IDC_TOPI			0x18
++#define APLIC_IDC_TOPI_ID_SHIFT		16
++#define APLIC_IDC_TOPI_ID_MASK		0x3ff
++#define APLIC_IDC_TOPI_ID		(APLIC_IDC_TOPI_ID_MASK << \
++					 APLIC_IDC_TOPI_ID_SHIFT)
++#define APLIC_IDC_TOPI_PRIO_SHIFT	0
++#define APLIC_IDC_TOPI_PRIO_MASK	0xff
++#define APLIC_IDC_TOPI_PRIO		(APLIC_IDC_TOPI_PRIO_MASK << \
++					 APLIC_IDC_TOPI_PRIO_SHIFT)
++
++#define APLIC_IDC_CLAIMI		0x1c
++
++#endif
+diff --git a/include/linux/irqchip/riscv-imsic.h b/include/linux/irqchip/riscv-imsic.h
+new file mode 100644
+index 000000000000..faf0b800b1b0
+--- /dev/null
++++ b/include/linux/irqchip/riscv-imsic.h
+@@ -0,0 +1,87 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (C) 2021 Western Digital Corporation or its affiliates.
++ * Copyright (C) 2022 Ventana Micro Systems Inc.
++ */
++#ifndef __LINUX_IRQCHIP_RISCV_IMSIC_H
++#define __LINUX_IRQCHIP_RISCV_IMSIC_H
++
++#include <linux/types.h>
++#include <linux/bitops.h>
++#include <asm/csr.h>
++
++#define IMSIC_MMIO_PAGE_SHIFT		12
++#define IMSIC_MMIO_PAGE_SZ		BIT(IMSIC_MMIO_PAGE_SHIFT)
++#define IMSIC_MMIO_PAGE_LE		0x00
++#define IMSIC_MMIO_PAGE_BE		0x04
++
++#define IMSIC_MIN_ID			63
++#define IMSIC_MAX_ID			2048
++
++#define IMSIC_EIDELIVERY		0x70
++
++#define IMSIC_EITHRESHOLD		0x72
++
++#define IMSIC_EIP0			0x80
++#define IMSIC_EIP63			0xbf
++#define IMSIC_EIPx_BITS			32
++
++#define IMSIC_EIE0			0xc0
++#define IMSIC_EIE63			0xff
++#define IMSIC_EIEx_BITS			32
++
++#define IMSIC_FIRST			IMSIC_EIDELIVERY
++#define IMSIC_LAST			IMSIC_EIE63
++
++#define IMSIC_MMIO_SETIPNUM_LE		0x00
++#define IMSIC_MMIO_SETIPNUM_BE		0x04
++
++struct imsic_local_config {
++	phys_addr_t				msi_pa;
++	void __iomem				*msi_va;
++};
++
++struct imsic_global_config {
++	/*
++	 * MSI Target Address Scheme
++	 *
++	 * XLEN-1                                                12     0
++	 * |                                                     |     |
++	 * -------------------------------------------------------------
++	 * |xxxxxx|Group Index|xxxxxxxxxxx|HART Index|Guest Index|  0  |
++	 * -------------------------------------------------------------
++	 */
++
++	/* Bits representing Guest index, HART index, and Group index */
++	u32					guest_index_bits;
++	u32					hart_index_bits;
++	u32					group_index_bits;
++	u32					group_index_shift;
++
++	/* Global base address matching all target MSI addresses */
++	phys_addr_t				base_addr;
++
++	/* Number of interrupt identities */
++	u32					nr_ids;
++
++	/* Number of guest interrupt identities */
++	u32					nr_guest_ids;
++
++	/* Per-CPU IMSIC addresses */
++	struct imsic_local_config __percpu	*local;
++};
++
++#ifdef CONFIG_RISCV_IMSIC
++
++const struct imsic_global_config *imsic_get_global_config(void);
++
++#else
++
++static inline const struct imsic_global_config *imsic_get_global_config(void)
++{
++	return NULL;
++}
++
++#endif
++
++#endif
+diff --git a/include/linux/irqdomain.h b/include/linux/irqdomain.h
+index 51c254b7fec2..be6d822a7813 100644
+--- a/include/linux/irqdomain.h
++++ b/include/linux/irqdomain.h
+@@ -619,6 +619,23 @@ static inline bool irq_domain_is_msi_device(struct irq_domain *domain)
+ 
+ #endif	/* CONFIG_IRQ_DOMAIN_HIERARCHY */
+ 
++#ifdef CONFIG_GENERIC_MSI_IRQ
++int msi_device_domain_alloc_wired(struct irq_domain *domain, unsigned int hwirq,
++				  unsigned int type);
++void msi_device_domain_free_wired(struct irq_domain *domain, unsigned int virq);
++#else
++static inline int msi_device_domain_alloc_wired(struct irq_domain *domain, unsigned int hwirq,
++						unsigned int type)
++{
++	WARN_ON_ONCE(1);
++	return -EINVAL;
++}
++static inline void msi_device_domain_free_wired(struct irq_domain *domain, unsigned int virq)
++{
++	WARN_ON_ONCE(1);
++}
++#endif
++
+ #else /* CONFIG_IRQ_DOMAIN */
+ static inline void irq_dispose_mapping(unsigned int virq) { }
+ static inline struct irq_domain *irq_find_matching_fwnode(
+diff --git a/include/linux/irqdomain_defs.h b/include/linux/irqdomain_defs.h
+index c29921fd8cd1..5c1fe6f1fcde 100644
+--- a/include/linux/irqdomain_defs.h
++++ b/include/linux/irqdomain_defs.h
+@@ -26,6 +26,8 @@ enum irq_domain_bus_token {
+ 	DOMAIN_BUS_DMAR,
+ 	DOMAIN_BUS_AMDVI,
+ 	DOMAIN_BUS_PCI_DEVICE_IMS,
++	DOMAIN_BUS_DEVICE_MSI,
++	DOMAIN_BUS_WIRED_TO_MSI,
+ };
+ 
+ #endif /* _LINUX_IRQDOMAIN_DEFS_H */
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index ddace8c34dcf..26d07e23052e 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -412,6 +412,7 @@ bool arch_restore_msi_irqs(struct pci_dev *dev);
+ struct irq_domain;
+ struct irq_domain_ops;
+ struct irq_chip;
++struct irq_fwspec;
+ struct device_node;
+ struct fwnode_handle;
+ struct msi_domain_info;
+@@ -431,6 +432,8 @@ struct msi_domain_info;
+  *			function.
+  * @msi_post_free:	Optional function which is invoked after freeing
+  *			all interrupts.
++ * @msi_translate:	Optional translate callback to support the odd wire to
++ *			MSI bridges, e.g. MBIGEN
+  *
+  * @get_hwirq, @msi_init and @msi_free are callbacks used by the underlying
+  * irqdomain.
+@@ -468,6 +471,8 @@ struct msi_domain_ops {
+ 					    struct device *dev);
+ 	void		(*msi_post_free)(struct irq_domain *domain,
+ 					 struct device *dev);
++	int		(*msi_translate)(struct irq_domain *domain, struct irq_fwspec *fwspec,
++					 irq_hw_number_t *hwirq, unsigned int *type);
+ };
+ 
+ /**
+@@ -547,6 +552,10 @@ enum {
+ 	MSI_FLAG_ALLOC_SIMPLE_MSI_DESCS	= (1 << 5),
+ 	/* Free MSI descriptors */
+ 	MSI_FLAG_FREE_MSI_DESCS		= (1 << 6),
++	/* Use dev->fwnode for MSI device domain creation */
++	MSI_FLAG_USE_DEV_FWNODE		= (1 << 7),
++	/* Set parent->dev into domain->pm_dev on device domain creation */
++	MSI_FLAG_PARENT_PM_DEV		= (1 << 8),
+ 
+ 	/* Mask for the generic functionality */
+ 	MSI_GENERIC_FLAGS_MASK		= GENMASK(15, 0),
+@@ -572,6 +581,11 @@ enum {
+  * struct msi_parent_ops - MSI parent domain callbacks and configuration info
+  *
+  * @supported_flags:	Required: The supported MSI flags of the parent domain
++ * @required_flags:	Optional: The required MSI flags of the parent MSI domain
++ * @bus_select_token:	Optional: The bus token of the real parent domain for
++ *			irq_domain::select()
++ * @bus_select_mask:	Optional: A mask of supported BUS_DOMAINs for
++ *			irq_domain::select()
+  * @prefix:		Optional: Prefix for the domain and chip name
+  * @init_dev_msi_info:	Required: Callback for MSI parent domains to setup parent
+  *			domain specific domain flags, domain ops and interrupt chip
+@@ -579,6 +593,9 @@ enum {
+  */
+ struct msi_parent_ops {
+ 	u32		supported_flags;
++	u32		required_flags;
++	u32		bus_select_token;
++	u32		bus_select_mask;
+ 	const char	*prefix;
+ 	bool		(*init_dev_msi_info)(struct device *dev, struct irq_domain *domain,
+ 					     struct irq_domain *msi_parent_domain,
+@@ -627,9 +644,6 @@ struct msi_domain_info *msi_get_domain_info(struct irq_domain *domain);
+ struct irq_domain *platform_msi_create_irq_domain(struct fwnode_handle *fwnode,
+ 						  struct msi_domain_info *info,
+ 						  struct irq_domain *parent);
+-int platform_msi_domain_alloc_irqs(struct device *dev, unsigned int nvec,
+-				   irq_write_msi_msg_t write_msi_msg);
+-void platform_msi_domain_free_irqs(struct device *dev);
+ 
+ /* When an MSI domain is used as an intermediate domain */
+ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
+@@ -656,6 +670,10 @@ int platform_msi_device_domain_alloc(struct irq_domain *domain, unsigned int vir
+ void platform_msi_device_domain_free(struct irq_domain *domain, unsigned int virq,
+ 				     unsigned int nvec);
+ void *platform_msi_get_host_data(struct irq_domain *domain);
++/* Per device platform MSI */
++int platform_device_msi_init_and_alloc_irqs(struct device *dev, unsigned int nvec,
++					    irq_write_msi_msg_t write_msi_msg);
++void platform_device_msi_free_irqs_all(struct device *dev);
+ 
+ bool msi_device_has_isolated_msi(struct device *dev);
+ #else /* CONFIG_GENERIC_MSI_IRQ */
+diff --git a/kernel/irq/irqdomain.c b/kernel/irq/irqdomain.c
+index ddaaccdc09fa..1e87ae59f301 100644
+--- a/kernel/irq/irqdomain.c
++++ b/kernel/irq/irqdomain.c
+@@ -29,6 +29,7 @@ static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
+ 					unsigned int nr_irqs, int node, void *arg,
+ 					bool realloc, const struct irq_affinity_desc *affinity);
+ static void irq_domain_check_hierarchy(struct irq_domain *domain);
++static void irq_domain_free_one_irq(struct irq_domain *domain, unsigned int virq);
+ 
+ struct irqchip_fwid {
+ 	struct fwnode_handle	fwnode;
+@@ -445,7 +446,7 @@ struct irq_domain *irq_find_matching_fwspec(struct irq_fwspec *fwspec,
+ 	 */
+ 	mutex_lock(&irq_domain_mutex);
+ 	list_for_each_entry(h, &irq_domain_list, link) {
+-		if (h->ops->select && fwspec->param_count)
++		if (h->ops->select)
+ 			rc = h->ops->select(h, fwspec, bus_token);
+ 		else if (h->ops->match)
+ 			rc = h->ops->match(h, to_of_node(fwnode), bus_token);
+@@ -855,8 +856,13 @@ unsigned int irq_create_fwspec_mapping(struct irq_fwspec *fwspec)
+ 	}
+ 
+ 	if (irq_domain_is_hierarchy(domain)) {
+-		virq = irq_domain_alloc_irqs_locked(domain, -1, 1, NUMA_NO_NODE,
+-						    fwspec, false, NULL);
++		if (irq_domain_is_msi_device(domain)) {
++			mutex_unlock(&domain->root->mutex);
++			virq = msi_device_domain_alloc_wired(domain, hwirq, type);
++			mutex_lock(&domain->root->mutex);
++		} else
++			virq = irq_domain_alloc_irqs_locked(domain, -1, 1, NUMA_NO_NODE,
++							    fwspec, false, NULL);
+ 		if (virq <= 0) {
+ 			virq = 0;
+ 			goto out;
+@@ -911,7 +917,7 @@ void irq_dispose_mapping(unsigned int virq)
+ 		return;
+ 
+ 	if (irq_domain_is_hierarchy(domain)) {
+-		irq_domain_free_irqs(virq, 1);
++		irq_domain_free_one_irq(domain, virq);
+ 	} else {
+ 		irq_domain_disassociate(domain, virq);
+ 		irq_free_desc(virq);
+@@ -1752,6 +1758,14 @@ void irq_domain_free_irqs(unsigned int virq, unsigned int nr_irqs)
+ 	irq_free_descs(virq, nr_irqs);
+ }
+ 
++static void irq_domain_free_one_irq(struct irq_domain *domain, unsigned int virq)
++{
++	if (irq_domain_is_msi_device(domain))
++		msi_device_domain_free_wired(domain, virq);
++	else
++		irq_domain_free_irqs(virq, 1);
++}
++
+ /**
+  * irq_domain_alloc_irqs_parent - Allocate interrupts from parent domain
+  * @domain:	Domain below which interrupts must be allocated
+@@ -1904,9 +1918,9 @@ static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
+ 	return -EINVAL;
+ }
+ 
+-static void irq_domain_check_hierarchy(struct irq_domain *domain)
+-{
+-}
++static void irq_domain_check_hierarchy(struct irq_domain *domain) { }
++static void irq_domain_free_one_irq(struct irq_domain *domain, unsigned int virq) { }
++
+ #endif	/* CONFIG_IRQ_DOMAIN_HIERARCHY */
+ 
+ #ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+diff --git a/kernel/irq/matrix.c b/kernel/irq/matrix.c
+index 75d0ae490e29..8f222d1cccec 100644
+--- a/kernel/irq/matrix.c
++++ b/kernel/irq/matrix.c
+@@ -8,8 +8,6 @@
+ #include <linux/cpu.h>
+ #include <linux/irq.h>
+ 
+-#define IRQ_MATRIX_SIZE	(BITS_TO_LONGS(IRQ_MATRIX_BITS))
+-
+ struct cpumap {
+ 	unsigned int		available;
+ 	unsigned int		allocated;
+@@ -17,8 +15,8 @@ struct cpumap {
+ 	unsigned int		managed_allocated;
+ 	bool			initialized;
+ 	bool			online;
+-	unsigned long		alloc_map[IRQ_MATRIX_SIZE];
+-	unsigned long		managed_map[IRQ_MATRIX_SIZE];
++	unsigned long		*managed_map;
++	unsigned long		alloc_map[];
+ };
+ 
+ struct irq_matrix {
+@@ -32,8 +30,8 @@ struct irq_matrix {
+ 	unsigned int		total_allocated;
+ 	unsigned int		online_maps;
+ 	struct cpumap __percpu	*maps;
+-	unsigned long		scratch_map[IRQ_MATRIX_SIZE];
+-	unsigned long		system_map[IRQ_MATRIX_SIZE];
++	unsigned long		*system_map;
++	unsigned long		scratch_map[];
+ };
+ 
+ #define CREATE_TRACE_POINTS
+@@ -50,24 +48,32 @@ __init struct irq_matrix *irq_alloc_matrix(unsigned int matrix_bits,
+ 					   unsigned int alloc_start,
+ 					   unsigned int alloc_end)
+ {
++	unsigned int cpu, matrix_size = BITS_TO_LONGS(matrix_bits);
+ 	struct irq_matrix *m;
+ 
+-	if (matrix_bits > IRQ_MATRIX_BITS)
+-		return NULL;
+-
+-	m = kzalloc(sizeof(*m), GFP_KERNEL);
++	m = kzalloc(struct_size(m, scratch_map, matrix_size * 2), GFP_KERNEL);
+ 	if (!m)
+ 		return NULL;
+ 
++	m->system_map = &m->scratch_map[matrix_size];
++
+ 	m->matrix_bits = matrix_bits;
+ 	m->alloc_start = alloc_start;
+ 	m->alloc_end = alloc_end;
+ 	m->alloc_size = alloc_end - alloc_start;
+-	m->maps = alloc_percpu(*m->maps);
++	m->maps = __alloc_percpu(struct_size(m->maps, alloc_map, matrix_size * 2),
++				 __alignof__(*m->maps));
+ 	if (!m->maps) {
+ 		kfree(m);
+ 		return NULL;
+ 	}
++
++	for_each_possible_cpu(cpu) {
++		struct cpumap *cm = per_cpu_ptr(m->maps, cpu);
++
++		cm->managed_map = &cm->alloc_map[matrix_size];
++	}
++
+ 	return m;
+ }
+ 
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 79b4a58ba9c3..f90952ebc494 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -726,11 +726,26 @@ static void msi_domain_free(struct irq_domain *domain, unsigned int virq,
+ 	irq_domain_free_irqs_top(domain, virq, nr_irqs);
+ }
+ 
++static int msi_domain_translate(struct irq_domain *domain, struct irq_fwspec *fwspec,
++				irq_hw_number_t *hwirq, unsigned int *type)
++{
++	struct msi_domain_info *info = domain->host_data;
++
++	/*
++	 * This will catch allocations through the regular irqdomain path except
++	 * for MSI domains which really support this, e.g. MBIGEN.
++	 */
++	if (!info->ops->msi_translate)
++		return -ENOTSUPP;
++	return info->ops->msi_translate(domain, fwspec, hwirq, type);
++}
++
+ static const struct irq_domain_ops msi_domain_ops = {
+ 	.alloc		= msi_domain_alloc,
+ 	.free		= msi_domain_free,
+ 	.activate	= msi_domain_activate,
+ 	.deactivate	= msi_domain_deactivate,
++	.translate	= msi_domain_translate,
+ };
+ 
+ static irq_hw_number_t msi_domain_ops_get_hwirq(struct msi_domain_info *info,
+@@ -830,8 +845,11 @@ static struct irq_domain *__msi_create_irq_domain(struct fwnode_handle *fwnode,
+ 	domain = irq_domain_create_hierarchy(parent, flags | IRQ_DOMAIN_FLAG_MSI, 0,
+ 					     fwnode, &msi_domain_ops, info);
+ 
+-	if (domain)
++	if (domain) {
+ 		irq_domain_update_bus_token(domain, info->bus_token);
++		if (info->flags & MSI_FLAG_PARENT_PM_DEV)
++			domain->pm_dev = parent->pm_dev;
++	}
+ 
+ 	return domain;
+ }
+@@ -945,9 +963,9 @@ bool msi_create_device_irq_domain(struct device *dev, unsigned int domid,
+ 				  void *chip_data)
+ {
+ 	struct irq_domain *domain, *parent = dev->msi.domain;
+-	const struct msi_parent_ops *pops;
++	struct fwnode_handle *fwnode, *fwnalloced = NULL;
+ 	struct msi_domain_template *bundle;
+-	struct fwnode_handle *fwnode;
++	const struct msi_parent_ops *pops;
+ 
+ 	if (!irq_domain_is_msi_parent(parent))
+ 		return false;
+@@ -970,7 +988,19 @@ bool msi_create_device_irq_domain(struct device *dev, unsigned int domid,
+ 		 pops->prefix ? : "", bundle->chip.name, dev_name(dev));
+ 	bundle->chip.name = bundle->name;
+ 
+-	fwnode = irq_domain_alloc_named_fwnode(bundle->name);
++	/*
++	 * Using the device firmware node is required for wire to MSI
++	 * device domains so that the existing firmware results in a domain
++	 * match.
++	 * All other device domains like PCI/MSI use the named firmware
++	 * node as they are not guaranteed to have a fwnode. They are never
++	 * looked up and always handled in the context of the device.
++	 */
++	if (bundle->info.flags & MSI_FLAG_USE_DEV_FWNODE)
++		fwnode = dev->fwnode;
++	else
++		fwnode = fwnalloced = irq_domain_alloc_named_fwnode(bundle->name);
++
+ 	if (!fwnode)
+ 		goto free_bundle;
+ 
+@@ -997,7 +1027,7 @@ bool msi_create_device_irq_domain(struct device *dev, unsigned int domid,
+ fail:
+ 	msi_unlock_descs(dev);
+ free_fwnode:
+-	irq_domain_free_fwnode(fwnode);
++	irq_domain_free_fwnode(fwnalloced);
+ free_bundle:
+ 	kfree(bundle);
+ 	return false;
+@@ -1431,34 +1461,10 @@ int msi_domain_alloc_irqs_all_locked(struct device *dev, unsigned int domid, int
+ 	return msi_domain_alloc_locked(dev, &ctrl);
+ }
+ 
+-/**
+- * msi_domain_alloc_irq_at - Allocate an interrupt from a MSI interrupt domain at
+- *			     a given index - or at the next free index
+- *
+- * @dev:	Pointer to device struct of the device for which the interrupts
+- *		are allocated
+- * @domid:	Id of the interrupt domain to operate on
+- * @index:	Index for allocation. If @index == %MSI_ANY_INDEX the allocation
+- *		uses the next free index.
+- * @affdesc:	Optional pointer to an interrupt affinity descriptor structure
+- * @icookie:	Optional pointer to a domain specific per instance cookie. If
+- *		non-NULL the content of the cookie is stored in msi_desc::data.
+- *		Must be NULL for MSI-X allocations
+- *
+- * This requires a MSI interrupt domain which lets the core code manage the
+- * MSI descriptors.
+- *
+- * Return: struct msi_map
+- *
+- *	On success msi_map::index contains the allocated index number and
+- *	msi_map::virq the corresponding Linux interrupt number
+- *
+- *	On failure msi_map::index contains the error code and msi_map::virq
+- *	is %0.
+- */
+-struct msi_map msi_domain_alloc_irq_at(struct device *dev, unsigned int domid, unsigned int index,
+-				       const struct irq_affinity_desc *affdesc,
+-				       union msi_instance_cookie *icookie)
++static struct msi_map __msi_domain_alloc_irq_at(struct device *dev, unsigned int domid,
++						unsigned int index,
++						const struct irq_affinity_desc *affdesc,
++						union msi_instance_cookie *icookie)
+ {
+ 	struct msi_ctrl ctrl = { .domid	= domid, .nirqs = 1, };
+ 	struct irq_domain *domain;
+@@ -1466,17 +1472,16 @@ struct msi_map msi_domain_alloc_irq_at(struct device *dev, unsigned int domid, u
+ 	struct msi_desc *desc;
+ 	int ret;
+ 
+-	msi_lock_descs(dev);
+ 	domain = msi_get_device_domain(dev, domid);
+ 	if (!domain) {
+ 		map.index = -ENODEV;
+-		goto unlock;
++		return map;
+ 	}
+ 
+ 	desc = msi_alloc_desc(dev, 1, affdesc);
+ 	if (!desc) {
+ 		map.index = -ENOMEM;
+-		goto unlock;
++		return map;
+ 	}
+ 
+ 	if (icookie)
+@@ -1485,7 +1490,7 @@ struct msi_map msi_domain_alloc_irq_at(struct device *dev, unsigned int domid, u
+ 	ret = msi_insert_desc(dev, desc, domid, index);
+ 	if (ret) {
+ 		map.index = ret;
+-		goto unlock;
++		return map;
+ 	}
+ 
+ 	ctrl.first = ctrl.last = desc->msi_index;
+@@ -1498,11 +1503,90 @@ struct msi_map msi_domain_alloc_irq_at(struct device *dev, unsigned int domid, u
+ 		map.index = desc->msi_index;
+ 		map.virq = desc->irq;
+ 	}
+-unlock:
++	return map;
++}
++
++/**
++ * msi_domain_alloc_irq_at - Allocate an interrupt from a MSI interrupt domain at
++ *			     a given index - or at the next free index
++ *
++ * @dev:	Pointer to device struct of the device for which the interrupts
++ *		are allocated
++ * @domid:	Id of the interrupt domain to operate on
++ * @index:	Index for allocation. If @index == %MSI_ANY_INDEX the allocation
++ *		uses the next free index.
++ * @affdesc:	Optional pointer to an interrupt affinity descriptor structure
++ * @icookie:	Optional pointer to a domain specific per instance cookie. If
++ *		non-NULL the content of the cookie is stored in msi_desc::data.
++ *		Must be NULL for MSI-X allocations
++ *
++ * This requires a MSI interrupt domain which lets the core code manage the
++ * MSI descriptors.
++ *
++ * Return: struct msi_map
++ *
++ *	On success msi_map::index contains the allocated index number and
++ *	msi_map::virq the corresponding Linux interrupt number
++ *
++ *	On failure msi_map::index contains the error code and msi_map::virq
++ *	is %0.
++ */
++struct msi_map msi_domain_alloc_irq_at(struct device *dev, unsigned int domid, unsigned int index,
++				       const struct irq_affinity_desc *affdesc,
++				       union msi_instance_cookie *icookie)
++{
++	struct msi_map map;
++
++	msi_lock_descs(dev);
++	map = __msi_domain_alloc_irq_at(dev, domid, index, affdesc, icookie);
+ 	msi_unlock_descs(dev);
+ 	return map;
+ }
+ 
++/**
++ * msi_device_domain_alloc_wired - Allocate a "wired" interrupt on @domain
++ * @domain:	The domain to allocate on
++ * @hwirq:	The hardware interrupt number to allocate for
++ * @type:	The interrupt type
++ *
++ * This weirdness supports wire to MSI controllers like MBIGEN.
++ *
++ * @hwirq is the hardware interrupt number which is handed in from
++ * irq_create_fwspec_mapping(). As the wire to MSI domain is sparse, but
++ * sized in firmware, the hardware interrupt number cannot be used as MSI
++ * index. For the underlying irq chip the MSI index is irrelevant and
++ * all it needs is the hardware interrupt number.
++ *
++ * To handle this the MSI index is allocated with MSI_ANY_INDEX and the
++ * hardware interrupt number is stored along with the type information in
++ * msi_desc::cookie so the underlying interrupt chip and domain code can
++ * retrieve it.
++ *
++ * Return: The Linux interrupt number (> 0) or an error code
++ */
++int msi_device_domain_alloc_wired(struct irq_domain *domain, unsigned int hwirq,
++				  unsigned int type)
++{
++	unsigned int domid = MSI_DEFAULT_DOMAIN;
++	union msi_instance_cookie icookie = { };
++	struct device *dev = domain->dev;
++	struct msi_map map = { };
++
++	if (WARN_ON_ONCE(!dev || domain->bus_token != DOMAIN_BUS_WIRED_TO_MSI))
++		return -EINVAL;
++
++	icookie.value = ((u64)type << 32) | hwirq;
++
++	msi_lock_descs(dev);
++	if (WARN_ON_ONCE(msi_get_device_domain(dev, domid) != domain))
++		map.index = -EINVAL;
++	else
++		map = __msi_domain_alloc_irq_at(dev, domid, MSI_ANY_INDEX, NULL, &icookie);
++	msi_unlock_descs(dev);
++
++	return map.index >= 0 ? map.virq : map.index;
++}
++
+ static void __msi_domain_free_irqs(struct device *dev, struct irq_domain *domain,
+ 				   struct msi_ctrl *ctrl)
+ {
+@@ -1628,6 +1712,30 @@ void msi_domain_free_irqs_all(struct device *dev, unsigned int domid)
+ 	msi_unlock_descs(dev);
+ }
+ 
++/**
++ * msi_device_domain_free_wired - Free a wired interrupt in @domain
++ * @domain:	The domain to free the interrupt on
++ * @virq:	The Linux interrupt number to free
++ *
++ * This is the counterpart of msi_device_domain_alloc_wired() for the
++ * weird wired to MSI converting domains.
++ */
++void msi_device_domain_free_wired(struct irq_domain *domain, unsigned int virq)
++{
++	struct msi_desc *desc = irq_get_msi_desc(virq);
++	struct device *dev = domain->dev;
++
++	if (WARN_ON_ONCE(!dev || !desc || domain->bus_token != DOMAIN_BUS_WIRED_TO_MSI))
++		return;
++
++	msi_lock_descs(dev);
++	if (!WARN_ON_ONCE(msi_get_device_domain(dev, MSI_DEFAULT_DOMAIN) != domain)) {
++		msi_domain_free_irqs_range_locked(dev, MSI_DEFAULT_DOMAIN, desc->msi_index,
++						  desc->msi_index);
++	}
++	msi_unlock_descs(dev);
++}
++
+ /**
+  * msi_get_domain_info - Get the MSI interrupt domain info for @domain
+  * @domain:	The interrupt domain to retrieve data from
+-- 
+2.34.1
+

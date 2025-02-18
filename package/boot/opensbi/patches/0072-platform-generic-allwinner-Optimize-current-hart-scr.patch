@@ -1,0 +1,32 @@
+From f5375bc15e9f3e577dfc24f9095a3e37246a3fa3 Mon Sep 17 00:00:00 2001
+From: Samuel Holland <samuel.holland@sifive.com>
+Date: Mon, 18 Mar 2024 07:49:29 -0700
+Subject: [PATCH 072/172] platform: generic: allwinner: Optimize current hart
+ scratch access
+
+The address of the local scratch area is stored in each hart's mscratch
+CSR. It is more efficient to read the CSR than to compute the address
+from the hart ID.
+
+Signed-off-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/allwinner/sun20i-d1.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/generic/allwinner/sun20i-d1.c b/platform/generic/allwinner/sun20i-d1.c
+index ed19d5d427c7..ab2eee55864c 100644
+--- a/platform/generic/allwinner/sun20i-d1.c
++++ b/platform/generic/allwinner/sun20i-d1.c
+@@ -142,7 +142,7 @@ static void sun20i_d1_riscv_cfg_restore(void)
+ 
+ static void sun20i_d1_riscv_cfg_init(void)
+ {
+-	u64 entry = sbi_hartid_to_scratch(0)->warmboot_addr;
++	u64 entry = sbi_scratch_thishart_ptr()->warmboot_addr;
+ 
+ 	/* Enable MMIO access. */
+ 	writel_relaxed(CCU_BGR_ENABLE, SUN20I_D1_CCU_BASE + RISCV_CFG_BGR_REG);
+-- 
+2.34.1
+

@@ -1,0 +1,1583 @@
+From 34a02d1b33146c69b83ae1f8a58ef518e05c124c Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:53:18 +0800
+Subject: [PATCH 13/53] swdtb: andespmu: add andespmu event for non-sscofpmf
+ bitmap (#106)
+
+swdtb: andespmu: add andespmu event for non-sscofpmf bitmap
+
+Add Andes PMU event into pmu node
+riscv,event-to-mhpmevent
+riscv,event-to-mhpmcounters
+riscv,raw-event-to-mhpmcounters
+
+Ported from OpenSBI.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/106
+Reviewed-by: Peter Yu-Chien Lin <peterlin@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ board/andestech/common/swdtb_merger/Makefile  |    2 +
+ .../andestech/common/swdtb_merger/andes_hpm.c | 1042 +++++++++++++++++
+ .../andestech/common/swdtb_merger/andes_hpm.h |  124 ++
+ .../common/swdtb_merger/sbi_ecall_interface.h |  261 +++++
+ .../common/swdtb_merger/swdtb_config.h        |    2 +
+ .../common/swdtb_merger/swdtb_merger.c        |    2 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  |   36 +
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |    3 +
+ 8 files changed, 1472 insertions(+)
+ create mode 100644 board/andestech/common/swdtb_merger/andes_hpm.c
+ create mode 100644 board/andestech/common/swdtb_merger/andes_hpm.h
+ create mode 100644 board/andestech/common/swdtb_merger/sbi_ecall_interface.h
+
+diff --git a/board/andestech/common/swdtb_merger/Makefile b/board/andestech/common/swdtb_merger/Makefile
+index b59b70f9f74b..222c89b36213 100644
+--- a/board/andestech/common/swdtb_merger/Makefile
++++ b/board/andestech/common/swdtb_merger/Makefile
+@@ -4,3 +4,5 @@
+ obj-y += swdtb_merger.o
+ obj-y += swdtb_merger_fixup.o
+ obj-y += swdtb_tool.o
++obj-y += swdtb_tool.o
++obj-y += andes_hpm.o
+diff --git a/board/andestech/common/swdtb_merger/andes_hpm.c b/board/andestech/common/swdtb_merger/andes_hpm.c
+new file mode 100644
+index 000000000000..d56c0e24858d
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/andes_hpm.c
+@@ -0,0 +1,1042 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2024 Andes Technology Corporation
++ */
++
++#include "andes_hpm.h"
++
++const struct event_select andes_hw_evt_selects[] = {
++	/* Hardware general events (Type #0) */
++	{
++		/* perf: cycles (eidx: 0x1) */
++		.eidx = SBI_PMU_HW_CPU_CYCLES,
++		.select = ANDES_CYCLES
++	},
++	{
++		/* perf: instructions (eidx: 0x2) */
++		.eidx = SBI_PMU_HW_INSTRUCTIONS,
++		.select = ANDES_INSTRET
++	},
++	{
++		/* perf: cache-references (eidx: 0x3) */
++		.eidx = SBI_PMU_HW_CACHE_REFERENCES,
++		.select = ANDES_DCACHE_ACCESS
++	},
++	{
++		/* perf: cache-misses (eidx: 0x4) */
++		.eidx = SBI_PMU_HW_CACHE_MISSES,
++		.select = ANDES_DCACHE_MISS
++	},
++	{
++		/* perf: branches (eidx: 0x5) */
++		.eidx = SBI_PMU_HW_BRANCH_INSTRUCTIONS,
++		.select = ANDES_CONDITION_BR,
++	},
++	{
++		/* perf: branch-misses (eidx: 0x6) */
++		.eidx = SBI_PMU_HW_BRANCH_MISSES,
++		.select = ANDES_MISPREDICT_CONDITION_BR,
++	},
++	/* Hardware cache events (Type #1) */
++	{
++		/* perf: L1-dcache-loads (eidx: 0x10000) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, READ, ACCESS),
++		.select = ANDES_DCACHE_LOAD_ACCESS
++	},
++	{
++		/* perf: L1-dcache-loads-misses (eidx: 0x10001) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, READ, MISS),
++		.select = ANDES_DCACHE_LOAD_MISS
++	},
++	{
++		/* perf: L1-dcache-stores (eidx: 0x10002) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, WRITE, ACCESS),
++		.select = ANDES_DCACHE_STORE_ACCESS
++	},
++	{
++		/* perf: L1-dcache-store-misses (eidx: 0x10003) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, WRITE, MISS),
++		.select = ANDES_DCACHE_STORE_MISS
++	},
++	{
++		/* perf: L1-icache-load (eidx: 0x10008) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1I, READ, ACCESS),
++		.select = ANDES_ICACHE_ACCESS
++	},
++	{
++		/* perf: L1-icache-load-misses (eidx: 0x10009) */
++		.eidx = SBI_PMU_HW_CACHE_EVENT_IDX(L1I, READ, MISS),
++		.select = ANDES_ICACHE_MISS
++	},
++	{ /* sentinel */ }
++};
++
++const struct event_counter andes_hw_evt_cnters[] = {
++	{
++		/* perf: cycles (eidx: 0x1) */
++		.eidx_start = SBI_PMU_HW_CPU_CYCLES,
++		/* perf: branch-misses (eidx: 0x6) */
++		.eidx_end = SBI_PMU_HW_BRANCH_MISSES,
++		.ctr_map = ANDES_MHPM_MAP,
++	},
++	{
++		/* perf: L1-dcache-loads (eidx: 0x10000) */
++		.eidx_start = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, READ, ACCESS),
++		/* perf: L1-dcache-store-misses (eidx: 0x10003) */
++		.eidx_end = SBI_PMU_HW_CACHE_EVENT_IDX(L1D, WRITE, MISS),
++		.ctr_map = ANDES_MHPM_MAP,
++	},
++	{
++		/* perf: L1-icache-load (eidx: 0x10008) */
++		.eidx_start = SBI_PMU_HW_CACHE_EVENT_IDX(L1I, READ, ACCESS),
++		/* perf: L1-icache-load-misses (eidx: 0x10009) */
++		.eidx_end = SBI_PMU_HW_CACHE_EVENT_IDX(L1I, READ, MISS),
++		.ctr_map = ANDES_MHPM_MAP,
++	},
++	{ /* sentinel */ }
++};
++
++const struct raw_event_counter andes2x_raw_evt_cnters[] = {
++	{
++		.select = ANDES_CYCLES,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INSTRET,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ATOMIC_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_SYS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_COMPUTE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_TAKEN_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JAL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JALR_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONTROL_TRANS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_EX9_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_DIV_REMAINDER_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_ADD_SUB_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_FUSED_MULADD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_DIV_SQUARE_ROOT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_OTHER_FLOAT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_MUL_AND_SUB_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ILM_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DLM_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_WB,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ICACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_DCACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_IFETCH_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_LOAD_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_IFETCH,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_LOAD,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ITLB_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_PIPE_STALL_CYCLE_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TAKE_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TARGET_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES2X_REPLY_LAS_SAS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{ /* sentinel */ }
++};
++
++const struct raw_event_counter andes45_raw_evt_cnters[] = {
++	{
++		.select = ANDES_CYCLES,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INSTRET,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ATOMIC_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_SYS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_COMPUTE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_TAKEN_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JAL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JALR_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONTROL_TRANS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_EX9_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_DIV_REMAINDER_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_ADD_SUB_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_FUSED_MULADD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_DIV_SQUARE_ROOT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_OTHER_FLOAT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_MUL_AND_SUB_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_RETIRED_OP,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ILM_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DLM_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_WB,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ICACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_DCACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_IFETCH_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_LOAD_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_IFETCH,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_LOAD,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ITLB_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_PIPE_STALL_CYCLE_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_HW_PREFETCH_BUS_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_FOR_OPERAND,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TAKE_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TARGET_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{ /* sentinel */ }
++};
++
++const struct raw_event_counter andes65_raw_evt_cnters[] = {
++	{
++		.select = ANDES_CYCLES,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INSTRET,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ATOMIC_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_SYS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_COMPUTE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_TAKEN_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JAL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_JALR_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CONTROL_TRANS_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_EX9_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_INT_DIV_REMAINDER_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_LOAD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_STORE_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_ADD_SUB_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_MUL_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_FUSED_MULADD_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_FLOAT_DIV_SQUARE_ROOT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_OTHER_FLOAT_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_RETIRED_OP,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_ICACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_LOAD_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_STORE_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_DCACHE_WB,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ICACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_DCACHE_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_IFETCH_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_UNCACHED_LOAD_FROM_BUS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_IFETCH,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_UNCACHED_LOAD,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_ITLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MAIN_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_CYCLE_WAIT_ITLB_FILL,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_PIPE_STALL_CYCLE_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_HW_PREFETCH_BUS_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_L1_ITLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_L1_ITLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_L1_DTLB_ACCESS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_L1_DTLB_MISS,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TAKE_CONDITION_BR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES_MISPREDICT_TARGET_RET_INST,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{
++		.select = ANDES65_REPLY_LOAD_ORDER_ECC_ERR,
++		.select_mask = ANDES_RAW_EVENT_MASK,
++		.ctr_map = ANDES_MHPM_MAP
++	},
++	{ /* sentinel */ }
++};
++
++int ae350_fdt_add_pmu(void *fdt, int node, unsigned long cpu)
++{
++	struct event_select *selects =
++		(struct event_select *)andes_hw_evt_selects;
++	struct event_counter *counters =
++		(struct event_counter *)andes_hw_evt_cnters;
++	struct raw_event_counter *rcounters;
++
++	if (cpu == 65)
++		rcounters = (struct raw_event_counter *)andes65_raw_evt_cnters;
++	else if (cpu == 45)
++		rcounters = (struct raw_event_counter *)andes45_raw_evt_cnters;
++	else
++		rcounters = (struct raw_event_counter *)andes2x_raw_evt_cnters;
++
++	return fdt_add_pmu(fdt, node, selects, counters, rcounters);
++}
++
++void show_hpm_data(void *fdt, int node, const char *name, int row)
++{
++#if ANDES_SWDTB_MERGER_CHECK_HPM
++	const u32 *offset;
++	u32 len;
++
++	offset = fdt_getprop(fdt, node, name, &len);
++	printf("%s%s%s:\n", KYEL, name, KNRM);
++	for (int idx = 0; idx < len / 4; idx++) {
++		printf("%08x", fdt32_to_cpu(*(offset + idx)));
++		if ((idx % row) == (row - 1))
++			printf("\n");
++		else
++			printf(" ");
++	}
++#else
++	printf("Andes PMU: %s%s%s\n", KYEL, name, KNRM);
++#endif
++}
++
++int fdt_add_pmu(void *fdt, int node,
++		struct event_select *selects,
++		struct event_counter *counters,
++		struct raw_event_counter *rcounters)
++{
++	int i, ret;
++	/* An entry of "riscv,event-to-mhpmevent" */
++	fdt32_t evt_to_mhpmevent[3];
++	/* An entry of "riscv,event-to-mhpmcounters" */
++	fdt32_t evt_to_mhpmcounters[3];
++	/* An entry of "riscv,raw-event-to-mhpmcounters" */
++	fdt32_t raw_evt_to_mhpmcounters[5];
++
++	const char *mhpmevent = "riscv,event-to-mhpmevent";
++	const char *mhpmcounters = "riscv,event-to-mhpmcounters";
++	const char *raw_event_to_mhpm = "riscv,raw-event-to-mhpmcounters";
++
++	/* The compatible string must be "riscv,pmu" */
++	ret = fdt_setprop_string(fdt, node, "compatible", "riscv,pmu");
++	if (ret)
++		return ret;
++
++	/*
++	 * If some of properties have been provided, do nothing,
++	 * we assume it's a valid pmu node.
++	 * see: https://github.com/riscv-software-src/opensbi/blob/master/docs/pmu_support.md#sbi-pmu-device-tree-bindings
++	 */
++	if (fdt_getprop(fdt, node, mhpmevent, NULL) ||
++	    fdt_getprop(fdt, node, mhpmcounters, NULL) ||
++	    fdt_getprop(fdt, node, raw_event_to_mhpm, NULL)) {
++		/* HPM event is existed! */
++		return RETURN_DONE;
++	}
++
++	/*
++	 * If "riscv,event-to-mhpmevent" is present,
++	 * "riscv,event-to-mhpmcounters" must be provided as well.
++	 */
++	if (selects && !counters)
++		return -EINVAL;
++
++	/* Add riscv,event-to-mhpmevent */
++	for (i = 0; selects && selects[i].eidx; i++) {
++		evt_to_mhpmevent[0] = cpu_to_fdt32(selects[i].eidx);
++		evt_to_mhpmevent[1] = cpu_to_fdt32(selects[i].select >> 32);
++		evt_to_mhpmevent[2] = cpu_to_fdt32(selects[i].select & ~0UL);
++
++		ret = fdt_appendprop(fdt, node, mhpmevent,
++				     evt_to_mhpmevent,
++				     sizeof(struct event_select));
++		if (ret) {
++			printf("Error on set %s: %d\n", mhpmevent, ret);
++			return ret;
++		}
++	}
++
++	/* Add riscv,event-to-mhpmcounters */
++	for (i = 0; counters && counters[i].eidx_start; i++) {
++		evt_to_mhpmcounters[0] = cpu_to_fdt32(counters[i].eidx_start);
++		evt_to_mhpmcounters[1] = cpu_to_fdt32(counters[i].eidx_end);
++		evt_to_mhpmcounters[2] = cpu_to_fdt32(counters[i].ctr_map);
++
++		ret = fdt_appendprop(fdt, node, mhpmcounters,
++				     evt_to_mhpmcounters,
++				     sizeof(struct event_counter));
++		if (ret) {
++			printf("Error on set %s: %d\n", mhpmcounters, ret);
++			return ret;
++		}
++	}
++
++	/* Add riscv,raw-event-to-mhpmcounters */
++	for (i = 0; rcounters && rcounters[i].select; i++) {
++		raw_evt_to_mhpmcounters[0] =
++			cpu_to_fdt32(rcounters[i].select >> 32);
++		raw_evt_to_mhpmcounters[1] =
++			cpu_to_fdt32(rcounters[i].select & ~0UL);
++		raw_evt_to_mhpmcounters[2] =
++			cpu_to_fdt32(rcounters[i].select_mask >> 32);
++		raw_evt_to_mhpmcounters[3] =
++			cpu_to_fdt32(rcounters[i].select_mask & ~0UL);
++		raw_evt_to_mhpmcounters[4] =
++			cpu_to_fdt32(rcounters[i].ctr_map);
++
++		ret = fdt_appendprop(fdt, node, raw_event_to_mhpm,
++				     raw_evt_to_mhpmcounters,
++				     sizeof(struct raw_event_counter));
++		if (ret) {
++			printf("Error on set %s: %d\n", raw_event_to_mhpm, ret);
++			return ret;
++		}
++	}
++
++	show_hpm_data(fdt, node, mhpmevent,
++		      sizeof(struct event_select) / sizeof(uint32_t));
++	show_hpm_data(fdt, node, mhpmcounters,
++		      sizeof(struct event_counter) / sizeof(uint32_t));
++	show_hpm_data(fdt, node, raw_event_to_mhpm,
++		      sizeof(struct raw_event_counter) / sizeof(uint32_t));
++
++	return RETURN_DONE;
++}
+diff --git a/board/andestech/common/swdtb_merger/andes_hpm.h b/board/andestech/common/swdtb_merger/andes_hpm.h
+new file mode 100644
+index 000000000000..c06857b44e7a
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/andes_hpm.h
+@@ -0,0 +1,124 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2024 Andes Technology Corporation
++ */
++#ifndef _ANDES_HPM_H_
++#define _ANDES_HPM_H_
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <linux/libfdt.h>
++#include <linux/ctype.h>
++#include <fdtdec.h>
++#include <fdt_support.h>
++#include "sbi_ecall_interface.h"
++#include "swdtb_merger_fixup.h"
++
++struct event_select {
++	/**
++	 * The description of an entry in
++	 * riscv,event-to-mhpmevent property
++	 */
++	u32 eidx;
++	u64 select;
++} __packed;
++
++struct event_counter {
++	/**
++	 * The description of an entry in
++	 * riscv,event-to-mhpmcounters property
++	 */
++	u32 eidx_start;
++	u32 eidx_end;
++	u32 ctr_map;
++} __packed;
++
++struct raw_event_counter {
++	/**
++	 * The description of an entry in
++	 * riscv,raw-event-to-mhpmcounters property
++	 */
++	u64 select;
++	u64 select_mask;
++	u32 ctr_map;
++} __packed;
++
++#define ANDES_MHPM_MAP		0x78
++#define ANDES_RAW_EVENT_MASK	~0ULL
++
++/* Event code for instruction commit events */         /* 25 27 45 65 */
++#define ANDES_CYCLES				0x10   /*  Y  Y  Y  Y */
++#define ANDES_INSTRET				0x20   /*  Y  Y  Y  Y */
++#define ANDES_INT_LOAD_INST			0x30   /*  Y  Y  Y  Y */
++#define ANDES_INT_STORE_INST			0x40   /*  Y  Y  Y  Y */
++#define ANDES_ATOMIC_INST			0x50   /*  Y  Y  Y  Y */
++#define ANDES_SYS_INST				0x60   /*  Y  Y  Y  Y */
++#define ANDES_INT_COMPUTE_INST			0x70   /*  Y  Y  Y  Y */
++#define ANDES_CONDITION_BR			0x80   /*  Y  Y  Y  Y */
++#define ANDES_TAKEN_CONDITION_BR		0x90   /*  Y  Y  Y  Y */
++#define ANDES_JAL_INST				0xA0   /*  Y  Y  Y  Y */
++#define ANDES_JALR_INST				0xB0   /*  Y  Y  Y  Y */
++#define ANDES_RET_INST				0xC0   /*  Y  Y  Y  Y */
++#define ANDES_CONTROL_TRANS_INST		0xD0   /*  Y  Y  Y  Y */
++#define ANDES_EX9_INST				0xE0   /*  Y  Y  Y  Y */
++#define ANDES_INT_MUL_INST			0xF0   /*  Y  Y  Y  Y */
++#define ANDES_INT_DIV_REMAINDER_INST		0x100  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_LOAD_INST			0x110  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_STORE_INST			0x120  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_ADD_SUB_INST		0x130  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_MUL_INST			0x140  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_FUSED_MULADD_INST		0x150  /*  Y  Y  Y  Y */
++#define ANDES_FLOAT_DIV_SQUARE_ROOT_INST	0x160  /*  Y  Y  Y  Y */
++#define ANDES_OTHER_FLOAT_INST			0x170  /*  Y  Y  Y  Y */
++#define ANDES_INT_MUL_AND_SUB_INST		0x180  /*  Y  Y  Y  N */
++#define ANDES_RETIRED_OP			0x190  /*  N  N  Y  Y */
++
++/* Event code for memory system events */              /* 25 27 45 65 */
++#define ANDES_ILM_ACCESS			0x01   /*  Y  Y  Y  N */
++#define ANDES_DLM_ACCESS			0x11   /*  Y  Y  Y  N */
++#define ANDES_ICACHE_ACCESS			0x21   /*  Y  Y  Y  Y */
++#define ANDES_ICACHE_MISS			0x31   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_ACCESS			0x41   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_MISS			0x51   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_LOAD_ACCESS		0x61   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_LOAD_MISS			0x71   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_STORE_ACCESS		0x81   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_STORE_MISS			0x91   /*  Y  Y  Y  Y */
++#define ANDES_DCACHE_WB				0xA1   /*  Y  Y  Y  Y */
++#define ANDES_CYCLE_WAIT_ICACHE_FILL		0xB1   /*  Y  Y  Y  Y */
++#define ANDES_CYCLE_WAIT_DCACHE_FILL		0xC1   /*  Y  Y  Y  Y */
++#define ANDES_UNCACHED_IFETCH_FROM_BUS		0xD1   /*  Y  Y  Y  Y */
++#define ANDES_UNCACHED_LOAD_FROM_BUS		0xE1   /*  Y  Y  Y  Y */
++#define ANDES_CYCLE_WAIT_UNCACHED_IFETCH	0xF1   /*  Y  Y  Y  Y */
++#define ANDES_CYCLE_WAIT_UNCACHED_LOAD		0x101  /*  Y  Y  Y  Y */
++#define ANDES_MAIN_ITLB_ACCESS			0x111  /*  Y  Y  Y  Y */
++#define ANDES_MAIN_ITLB_MISS			0x121  /*  Y  Y  Y  Y */
++#define ANDES_MAIN_DTLB_ACCESS			0x131  /*  Y  Y  Y  Y */
++#define ANDES_MAIN_DTLB_MISS			0x141  /*  Y  Y  Y  Y */
++#define ANDES_CYCLE_WAIT_ITLB_FILL		0x151  /*  Y  Y  Y  Y */
++#define ANDES_PIPE_STALL_CYCLE_DTLB_MISS	0x161  /*  Y  Y  Y  Y */
++#define ANDES_HW_PREFETCH_BUS_ACCESS		0x171  /*  N  N  Y  Y */
++#define ANDES_CYCLE_WAIT_FOR_OPERAND		0x181  /*  N  N  Y  N */
++#define ANDES_L1_ITLB_ACCESS			0x191  /*  N  N  N  Y */
++#define ANDES_L1_ITLB_MISS			0x1A1  /*  N  N  N  Y */
++#define ANDES_L1_DTLB_ACCESS			0x1B1  /*  N  N  N  Y */
++#define ANDES_L1_DTLB_MISS			0x1C1  /*  N  N  N  Y */
++
++/* Event code for microarchitecture events */          /* 25 27 45 65 */
++#define ANDES_MISPREDICT_CONDITION_BR		0x02   /*  Y  Y  Y  Y */
++#define ANDES_MISPREDICT_TAKE_CONDITION_BR	0x12   /*  Y  Y  Y  Y */
++#define ANDES_MISPREDICT_TARGET_RET_INST	0x22   /*  Y  Y  Y  Y */
++#define ANDES2X_REPLY_LAS_SAS			0x32   /*  Y  Y  N  N */
++#define ANDES65_REPLY_LOAD_ORDER_ECC_ERR	0x32   /*  N  N  N  Y */
++
++int fdt_add_pmu(void *fdt, int node,
++		struct event_select *selects,
++		struct event_counter *counters,
++		struct raw_event_counter *rcounters);
++
++int ae350_fdt_add_pmu(void *fdt, int node, unsigned long cpu);
++#endif /* _ANDES_HPM_H_ */
+diff --git a/board/andestech/common/swdtb_merger/sbi_ecall_interface.h b/board/andestech/common/swdtb_merger/sbi_ecall_interface.h
+new file mode 100644
+index 000000000000..e2c3dd93226a
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/sbi_ecall_interface.h
+@@ -0,0 +1,261 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2019 Western Digital Corporation or its affiliates.
++ *
++ * Authors:
++ *   Anup Patel <anup.patel@wdc.com>
++ */
++#ifndef __SBI_ECALL_INTERFACE_H__
++#define __SBI_ECALL_INTERFACE_H__
++
++/* clang-format off */
++
++/* SBI Extension IDs */
++#define SBI_EXT_0_1_SET_TIMER			0x0
++#define SBI_EXT_0_1_CONSOLE_PUTCHAR		0x1
++#define SBI_EXT_0_1_CONSOLE_GETCHAR		0x2
++#define SBI_EXT_0_1_CLEAR_IPI			0x3
++#define SBI_EXT_0_1_SEND_IPI			0x4
++#define SBI_EXT_0_1_REMOTE_FENCE_I		0x5
++#define SBI_EXT_0_1_REMOTE_SFENCE_VMA		0x6
++#define SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID	0x7
++#define SBI_EXT_0_1_SHUTDOWN			0x8
++#define SBI_EXT_BASE				0x10
++#define SBI_EXT_TIME				0x54494D45
++#define SBI_EXT_IPI				0x735049
++#define SBI_EXT_RFENCE				0x52464E43
++#define SBI_EXT_HSM				0x48534D
++#define SBI_EXT_SRST				0x53525354
++#define SBI_EXT_PMU				0x504D55
++
++/* SBI function IDs for BASE extension*/
++#define SBI_EXT_BASE_GET_SPEC_VERSION		0x0
++#define SBI_EXT_BASE_GET_IMP_ID			0x1
++#define SBI_EXT_BASE_GET_IMP_VERSION		0x2
++#define SBI_EXT_BASE_PROBE_EXT			0x3
++#define SBI_EXT_BASE_GET_MVENDORID		0x4
++#define SBI_EXT_BASE_GET_MARCHID		0x5
++#define SBI_EXT_BASE_GET_MIMPID			0x6
++
++/* SBI function IDs for TIME extension*/
++#define SBI_EXT_TIME_SET_TIMER			0x0
++
++/* SBI function IDs for IPI extension*/
++#define SBI_EXT_IPI_SEND_IPI			0x0
++
++/* SBI function IDs for RFENCE extension*/
++#define SBI_EXT_RFENCE_REMOTE_FENCE_I		0x0
++#define SBI_EXT_RFENCE_REMOTE_SFENCE_VMA	0x1
++#define SBI_EXT_RFENCE_REMOTE_SFENCE_VMA_ASID	0x2
++#define SBI_EXT_RFENCE_REMOTE_HFENCE_GVMA_VMID	0x3
++#define SBI_EXT_RFENCE_REMOTE_HFENCE_GVMA	0x4
++#define SBI_EXT_RFENCE_REMOTE_HFENCE_VVMA_ASID	0x5
++#define SBI_EXT_RFENCE_REMOTE_HFENCE_VVMA	0x6
++
++/* SBI function IDs for HSM extension */
++#define SBI_EXT_HSM_HART_START			0x0
++#define SBI_EXT_HSM_HART_STOP			0x1
++#define SBI_EXT_HSM_HART_GET_STATUS		0x2
++#define SBI_EXT_HSM_HART_SUSPEND		0x3
++
++#define SBI_HSM_STATE_STARTED			0x0
++#define SBI_HSM_STATE_STOPPED			0x1
++#define SBI_HSM_STATE_START_PENDING		0x2
++#define SBI_HSM_STATE_STOP_PENDING		0x3
++#define SBI_HSM_STATE_SUSPENDED			0x4
++#define SBI_HSM_STATE_SUSPEND_PENDING		0x5
++#define SBI_HSM_STATE_RESUME_PENDING		0x6
++
++#define SBI_HSM_SUSP_BASE_MASK			0x7fffffff
++#define SBI_HSM_SUSP_NON_RET_BIT		0x80000000
++#define SBI_HSM_SUSP_PLAT_BASE			0x10000000
++
++#define SBI_HSM_SUSPEND_RET_DEFAULT		0x00000000
++#define SBI_HSM_SUSPEND_RET_PLATFORM		SBI_HSM_SUSP_PLAT_BASE
++#define SBI_HSM_SUSPEND_RET_LAST		SBI_HSM_SUSP_BASE_MASK
++#define SBI_HSM_SUSPEND_NON_RET_DEFAULT		SBI_HSM_SUSP_NON_RET_BIT
++#define SBI_HSM_SUSPEND_NON_RET_PLATFORM	(SBI_HSM_SUSP_NON_RET_BIT | \
++						 SBI_HSM_SUSP_PLAT_BASE)
++#define SBI_HSM_SUSPEND_NON_RET_LAST		(SBI_HSM_SUSP_NON_RET_BIT | \
++						 SBI_HSM_SUSP_BASE_MASK)
++
++/* SBI function IDs for SRST extension */
++#define SBI_EXT_SRST_RESET			0x0
++
++#define SBI_SRST_RESET_TYPE_SHUTDOWN		0x0
++#define SBI_SRST_RESET_TYPE_COLD_REBOOT	0x1
++#define SBI_SRST_RESET_TYPE_WARM_REBOOT	0x2
++#define SBI_SRST_RESET_TYPE_LAST	SBI_SRST_RESET_TYPE_WARM_REBOOT
++
++#define SBI_SRST_RESET_REASON_NONE	0x0
++#define SBI_SRST_RESET_REASON_SYSFAIL	0x1
++
++/* SBI function IDs for PMU extension */
++#define SBI_EXT_PMU_NUM_COUNTERS	0x0
++#define SBI_EXT_PMU_COUNTER_GET_INFO	0x1
++#define SBI_EXT_PMU_COUNTER_CFG_MATCH	0x2
++#define SBI_EXT_PMU_COUNTER_START	0x3
++#define SBI_EXT_PMU_COUNTER_STOP	0x4
++#define SBI_EXT_PMU_COUNTER_FW_READ	0x5
++
++/** General pmu event codes specified in SBI PMU extension */
++enum sbi_pmu_hw_generic_events_t {
++	SBI_PMU_HW_NO_EVENT			= 0,
++	SBI_PMU_HW_CPU_CYCLES			= 1,
++	SBI_PMU_HW_INSTRUCTIONS			= 2,
++	SBI_PMU_HW_CACHE_REFERENCES		= 3,
++	SBI_PMU_HW_CACHE_MISSES			= 4,
++	SBI_PMU_HW_BRANCH_INSTRUCTIONS		= 5,
++	SBI_PMU_HW_BRANCH_MISSES		= 6,
++	SBI_PMU_HW_BUS_CYCLES			= 7,
++	SBI_PMU_HW_STALLED_CYCLES_FRONTEND	= 8,
++	SBI_PMU_HW_STALLED_CYCLES_BACKEND	= 9,
++	SBI_PMU_HW_REF_CPU_CYCLES		= 10,
++
++	SBI_PMU_HW_GENERAL_MAX,
++};
++
++/**
++ * Generalized hardware cache events:
++ *
++ *       { L1-D, L1-I, LLC, ITLB, DTLB, BPU, NODE } x
++ *       { read, write, prefetch } x
++ *       { accesses, misses }
++ */
++enum sbi_pmu_hw_cache_id {
++	SBI_PMU_HW_CACHE_L1D		= 0,
++	SBI_PMU_HW_CACHE_L1I		= 1,
++	SBI_PMU_HW_CACHE_LL		= 2,
++	SBI_PMU_HW_CACHE_DTLB		= 3,
++	SBI_PMU_HW_CACHE_ITLB		= 4,
++	SBI_PMU_HW_CACHE_BPU		= 5,
++	SBI_PMU_HW_CACHE_NODE		= 6,
++
++	SBI_PMU_HW_CACHE_MAX,
++};
++
++enum sbi_pmu_hw_cache_op_id {
++	SBI_PMU_HW_CACHE_OP_READ	= 0,
++	SBI_PMU_HW_CACHE_OP_WRITE	= 1,
++	SBI_PMU_HW_CACHE_OP_PREFETCH	= 2,
++
++	SBI_PMU_HW_CACHE_OP_MAX,
++};
++
++enum sbi_pmu_hw_cache_op_result_id {
++	SBI_PMU_HW_CACHE_RESULT_ACCESS	= 0,
++	SBI_PMU_HW_CACHE_RESULT_MISS	= 1,
++
++	SBI_PMU_HW_CACHE_RESULT_MAX,
++};
++
++#define SBI_PMU_HW_CACHE_EVENT_IDX(id, op, res) \
++	(SBI_PMU_EVENT_TYPE_HW_CACHE << SBI_PMU_EVENT_IDX_TYPE_OFFSET | \
++	 SBI_PMU_HW_CACHE_##id << 3 | SBI_PMU_HW_CACHE_OP_##op << 1 | \
++	 SBI_PMU_HW_CACHE_RESULT_##res)
++
++/**
++ * Special "firmware" events provided by the OpenSBI, even if the hardware
++ * does not support performance events. These events are encoded as a raw
++ * event type in Linux kernel perf framework.
++ */
++enum sbi_pmu_fw_event_code_id {
++	SBI_PMU_FW_MISALIGNED_LOAD	= 0,
++	SBI_PMU_FW_MISALIGNED_STORE	= 1,
++	SBI_PMU_FW_ACCESS_LOAD		= 2,
++	SBI_PMU_FW_ACCESS_STORE		= 3,
++	SBI_PMU_FW_ILLEGAL_INSN		= 4,
++	SBI_PMU_FW_SET_TIMER		= 5,
++	SBI_PMU_FW_IPI_SENT		= 6,
++	SBI_PMU_FW_IPI_RECVD		= 7,
++	SBI_PMU_FW_FENCE_I_SENT		= 8,
++	SBI_PMU_FW_FENCE_I_RECVD	= 9,
++	SBI_PMU_FW_SFENCE_VMA_SENT	= 10,
++	SBI_PMU_FW_SFENCE_VMA_RCVD	= 11,
++	SBI_PMU_FW_SFENCE_VMA_ASID_SENT	= 12,
++	SBI_PMU_FW_SFENCE_VMA_ASID_RCVD	= 13,
++
++	SBI_PMU_FW_HFENCE_GVMA_SENT	= 14,
++	SBI_PMU_FW_HFENCE_GVMA_RCVD	= 15,
++	SBI_PMU_FW_HFENCE_GVMA_VMID_SENT = 16,
++	SBI_PMU_FW_HFENCE_GVMA_VMID_RCVD = 17,
++
++	SBI_PMU_FW_HFENCE_VVMA_SENT	= 18,
++	SBI_PMU_FW_HFENCE_VVMA_RCVD	= 19,
++	SBI_PMU_FW_HFENCE_VVMA_ASID_SENT = 20,
++	SBI_PMU_FW_HFENCE_VVMA_ASID_RCVD = 21,
++	SBI_PMU_FW_MAX,
++};
++
++/** SBI PMU event idx type */
++enum sbi_pmu_event_type_id {
++	SBI_PMU_EVENT_TYPE_HW				= 0x0,
++	SBI_PMU_EVENT_TYPE_HW_CACHE			= 0x1,
++	SBI_PMU_EVENT_TYPE_HW_RAW			= 0x2,
++	SBI_PMU_EVENT_TYPE_FW				= 0xf,
++	SBI_PMU_EVENT_TYPE_MAX,
++};
++
++/** SBI PMU counter type */
++enum sbi_pmu_ctr_type {
++	SBI_PMU_CTR_TYPE_HW = 0,
++	SBI_PMU_CTR_TYPE_FW,
++};
++
++/* Helper macros to decode event idx */
++#define SBI_PMU_EVENT_IDX_MASK 0xFFFFF
++#define SBI_PMU_EVENT_IDX_TYPE_OFFSET 16
++#define SBI_PMU_EVENT_IDX_TYPE_MASK (0xF << SBI_PMU_EVENT_IDX_TYPE_OFFSET)
++#define SBI_PMU_EVENT_IDX_CODE_MASK 0xFFFF
++#define SBI_PMU_EVENT_RAW_IDX 0x20000
++
++#define SBI_PMU_EVENT_IDX_INVALID 0xFFFFFFFF
++
++#define SBI_PMU_EVENT_HW_CACHE_OPS_RESULT	0x1
++#define SBI_PMU_EVENT_HW_CACHE_OPS_ID_MASK	0x6
++#define SBI_PMU_EVENT_HW_CACHE_OPS_ID_OFFSET	1
++#define SBI_PMU_EVENT_HW_CACHE_ID_MASK		0xfff8
++#define SBI_PMU_EVENT_HW_CACHE_ID_OFFSET	3
++
++/* Flags defined for config matching function */
++#define SBI_PMU_CFG_FLAG_SKIP_MATCH	(1 << 0)
++#define SBI_PMU_CFG_FLAG_CLEAR_VALUE	(1 << 1)
++#define SBI_PMU_CFG_FLAG_AUTO_START	(1 << 2)
++#define SBI_PMU_CFG_FLAG_SET_VUINH	(1 << 3)
++#define SBI_PMU_CFG_FLAG_SET_VSINH	(1 << 4)
++#define SBI_PMU_CFG_FLAG_SET_UINH	(1 << 5)
++#define SBI_PMU_CFG_FLAG_SET_SINH	(1 << 6)
++#define SBI_PMU_CFG_FLAG_SET_MINH	(1 << 7)
++
++/* Flags defined for counter start function */
++#define SBI_PMU_START_FLAG_SET_INIT_VALUE (1 << 0)
++
++/* Flags defined for counter stop function */
++#define SBI_PMU_STOP_FLAG_RESET (1 << 0)
++
++/* SBI base specification related macros */
++#define SBI_SPEC_VERSION_MAJOR_OFFSET		24
++#define SBI_SPEC_VERSION_MAJOR_MASK		0x7f
++#define SBI_SPEC_VERSION_MINOR_MASK		0xffffff
++#define SBI_EXT_VENDOR_START			0x09000000
++#define SBI_EXT_VENDOR_END			0x09FFFFFF
++#define SBI_EXT_FIRMWARE_START			0x0A000000
++#define SBI_EXT_FIRMWARE_END			0x0AFFFFFF
++
++/* SBI return error codes */
++#define SBI_SUCCESS				0
++#define SBI_ERR_FAILED				-1
++#define SBI_ERR_NOT_SUPPORTED			-2
++#define SBI_ERR_INVALID_PARAM			-3
++#define SBI_ERR_DENIED				-4
++#define SBI_ERR_INVALID_ADDRESS			-5
++#define SBI_ERR_ALREADY_AVAILABLE		-6
++#define SBI_ERR_ALREADY_STARTED			-7
++#define SBI_ERR_ALREADY_STOPPED			-8
++
++#define SBI_LAST_ERR				SBI_ERR_ALREADY_STOPPED
++
++/* clang-format on */
++
++#endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_config.h b/board/andestech/common/swdtb_merger/swdtb_config.h
+index 2aa355ee4fb9..2140a58cb369 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_config.h
++++ b/board/andestech/common/swdtb_merger/swdtb_config.h
+@@ -8,6 +8,8 @@
+ #define __SWDTB_CONFIG_H_
+ 
+ #define ANDES_SWDTB_MERGER_CHECK	1
++/* Due to the HPM event data to large, default skip printf message */
++#define ANDES_SWDTB_MERGER_CHECK_HPM	0
+ 
+ /* Max string line per bytes for console record */
+ #define MAX_STRING_BYTE			256
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 0d288748def6..f830d09c864a 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -49,6 +49,8 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "dma type to snd",		dma_type_to_snd_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "dma type to lcd",		dma_type_to_lcd_fixup},
++	{SWDTB_ENABLE,	1,
++	 "add hpm event",		andespmu_event_fixup},
+ };
+ 
+ /*
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 0ebea1b93b6e..f26738b8b489 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -733,3 +733,39 @@ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 	return ret;
+ }
++
++/**
++ * The andespmu_event_fixup() will add riscv,raw-event-to-mhpmcounters,
++ * riscv,event-to-mhpmcounters and riscv,event-to-mhpmevent into pmu node,
++ * porting from OpenSBI
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int andespmu_event_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "pmu";
++	const char *cpu_prop = "model";
++	const char *full_name;
++	const char *cpu_mode;
++	const char *cpu_str;
++	unsigned long cpu;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		cpu_mode = fdt_getprop(fdt, 0, cpu_prop, NULL);
++		if (!cpu_mode) {
++			dtb_error("Not found cpu model\n");
++			return !(RETURN_DONE);
++		}
++		/* Get CPU series number */
++		cpu_str = cpu_mode + (strlen(cpu_mode) - 2);
++		cpu = simple_strtoul(cpu_str, NULL, 10);
++
++		ret = ae350_fdt_add_pmu(fdt, node, cpu);
++
++		return ret;
++	}
++
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 0252076e5f3e..9ad434291ee5 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -13,6 +13,7 @@
+ #include <string.h>
+ #include "swdtb_tool.h"
+ #include "swdtb_config.h"
++#include "andes_hpm.h"
+ 
+ /* For the uncountable */
+ #define COUNT_INFINITE	(0xFFFFFFFF)
+@@ -50,4 +51,6 @@ int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int insert_inject_node(void *fdt, int node, char *name, char *value);
+ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value);
++
++int andespmu_event_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+-- 
+2.34.1
+

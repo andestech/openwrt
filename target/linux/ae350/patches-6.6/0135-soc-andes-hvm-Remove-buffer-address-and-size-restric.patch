@@ -1,0 +1,37 @@
+From 501d29160c176cf66d54a33033548529eb715108 Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Thu, 21 Nov 2024 16:05:06 +0800
+Subject: [PATCH 135/168] soc: andes: hvm: Remove buffer address and size
+ restrictions for DMA memcpy access to HVM
+
+The buffer address and size restrictions are no longer necessary,
+as the ATCDMAC300 DMA engine does not impose such limitations
+when accessing the HVM.
+
+Signed-off-by: CL Wang <cl634@andestech.com>
+---
+ drivers/soc/andes/hvm.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/soc/andes/hvm.c b/drivers/soc/andes/hvm.c
+index 5ecc673a5987..64624919e7f4 100644
+--- a/drivers/soc/andes/hvm.c
++++ b/drivers/soc/andes/hvm.c
+@@ -275,14 +275,6 @@ static int dma_dev_check_dma_buf(dma_addr_t pa, unsigned int size)
+ 				 mem_list) {
+ 		if (pa >= mem_info->phy_addr &&
+ 		    (pa + size) <= (mem_info->phy_addr + mem_info->size)) {
+-			/* If the transfer address is within the HVM range,
+-			 * both the physical address and the transfer size
+-			 * must be multiples of 4.
+-			 */
+-			if ((size & 0x3) || (pa & 0x3)) {
+-				dev_err(drv_info->dev, "For HVM, the physical address and the transfer size must be multiples of 4.\n");
+-				return -EINVAL;
+-			}
+ 			return 0;
+ 		}
+ 	}
+-- 
+2.34.1
+

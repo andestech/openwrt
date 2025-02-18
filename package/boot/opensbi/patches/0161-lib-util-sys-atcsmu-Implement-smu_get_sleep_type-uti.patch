@@ -1,0 +1,61 @@
+From 0fc0cc8157c5c08dcbff7932cb83c6887072fbe4 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 14 Aug 2024 15:02:37 +0800
+Subject: [PATCH 161/172] lib: util: sys: atcsmu: Implement smu_get_sleep_type
+ utility (#116)
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ include/sbi_utils/sys/atcsmu.h | 7 +++++++
+ lib/utils/sys/atcsmu.c         | 7 +++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/include/sbi_utils/sys/atcsmu.h b/include/sbi_utils/sys/atcsmu.h
+index 07be22eef626..7c5771a87a38 100644
+--- a/include/sbi_utils/sys/atcsmu.h
++++ b/include/sbi_utils/sys/atcsmu.h
+@@ -10,6 +10,8 @@
+ #include <sbi/sbi_types.h>
+ 
+ /* clang-format off */
++#define PCS0_SCRATCH_OFFSET	0x84
++#define PCSm_SCRATCH_OFFSET(n) ((n + 3) * 0x20 + PCS0_SCRATCH_OFFSET)
+ 
+ #define PCS0_WE_OFFSET		0x90
+ #define PCSm_WE_OFFSET(i)	((i + 3) * 0x20 + PCS0_WE_OFFSET)
+@@ -45,6 +47,10 @@
+ #define PCS_MAX_NR  8
+ #define FLASH_BASE  0x80000000ULL
+ 
++/* Andes AE350 sleep type */
++#define SBI_SUSP_AE350_LIGHT_SLEEP                     0x80000001
++#define SBI_SUSP_AE350_DEEP_SLEEP                      0x80000002
++
+ /* clang-format on */
+ 
+ struct smu_data {
+@@ -55,5 +61,6 @@ int smu_set_wakeup_events(struct smu_data *smu, u32 events, u32 hartid);
+ bool smu_support_sleep_mode(struct smu_data *smu, u32 sleep_mode, u32 hartid);
+ int smu_set_command(struct smu_data *smu, u32 pcs_ctl, u32 hartid);
+ int smu_set_reset_vector(struct smu_data *smu, ulong wakeup_addr, u32 hartid);
++u32 smu_get_sleep_type(struct smu_data *smu, u32 hartid);
+ 
+ #endif /* _SYS_ATCSMU_H */
+diff --git a/lib/utils/sys/atcsmu.c b/lib/utils/sys/atcsmu.c
+index 8ddd88d5f52b..2723db02a866 100644
+--- a/lib/utils/sys/atcsmu.c
++++ b/lib/utils/sys/atcsmu.c
+@@ -90,3 +90,10 @@ inline int smu_set_reset_vector(struct smu_data *smu, ulong wakeup_addr,
+ 	} else
+ 		return 0;
+ }
++
++inline u32 smu_get_sleep_type(struct smu_data *smu, u32 hartid)
++{
++	if (!smu)
++		return SBI_EINVAL;
++	return readl((void *)(smu->addr + PCSm_SCRATCH_OFFSET(hartid)));
++}
+-- 
+2.34.1
+

@@ -1,0 +1,45 @@
+From 1d89a9da64e4b4f51c59c44eba2f65b037bc4d95 Mon Sep 17 00:00:00 2001
+From: "Pope B.Lei" <popeblei@gmail.com>
+Date: Wed, 10 Apr 2024 10:05:20 +0800
+Subject: [PATCH 092/172] lib: sbi: Refine the settings for switching to
+ Virtual Supervisor Mode.
+
+Although Mstatus.MPV is set, before executing mret, access to VS mode
+registers should use the actual register addresses, not the pseudonyms
+of S registers.
+
+Signed-off-by: Pope B.Lei <popeblei@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_hart.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/lib/sbi/sbi_hart.c b/lib/sbi/sbi_hart.c
+index 0e7b5d1d7cbe..cd974cc1a8da 100644
+--- a/lib/sbi/sbi_hart.c
++++ b/lib/sbi/sbi_hart.c
+@@ -1046,10 +1046,17 @@ sbi_hart_switch_mode(unsigned long arg0, unsigned long arg1,
+ 	csr_write(CSR_MEPC, next_addr);
+ 
+ 	if (next_mode == PRV_S) {
+-		csr_write(CSR_STVEC, next_addr);
+-		csr_write(CSR_SSCRATCH, 0);
+-		csr_write(CSR_SIE, 0);
+-		csr_write(CSR_SATP, 0);
++		if (next_virt) {
++			csr_write(CSR_VSTVEC, next_addr);
++			csr_write(CSR_VSSCRATCH, 0);
++			csr_write(CSR_VSIE, 0);
++			csr_write(CSR_VSATP, 0);
++		} else {
++			csr_write(CSR_STVEC, next_addr);
++			csr_write(CSR_SSCRATCH, 0);
++			csr_write(CSR_SIE, 0);
++			csr_write(CSR_SATP, 0);
++		}
+ 	} else if (next_mode == PRV_U) {
+ 		if (misa_extension('N')) {
+ 			csr_write(CSR_UTVEC, next_addr);
+-- 
+2.34.1
+

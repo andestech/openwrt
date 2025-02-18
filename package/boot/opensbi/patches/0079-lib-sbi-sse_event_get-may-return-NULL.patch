@@ -1,0 +1,31 @@
+From 37e1544a86135c8048af77a51486397209529fff Mon Sep 17 00:00:00 2001
+From: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Date: Mon, 8 Apr 2024 09:29:04 +0200
+Subject: [PATCH 079/172] lib: sbi: sse_event_get() may return NULL
+
+sse_event_get() may return NULL. We should not dereference the return value
+in sbi_sse_exit() without checking.
+
+Fixes: c8cdf01d8f3a ("lib: sbi: Add support for Supervisor Software Events extension")
+Signed-off-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index a6866922da6e..f0729f944d1b 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -1119,7 +1119,7 @@ void sbi_sse_exit(struct sbi_scratch *scratch)
+ 	for (i = 0; i < EVENT_COUNT; i++) {
+ 		e = sse_event_get(supported_events[i]);
+ 
+-		if (e->attrs.hartid != current_hartid())
++		if (!e || e->attrs.hartid != current_hartid())
+ 			continue;
+ 
+ 		if (sse_event_state(e) > SBI_SSE_STATE_REGISTERED) {
+-- 
+2.34.1
+

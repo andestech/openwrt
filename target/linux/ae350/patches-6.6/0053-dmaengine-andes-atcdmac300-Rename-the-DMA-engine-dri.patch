@@ -1,0 +1,503 @@
+From c995d763984d36084425ae4d30a877925341462f Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Wed, 12 Jun 2024 23:07:04 +0800
+Subject: [PATCH 053/168] dmaengine: andes: atcdmac300: Rename the DMA engine
+ driver from atcdmac300g to atcdmac300
+
+1. Change the dma@f0c00000 compatible from "andestech,atcdmac300g" to
+   "andestech,atcdmac300" in the DTS.
+2. Change kernel config name from ATCDMAC300G to ATCDMAC300.
+3. Rename the SD Card driver from ftsdc010g.c to ftsdc010.c.
+4. Rename the DMA engine driver from atcdmac300g.c to atcdmac300.c.
+
+Signed-off-by: CL Wang <cl634@andestech.com>
+---
+ .../boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts     | 4 ++--
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts        | 4 ++--
+ .../boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts   | 4 ++--
+ .../boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts     | 4 ++--
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts        | 4 ++--
+ .../boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts    | 4 ++--
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts       | 4 ++--
+ .../boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts  | 4 ++--
+ .../boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts    | 4 ++--
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts       | 4 ++--
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts             | 4 ++--
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts      | 4 ++--
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts       | 4 ++--
+ arch/riscv/configs/andes-support.config                   | 5 +++--
+ drivers/dma/Kconfig                                       | 4 ++--
+ drivers/dma/Makefile                                      | 2 +-
+ drivers/dma/{atcdmac300g.c => atcdmac300.c}               | 4 ++--
+ drivers/dma/{atcdmac300g.h => atcdmac300.h}               | 6 +++---
+ drivers/mmc/host/Kconfig                                  | 6 +++---
+ drivers/mmc/host/Makefile                                 | 2 +-
+ drivers/mmc/host/{ftsdc010g.c => ftsdc010.c}              | 8 ++++----
+ drivers/mmc/host/{ftsdc010g.h => ftsdc010.h}              | 0
+ 22 files changed, 45 insertions(+), 44 deletions(-)
+ rename drivers/dma/{atcdmac300g.c => atcdmac300.c} (99%)
+ rename drivers/dma/{atcdmac300g.h => atcdmac300.h} (99%)
+ rename drivers/mmc/host/{ftsdc010g.c => ftsdc010.c} (99%)
+ rename drivers/mmc/host/{ftsdc010g.h => ftsdc010.h} (100%)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index ab388216b9ac..bdc649ff0214 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -185,7 +185,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x02>;
+@@ -198,7 +198,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 7d94082023ef..2e8b571174e4 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -270,7 +270,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x06>;
+@@ -284,7 +284,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x06>;
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 70fde4e3eb30..d5c875b91ffd 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -197,7 +197,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x03>;
+@@ -210,7 +210,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x03>;
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index 898921fde7f3..e0c168de0594 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -187,7 +187,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x02>;
+@@ -200,7 +200,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index e25746c27a35..956cc149591b 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -270,7 +270,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x06>;
+@@ -283,7 +283,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x06>;
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 64dfd4bd244f..d450a7a982a4 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -185,7 +185,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x02>;
+@@ -198,7 +198,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 85aadd06e6aa..4a92a73ef93a 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -270,7 +270,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x06>;
+@@ -284,7 +284,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x06>;
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 73e3255a5107..ac3ce5aeda22 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -197,7 +197,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x03>;
+@@ -210,7 +210,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x03>;
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 9bb77d5f164b..85ff2c27d974 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -187,7 +187,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x02>;
+@@ -200,7 +200,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index c574a537f222..e85ab977acfa 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -270,7 +270,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x06>;
+@@ -283,7 +283,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x06>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index be846140e287..6b5773111419 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -374,7 +374,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x0a>;
+@@ -387,7 +387,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x0a>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 1753aa88c34e..7d537770e3b4 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -270,7 +270,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x06>;
+@@ -283,7 +283,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x06>;
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index 11de68656b14..b2c1f3bd5882 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -221,7 +221,7 @@ smu@f0100000 {
+ 		};
+ 
+ 		mmc@f0e00000 {
+-			compatible = "andestech,atfsdc010g";
++			compatible = "andestech,atfsdc010";
+ 			reg = <0x00 0xf0e00000 0x00 0x1000>;
+ 			interrupts = <0x12 0x04>;
+ 			interrupt-parent = <0x04>;
+@@ -234,7 +234,7 @@ mmc@f0e00000 {
+ 		};
+ 
+ 		dma@f0c00000 {
+-			compatible = "andestech,atcdmac300g";
++			compatible = "andestech,atcdmac300";
+ 			reg = <0x00 0xf0c00000 0x00 0x1000>;
+ 			interrupts = <0x0a 0x04>;
+ 			interrupt-parent = <0x04>;
+diff --git a/arch/riscv/configs/andes-support.config b/arch/riscv/configs/andes-support.config
+index 99b32c45c900..bdc12901291b 100644
+--- a/arch/riscv/configs/andes-support.config
++++ b/arch/riscv/configs/andes-support.config
+@@ -2,5 +2,6 @@ CONFIG_DEFAULT_HOSTNAME="andes-test"
+ CONFIG_ARCH_ANDES=y
+ CONFIG_ANDES_PPMA=y
+ 
+-CONFIG_ATCDMAC300G=y
+-CONFIG_MMC_FTSDCG=y
++CONFIG_FTMAC100=y
++CONFIG_MMC_FTSDC=y
++CONFIG_ATCDMAC300=y
+diff --git a/drivers/dma/Kconfig b/drivers/dma/Kconfig
+index 05e946b3d122..231c0a27e641 100644
+--- a/drivers/dma/Kconfig
++++ b/drivers/dma/Kconfig
+@@ -93,7 +93,7 @@ config APPLE_ADMAC
+ 	help
+ 	  Enable support for Audio DMA Controller found on Apple Silicon SoCs.
+ 
+-config ATCDMAC300G
++config ATCDMAC300
+ 	tristate "Andes generic DMA support"
+ 	depends on ARCH_ANDES
+ 	select DMA_ENGINE
+@@ -785,7 +785,7 @@ config ASYNC_TX_DMA
+ config DMATEST
+ 	tristate "DMA Test client"
+ 	depends on DMA_ENGINE
+-	depends on ATCDMAC300G
++	depends on ATCDMAC300
+ 	select DMA_ENGINE_RAID
+ 	help
+ 	  Simple DMA test client. Say N unless you're debugging a
+diff --git a/drivers/dma/Makefile b/drivers/dma/Makefile
+index 3da6396668d4..0e7290da9369 100644
+--- a/drivers/dma/Makefile
++++ b/drivers/dma/Makefile
+@@ -19,7 +19,7 @@ obj-$(CONFIG_AMCC_PPC440SPE_ADMA) += ppc4xx/
+ obj-$(CONFIG_AMD_PTDMA) += ptdma/
+ obj-$(CONFIG_APPLE_ADMAC) += apple-admac.o
+ obj-$(CONFIG_AT_HDMAC) += at_hdmac.o
+-obj-$(CONFIG_ATCDMAC300G) += atcdmac300g.o
++obj-$(CONFIG_ATCDMAC300) += atcdmac300.o
+ obj-$(CONFIG_AT_XDMAC) += at_xdmac.o
+ obj-$(CONFIG_AXI_DMAC) += dma-axi-dmac.o
+ obj-$(CONFIG_BCM_SBA_RAID) += bcm-sba-raid.o
+diff --git a/drivers/dma/atcdmac300g.c b/drivers/dma/atcdmac300.c
+similarity index 99%
+rename from drivers/dma/atcdmac300g.c
+rename to drivers/dma/atcdmac300.c
+index 614010da19f0..297ee7e9d45a 100644
+--- a/drivers/dma/atcdmac300g.c
++++ b/drivers/dma/atcdmac300.c
+@@ -18,7 +18,7 @@
+ #include <linux/of_address.h>
+ #include <linux/dma-map-ops.h>
+ #include "dmaengine.h"
+-#include "atcdmac300g.h"
++#include "atcdmac300.h"
+ 
+ #define V5_DMA_BUSWIDTHS\
+ 	(BIT(DMA_SLAVE_BUSWIDTH_UNDEFINED) |\
+@@ -1078,7 +1078,7 @@ static struct v5_dma_platform_data v5dma_config = {
+ #if defined(CONFIG_OF)
+ static const struct of_device_id v5_dma_dt_ids[] = {
+ 	{
+-		.compatible = "andestech,atcdmac300g",
++		.compatible = "andestech,atcdmac300",
+ 		.data = &v5dma_config,
+ 	}, {
+ 		/* sentinel */
+diff --git a/drivers/dma/atcdmac300g.h b/drivers/dma/atcdmac300.h
+similarity index 99%
+rename from drivers/dma/atcdmac300g.h
+rename to drivers/dma/atcdmac300.h
+index dcc4a6446f37..f8eb066b11bd 100644
+--- a/drivers/dma/atcdmac300g.h
++++ b/drivers/dma/atcdmac300.h
+@@ -4,8 +4,8 @@
+  *
+  * Copyright (C) 2021 Andes Technology Corporation
+  */
+-#ifndef ATCDMAC300G_H
+-#define	ATCDMAC300G_H
++#ifndef ATCDMAC300_H
++#define	ATCDMAC300_H
+ 
+ #include <linux/platform_data/dma-v5.h>
+ 
+@@ -397,4 +397,4 @@ static inline int v5_chan_is_paused(struct v5_dma_chan *v5chan)
+ {
+ 	return 0;
+ }
+-#endif /* ATCDMAC300G_H */
++#endif /* ATCDMAC300_H */
+diff --git a/drivers/mmc/host/Kconfig b/drivers/mmc/host/Kconfig
+index 706d5ad5ab36..cbb41c7ae2d5 100644
+--- a/drivers/mmc/host/Kconfig
++++ b/drivers/mmc/host/Kconfig
+@@ -616,10 +616,10 @@ config MMC_DAVINCI
+ 	  If you have an DAVINCI board with a Multimedia Card slot,
+ 	  say Y or M here.  If unsure, say N.
+ 
+-config MMC_FTSDCG
+-	tristate "Andestech SDC Multimedia Card Interface support dmeengine"
++config MMC_FTSDC
++	tristate "Andestech SDC Multimedia Card Interface use dmaengine"
+ 	depends on RISCV
+-	depends on ATCDMAC300G
++	depends on ATCDMAC300
+ 	help
+ 	  This selects the TI DAVINCI Multimedia card Interface.
+ 	  If you have an DAVINCI board with a Multimedia Card slot,
+diff --git a/drivers/mmc/host/Makefile b/drivers/mmc/host/Makefile
+index 47ab0edc9fab..7e25507a43d8 100644
+--- a/drivers/mmc/host/Makefile
++++ b/drivers/mmc/host/Makefile
+@@ -32,7 +32,7 @@ obj-$(CONFIG_MMC_ATMELMCI)	+= atmel-mci.o
+ obj-$(CONFIG_MMC_TIFM_SD)	+= tifm_sd.o
+ obj-$(CONFIG_MMC_MVSDIO)	+= mvsdio.o
+ obj-$(CONFIG_MMC_DAVINCI)       += davinci_mmc.o
+-obj-$(CONFIG_MMC_FTSDCG)         += ftsdc010g.o
++obj-$(CONFIG_MMC_FTSDC)		+= ftsdc010.o
+ obj-$(CONFIG_MMC_SPI)		+= mmc_spi.o
+ obj-$(CONFIG_MMC_SPI)		+= of_mmc_spi.o
+ obj-$(CONFIG_MMC_SDRICOH_CS)	+= sdricoh_cs.o
+diff --git a/drivers/mmc/host/ftsdc010g.c b/drivers/mmc/host/ftsdc010.c
+similarity index 99%
+rename from drivers/mmc/host/ftsdc010g.c
+rename to drivers/mmc/host/ftsdc010.c
+index 7f4da744983c..b8d4d020eadf 100644
+--- a/drivers/mmc/host/ftsdc010g.c
++++ b/drivers/mmc/host/ftsdc010.c
+@@ -23,12 +23,12 @@
+ #include <linux/of.h>
+ #include <linux/of_device.h>
+ #include <linux/io.h>
+-#include "ftsdc010g.h"
++#include "ftsdc010.h"
+ #include "../core/core.h"
+ #include <linux/highmem.h>
+ #include <linux/kernel.h>
+ 
+-#define DRIVER_NAME "ftsdc010g"
++#define DRIVER_NAME "ftsdc010"
+ #define REG_READ(addr) readl((host->base + addr))
+ #define REG_WRITE(data, addr) writel((data), (host->base + addr))
+ 
+@@ -1314,7 +1314,7 @@ MODULE_DEVICE_TABLE(platform, ftsdc_mmc_devtype);
+ 
+ static const struct of_device_id ftsdc_mmc_dt_ids[] = {
+ 	{
+-		.compatible = "andestech,atfsdc010g",
++		.compatible = "andestech,atfsdc010",
+ 		.data = &ftsdc_mmc_devtype[MMC_CTLR_VERSION_2],
+ 	},
+ 	{},
+@@ -1579,7 +1579,7 @@ static int ftsdc_resume(struct platform_device *pdev)
+ 
+ static struct platform_driver ftsdc_driver = {
+ 	.driver	= {
+-		.name	= "ftsdc010g",
++		.name	= "ftsdc010",
+ 		.owner	= THIS_MODULE,
+ 		.of_match_table = of_match_ptr(ftsdc_mmc_dt_ids),
+ 	},
+diff --git a/drivers/mmc/host/ftsdc010g.h b/drivers/mmc/host/ftsdc010.h
+similarity index 100%
+rename from drivers/mmc/host/ftsdc010g.h
+rename to drivers/mmc/host/ftsdc010.h
+-- 
+2.34.1
+

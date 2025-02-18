@@ -1,0 +1,45 @@
+From 533067d182af540ff13e6e03abd0c0f1ab844178 Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Wed, 8 May 2024 17:02:39 +0530
+Subject: [PATCH 105/172] lib: sbi: Put event after use in sbi_sse_exit() loop
+
+Currently, the sbi_sse_exit() gets event in a loop but does not put
+it back after use. This results in global events remaining locked
+causing hangs on sub-sequent calls to sse_event_get() for global
+events.
+
+Fixes: c8cdf01d8f3a ("lib: sbi: Add support for Supervisor Software Events extension")
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+---
+ lib/sbi/sbi_sse.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index 18dfdb6dc956..0cd6ba6b9e21 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -1121,13 +1121,18 @@ void sbi_sse_exit(struct sbi_scratch *scratch)
+ 
+ 	for (i = 0; i < EVENT_COUNT; i++) {
+ 		e = sse_event_get(supported_events[i]);
+-
+-		if (!e || e->attrs.hartid != current_hartid())
++		if (!e)
+ 			continue;
+ 
++		if (e->attrs.hartid != current_hartid())
++			goto skip;
++
+ 		if (sse_event_state(e) > SBI_SSE_STATE_REGISTERED) {
+ 			sbi_printf("Event %d in invalid state at exit", i);
+ 			sse_event_set_state(e, SBI_SSE_STATE_UNUSED);
+ 		}
++
++skip:
++		sse_event_put(e);
+ 	}
+ }
+-- 
+2.34.1
+

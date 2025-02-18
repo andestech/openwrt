@@ -1,0 +1,148 @@
+From beb0cd177f10a6bdafd73aac19059fecf6a07a91 Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Fri, 15 Mar 2024 19:55:23 +0530
+Subject: [PATCH 073/172] lib: sbi: Simplify wait_for_coldboot() implementation
+
+On QEMU virt machine with large number of HARTs, some of the HARTs
+randomly fail to come out of wait_for_coldboot() due to one of the
+following race-conditions:
+
+1) Failing HARTs are not able to acquire the coldboot_lock and
+   update the coldboot_hartmask in wait_for_coldboot() before
+   the coldboot HART acquires the coldboot_lock and sends IPI
+   in wake_coldboot_harts() hence the failing HARTs never
+   receive IPI from the coldboot HART.
+
+2) Failing HARTs acquire the coldbood_lock and update the
+   coldboot_hartmask before coldboot HART does sbi_scratch_init()
+   so the sbi_hartmask_set_hartid() does not update the
+   coldboot_hartmask on the failing HARTs hence they never
+   receive IPI from the coldboot HART.
+
+To address this, use a simple busy-loop in wait_for_coldboot() for
+polling on coldboot_done flag.
+
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+---
+ include/sbi/riscv_barrier.h |  6 +++-
+ lib/sbi/sbi_init.c          | 70 ++-----------------------------------
+ 2 files changed, 8 insertions(+), 68 deletions(-)
+
+diff --git a/include/sbi/riscv_barrier.h b/include/sbi/riscv_barrier.h
+index 1fba8b82760c..3d4a038c95ec 100644
+--- a/include/sbi/riscv_barrier.h
++++ b/include/sbi/riscv_barrier.h
+@@ -40,7 +40,11 @@
+ #define smp_wmb()		RISCV_FENCE(w,w)
+ 
+ /* CPU relax for busy loop */
+-#define cpu_relax()		asm volatile ("" : : : "memory")
++#define cpu_relax()						\
++do {								\
++	unsigned long __t;					\
++	__asm__ __volatile__ ("div %0, %0, zero" : "=r" (__t));	\
++} while (0)
+ 
+ /* clang-format on */
+ 
+diff --git a/lib/sbi/sbi_init.c b/lib/sbi/sbi_init.c
+index 67ddfe199638..616649110873 100644
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -10,7 +10,6 @@
+ #include <sbi/riscv_asm.h>
+ #include <sbi/riscv_atomic.h>
+ #include <sbi/riscv_barrier.h>
+-#include <sbi/riscv_locks.h>
+ #include <sbi/sbi_console.h>
+ #include <sbi/sbi_cppc.h>
+ #include <sbi/sbi_domain.h>
+@@ -191,82 +190,19 @@ static void sbi_boot_print_hart(struct sbi_scratch *scratch, u32 hartid)
+ 	sbi_hart_delegation_dump(scratch, "Boot HART ", "         ");
+ }
+ 
+-static spinlock_t coldboot_lock = SPIN_LOCK_INITIALIZER;
+-static struct sbi_hartmask coldboot_wait_hmask = { 0 };
+-
+ static unsigned long coldboot_done;
+ 
+ static void wait_for_coldboot(struct sbi_scratch *scratch, u32 hartid)
+ {
+-	unsigned long saved_mie, cmip;
+-
+-	if (__smp_load_acquire(&coldboot_done))
+-		return;
+-
+-	/* Save MIE CSR */
+-	saved_mie = csr_read(CSR_MIE);
+-
+-	/* Set MSIE and MEIE bits to receive IPI */
+-	csr_set(CSR_MIE, MIP_MSIP | MIP_MEIP);
+-
+-	/* Acquire coldboot lock */
+-	spin_lock(&coldboot_lock);
+-
+-	/* Mark current HART as waiting */
+-	sbi_hartmask_set_hartid(hartid, &coldboot_wait_hmask);
+-
+-	/* Release coldboot lock */
+-	spin_unlock(&coldboot_lock);
+-
+-	/* Wait for coldboot to finish using WFI */
+-	while (!__smp_load_acquire(&coldboot_done)) {
+-		do {
+-			wfi();
+-			cmip = csr_read(CSR_MIP);
+-		 } while (!(cmip & (MIP_MSIP | MIP_MEIP)));
+-	}
+-
+-	/* Acquire coldboot lock */
+-	spin_lock(&coldboot_lock);
+-
+-	/* Unmark current HART as waiting */
+-	sbi_hartmask_clear_hartid(hartid, &coldboot_wait_hmask);
+-
+-	/* Release coldboot lock */
+-	spin_unlock(&coldboot_lock);
+-
+-	/* Restore MIE CSR */
+-	csr_write(CSR_MIE, saved_mie);
+-
+-	/*
+-	 * The wait for coldboot is common for both warm startup and
+-	 * warm resume path so clearing IPI here would result in losing
+-	 * an IPI in warm resume path.
+-	 *
+-	 * Also, the sbi_platform_ipi_init() called from sbi_ipi_init()
+-	 * will automatically clear IPI for current HART.
+-	 */
++	/* Wait for coldboot to finish */
++	while (!__smp_load_acquire(&coldboot_done))
++		cpu_relax();
+ }
+ 
+ static void wake_coldboot_harts(struct sbi_scratch *scratch, u32 hartid)
+ {
+-	u32 i, hartindex = sbi_hartid_to_hartindex(hartid);
+-
+ 	/* Mark coldboot done */
+ 	__smp_store_release(&coldboot_done, 1);
+-
+-	/* Acquire coldboot lock */
+-	spin_lock(&coldboot_lock);
+-
+-	/* Send an IPI to all HARTs waiting for coldboot */
+-	sbi_hartmask_for_each_hartindex(i, &coldboot_wait_hmask) {
+-		if (i == hartindex)
+-			continue;
+-		sbi_ipi_raw_send(i);
+-	}
+-
+-	/* Release coldboot lock */
+-	spin_unlock(&coldboot_lock);
+ }
+ 
+ static unsigned long entry_count_offset;
+-- 
+2.34.1
+

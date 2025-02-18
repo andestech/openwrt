@@ -1,0 +1,32 @@
+From b5c984bd089510cc6c7ad7a5646ead1cf8ea676a Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Tue, 11 Jun 2024 19:19:33 +0800
+Subject: [PATCH 118/172] lib: utils/reset: Skip initialize reset when dt is
+ not enabled
+
+When the dt node has a status property and the value is not ok or
+okay, skip initializing reset.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/reset/fdt_reset.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/utils/reset/fdt_reset.c b/lib/utils/reset/fdt_reset.c
+index 4334586d39f7..327fb991d4ed 100644
+--- a/lib/utils/reset/fdt_reset.c
++++ b/lib/utils/reset/fdt_reset.c
+@@ -26,6 +26,9 @@ int fdt_reset_driver_init(void *fdt, struct fdt_reset *drv)
+ 	if (noff < 0)
+ 		return SBI_ENODEV;
+ 
++	if (!fdt_node_is_enabled(fdt, noff))
++		return SBI_ENODEV;
++
+ 	if (drv->init) {
+ 		rc = drv->init(fdt, noff, match);
+ 		if (rc && rc != SBI_ENODEV) {
+-- 
+2.34.1
+

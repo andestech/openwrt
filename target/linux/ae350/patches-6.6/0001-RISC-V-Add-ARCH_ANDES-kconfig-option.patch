@@ -1,0 +1,32 @@
+From 1098cd2c3da73907970585c9cd5579d3ef692951 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Thu, 14 Sep 2023 22:23:00 +0800
+Subject: [PATCH 001/168] RISC-V: Add ARCH_ANDES kconfig option
+
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ arch/riscv/Kconfig.socs | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/riscv/Kconfig.socs b/arch/riscv/Kconfig.socs
+index 30fd6a512828..cb44df4cb5ea 100644
+--- a/arch/riscv/Kconfig.socs
++++ b/arch/riscv/Kconfig.socs
+@@ -1,5 +1,14 @@
+ menu "SoC selection"
+ 
++config ARCH_ANDES
++	bool "Andes RISC-V SoCs"
++	depends on MMU && !XIP_KERNEL
++	select ERRATA_ANDES
++	select ERRATA_ANDES_CMO
++	select AX45MP_L2_CACHE
++	help
++	  This enables support for Andes platform hardware.
++
+ config ARCH_MICROCHIP_POLARFIRE
+ 	def_bool SOC_MICROCHIP_POLARFIRE
+ 
+-- 
+2.34.1
+

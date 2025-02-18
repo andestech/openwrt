@@ -1,0 +1,44 @@
+From 70aaaf37f53aa87e9ae02453dffa09a5f41563f9 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Fri, 23 Aug 2024 11:49:23 +0800
+Subject: [PATCH 162/172] lib: utils: cache: fdt_cache_andes_l2c: Add andes L2
+ cache disable operation (#116)
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ lib/utils/cache/fdt_cache_andes_l2c.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/lib/utils/cache/fdt_cache_andes_l2c.c b/lib/utils/cache/fdt_cache_andes_l2c.c
+index 2bb15ec013ce..7670a11e05e3 100644
+--- a/lib/utils/cache/fdt_cache_andes_l2c.c
++++ b/lib/utils/cache/fdt_cache_andes_l2c.c
+@@ -120,8 +120,25 @@ static int andes_l2c_get_addr(unsigned long *addr)
+ 	return 0;
+ }
+ 
++static int andes_l2c_disable(void)
++{
++	u32 ctrl;
++
++	ctrl = readl((void *)(l2c.addr + L2C_REG_CTL_OFFSET));
++	if (ctrl & L2_ENABLE) {
++		andes_l2c_wbinval_all();
++		writel(ctrl & (~L2_ENABLE), (void *)(l2c.addr + L2C_REG_CTL_OFFSET));
++	}
++
++	/* Check if L2C is enabled */
++	return (readl((void *)(l2c.addr + L2C_REG_CTL_OFFSET)) & L2_ENABLE)
++	       ? SBI_EINVAL
++	       : SBI_OK;
++}
++
+ static struct cache andes_l2c = {
+ 	.enable	     = andes_l2c_enable,
++	.disable     = andes_l2c_disable,
+ 	.wbinval_all = andes_l2c_wbinval_all,
+ 	.get_addr    = andes_l2c_get_addr,
+ };
+-- 
+2.34.1
+

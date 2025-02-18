@@ -1,0 +1,303 @@
+From 0c6c0e88a42ecb8b048d24fbdcd286d73d8a4a09 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:47:00 +0800
+Subject: [PATCH 08/53] swdtb: riscv: update ISA string for kernel 6.6 (#95)
+
+1. swdtb: riscv: update ISA string for kernel 6.6
+2. swdtb: riscv: add xandespmu to ISA string
+
+*Update ISA string for kernel 6.6:
+* Remove version numbers from extensions:
+For example, change "rv64i2p0m2p0a2p0f2p0d2p0c2p0" to "rv64imafdc".
+* Change "xv5-1p1" to "xandes"
+* Change "xdsp0p0" to "xdsp"
+
+Example 1: in AX45MP 4C
+    "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0"
+==>
+    "rv64imafdc_xandes_xdsp_xandespmu"
+
+Example 2: in AX27L2
+    "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0"
+==>
+    "rv64imafdc_xandes_xdsp_xandespmu"
+
+*Add xandespmu to ISA string:
+Add a subfeature to riscv_isa_fixup that appends xandespmu to the end of
+the RISC-V ISA string if the ISA string does not already contain
+"sscofpmf" (indicating that the bitmap is using Andes PMU). This
+modification should only apply if the CPU series is 25, 27, or 45.
+Ensure that the xandespmu string is not already present before appending
+it.
+
+Example:
+    riscv,isa = "rv64imafdc_xandes_xdsp"
+==>
+    riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu"
+
+Signed-off-by: Randolph randolph@andestech.com
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/95
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: CL Chin-Long Wang <cl634@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        |   2 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 218 +++++++++++++++++-
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |   2 +
+ 3 files changed, 221 insertions(+), 1 deletion(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 272a75996bcd..769d8fc92965 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -31,6 +31,8 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "using generic sdc",		using_generic_sdc},
+ 	{SWDTB_ENABLE,	1,
+ 	 "change ax25 to ae350",	ae350_fixup},
++	{SWDTB_ENABLE,	COUNT_INFINITE,
++	 "isa string for Linux 6.6",	riscv_isa_fixup},
+ };
+ 
+ static void process_string_data(void *blob, int node, char *name, char *value)
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 5c88fe8fbc6e..891b34a2b5ca 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -95,4 +95,220 @@ int plmt_fixup(void *fdt, int node, char *name, char *value)
+ 	char *new_str = "andestech,plmt0";
+ 
+ 	return compatible_change(fdt, node, name, value, old_str, new_str);
+-}
+\ No newline at end of file
++}
++
++/**
++ * The riscv_isa_fixup() function is used for handling ISA string legacy mode
++ * in Linux 6.6.
++ * 1. remove version numbers of extension:
++ * Example "rv64i2p0m2p0a2p0f2p0d2p0c2p0" ==> "rv64imafdc"
++ * 2. change "xv5-1p1" to "xandes"
++ * 3. change "xdsp0p0" to "xdsp"
++ *
++ * example 1: in AX45MP 4C
++ * "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0" ==>
++ * "rv64imafdc_xandes_xdsp_xandespmu"
++ *
++ * example 2: in AX27L2
++ * "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0" ==>
++ * "rv64imafdc_xandes_xdsp_xandespmu"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
++{
++#define ISA_SUBVERSION_LENGTH	3
++#if defined(CONFIG_ARCH_RV64I)
++	const char *rv_str = "rv64";
++#else
++	const char *rv_str = "rv32";
++#endif
++	const char *xv5_str = "xv5-";
++	const char *old_dsp = "xdsp";
++	const char *new_dsp = "_xdsp";
++
++	const char *prop_name = "riscv,isa";
++	char *old_str = value;
++	int idx = 0;
++	int new_idx = 0;
++	int ret;
++	/*
++	 * Cannot detect the old string, the old string is a
++	 * subset of the new string. 
++	 * 0 is no new_dsp, 1 indicates that it contains new_dsp. 
++	 */
++	int new_dsp_idx = 0;
++	int old_xv5_idx = 0;
++
++	if (strcmp(name, prop_name) == 0) {
++		/* Must using calloc */
++		char *new_str = calloc(1, strlen(old_str));
++
++		if (strstr(old_str, new_dsp)) {
++			/* Contains new "_xdsp" strings. */
++			new_dsp_idx = 1;
++		}
++		if (strstr(old_str, xv5_str)) {
++			/* Contains old "xv5-" strings. */
++			old_xv5_idx = 1;
++		}
++
++		while (idx < strlen(old_str)) {
++			if (!strncmp(&old_str[idx], rv_str, strlen(rv_str))) {
++				strncat(new_str, rv_str, strlen(rv_str));
++
++				idx += strlen(rv_str);
++				new_idx += strlen(rv_str);
++				continue;
++			}
++
++			/*
++			 * Remove subversion phase
++			 * The subversion format is 0p0 1p0 2p0 ....
++			 */
++			if (isdigit(old_str[idx])) {
++				if (old_str[idx + 1] == 'p') {
++					if (isdigit(old_str[idx + 2])) {
++						idx += ISA_SUBVERSION_LENGTH;
++						continue;
++					}
++				}
++			}
++
++			/*
++			 * Remove xv5-1p1, comparison to "xv5-" only
++			 * the subversion of "xv5" will be processed in remove
++			 * subversion phase
++			 */
++			if (old_xv5_idx &&
++			    !strncmp(&old_str[idx],
++				     xv5_str, strlen(xv5_str))) {
++				const char *new_xv5 = "_xandes";
++
++				strncat(new_str, new_xv5, strlen(new_xv5));
++
++				/* Remove xv5-*/
++				idx += strlen(xv5_str);
++				new_idx += strlen(new_xv5);
++				continue;
++			}
++
++			/* Change xdsp to _xdps */
++			if (!new_dsp_idx &&
++			    !strncmp(&old_str[idx],
++				     old_dsp, strlen(old_dsp))) {
++				strncat(new_str, new_dsp, strlen(new_dsp));
++
++				idx += strlen(old_dsp);
++				new_idx += strlen(new_dsp);
++				continue;
++			}
++
++			new_str[new_idx] = old_str[idx];
++			dtb_debug("Current new ISA string: %s\n", new_str);
++
++			idx++;
++			new_idx++;
++		}
++
++		/* Add end flag to new string tail */
++		new_str[new_idx] = '\0';
++		dtb_debug("New string: %s: %s%s%s length:%ld\n",
++			  prop_name, KYEL, new_str, KNRM, strlen(new_str));
++
++		if (strncmp(value, new_str, strlen(new_str)) == 0) {
++			/* Both strings identical */
++			return RETURN_DONE;
++		}
++
++		dtb_info("RAW: %s: %s\n", (char *)name, (char *)value);
++
++		/* The end flag not in the strlen, length +1 is needed */
++		ret = fdt_setprop(fdt, node, name, new_str,
++				  strlen(new_str) + 1);
++		free(new_str);
++		if (ret) {
++			dtb_error("Error on fdt_setprop: %s\n",
++				  fdt_strerror(ret));
++			return ret;
++		}
++
++		ret = andespmu_node_fixup(fdt, node, (char *)prop_name, NULL);
++		if (ret) {
++			dtb_error("Error on fdt_setprop: %s\n",
++				  fdt_strerror(ret));
++			return ret;
++ 		}
++
++		show_result(fdt, node, prop_name, RESULT_STRING);
++
++		return ret;
++	}
++
++	return !(RETURN_DONE);
++}
++
++/**
++ * This is the subfeature of riscv_isa_fixup
++ * for non sscofpmf and 25/27/45 bitmap we will addend _xandespmu to the
++ * isa string
++ * "rv64imafdc" ==> "rv64imafdc_xandespmu"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int andespmu_node_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *prop_name = "riscv,isa";
++	/* For non "sscofpmf" bitmap */
++	const char *target_name = "sscofpmf";
++	const char *pmu_isa = "_xandespmu";
++	const char *cpu_prop = "model";
++	const char *cpu_mode;
++	const char *compare_model = "andestech,ax65";
++	const char *old_str;
++	char *new_str;
++	int ret;
++
++	old_str = fdt_getprop(fdt, node, prop_name, NULL);
++
++	/* The "sscofpmf" is the major string in this fixup, check first. */
++	if (strstr(old_str, target_name)) {
++		/* Already contains "sscofpmf" strings. */
++		return RETURN_DONE;
++	}
++
++	/* The "_xandespmu" is the major string in this fixup, check first. */
++	if (strstr(old_str, pmu_isa)) {
++		/* Already contains "_xandespmu" strings. */
++		return RETURN_DONE;
++	}
++
++	cpu_mode = fdt_getprop(fdt, 0, cpu_prop, NULL);
++	if (!cpu_mode) {
++		printf("Not found cpu model\n");
++		return !(RETURN_DONE);
++	}
++
++	/* The bitmap cpu is not 25 27 45 */
++	if (strcmp(cpu_mode, compare_model) == 0) {
++		/* The bitmap is ax65 we don't need to add xandespmu for ax65 */
++		printf("CPU is %s\n", compare_model);
++		return RETURN_DONE;
++	}
++
++	/* Must using calloc */
++	new_str = calloc(1, strlen(old_str) + strlen(pmu_isa) + 1);
++	strncat(new_str, old_str, strlen(old_str));
++	/* +1 for '\0' */
++	strncat(new_str, pmu_isa, strlen(pmu_isa) + 1);
++
++	/* The end flag not in the strlen, length +1 is needed */
++	ret = fdt_setprop(fdt, node, name, new_str,
++			  strlen(new_str) + 1);
++	if (ret)
++		dtb_error("Error on fdt_setprop: %s\n", fdt_strerror(ret));
++
++	free(new_str);
++
++	return ret;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 9ff5e1e58811..8eb6d61ea422 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -34,4 +34,6 @@ int using_generic_sdc(void *fdt, int node, char *name, char *value);
+ int ae350_fixup(void *fdt, int node, char *name, char *value);
+ int plmt_fixup(void *fdt, int node, char *name, char *value);
+ 
++int riscv_isa_fixup(void *fdt, int node, char *name, char *value);
++int andespmu_node_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+-- 
+2.34.1
+

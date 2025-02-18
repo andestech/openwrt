@@ -1,0 +1,59 @@
+From 9b0987351405ffc34286928eb38ca15de23df842 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Thu, 19 Jan 2023 15:42:44 +0800
+Subject: [PATCH 141/172] platform: generic: andes: support Andes platform
+
+Add Andes defconfig and build configuration
+
+Reformed from the following patches on ast-v5_3_0-branch
+- (7d4cd15d32) platform: generic: objects.mk: Adjust firmware text start address to 0x0
+- (4aa323f363) ae350/config.mk: Disable jump/payload mode
+- (993a82a729) platform: generic: defconfig: Disable unused platforms and drivers
+
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ platform/generic/andes/objects.mk        |  9 +++++++++
+ platform/generic/configs/andes_defconfig | 11 +++++++++++
+ 2 files changed, 20 insertions(+)
+ create mode 100644 platform/generic/configs/andes_defconfig
+
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index 15e618529c44..a961d2369231 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -2,6 +2,15 @@
+ # SPDX-License-Identifier: BSD-2-Clause
+ #
+ 
++# Use Andes custom configuration
++PLATFORM_DEFCONFIG=andes_defconfig
++
++# Blobs to build
++FW_TEXT_START=0x00000000
++FW_JUMP=n
++FW_PAYLOAD=n
++
++# Objects to build
+ carray-platform_override_modules-$(CONFIG_PLATFORM_ANDES_AE350) += andes_ae350
+ platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o
+ 
+diff --git a/platform/generic/configs/andes_defconfig b/platform/generic/configs/andes_defconfig
+new file mode 100644
+index 000000000000..30df912859c9
+--- /dev/null
++++ b/platform/generic/configs/andes_defconfig
+@@ -0,0 +1,11 @@
++CONFIG_PLATFORM_ANDES_AE350=y
++CONFIG_FDT_IPI=y
++CONFIG_FDT_IPI_PLICSW=y
++CONFIG_FDT_IRQCHIP=y
++CONFIG_FDT_IRQCHIP_PLIC=y
++CONFIG_FDT_RESET=y
++CONFIG_FDT_RESET_ATCWDT200=y
++CONFIG_FDT_SERIAL=y
++CONFIG_FDT_SERIAL_UART8250=y
++CONFIG_FDT_TIMER=y
++CONFIG_FDT_TIMER_PLMT=y
+-- 
+2.34.1
+

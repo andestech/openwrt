@@ -1,0 +1,214 @@
+From 874fcefdf5883c042b4b1f61f6265e03e16f2e79 Mon Sep 17 00:00:00 2001
+From: Ivan Orlov <ivan.orlov0322@gmail.com>
+Date: Mon, 4 Mar 2024 21:45:49 +0000
+Subject: [PATCH 041/172] lib: Add SBIUnit testing macros and functions
+
+This patch introduces all of the SBIUnit macros and functions which
+can be used during the test development process. Also, it defines
+the 'run_all_tests' function, which is being called during the
+'init_coldboot' right after printing the boot hart information.
+
+Also, add the CONFIG_SBIUNIT Kconfig entry in order to be able to
+turn the tests on and off. When the CONFIG_SBIUNIT is disabled,
+the tests and all related code is excluded completely on the
+compilation stage.
+
+Signed-off-by: Ivan Orlov <ivan.orlov0322@gmail.com>
+Reviewed-by: Andrew Jones <ajones@ventanamicro.com>
+---
+ include/sbi/sbi_unit_test.h   | 71 +++++++++++++++++++++++++++++++++++
+ lib/sbi/Kconfig               |  4 ++
+ lib/sbi/objects.mk            |  2 +
+ lib/sbi/sbi_init.c            |  3 ++
+ lib/sbi/sbi_unit_test.c       | 43 +++++++++++++++++++++
+ lib/sbi/sbi_unit_tests.carray |  3 ++
+ 6 files changed, 126 insertions(+)
+ create mode 100644 include/sbi/sbi_unit_test.h
+ create mode 100644 lib/sbi/sbi_unit_test.c
+ create mode 100644 lib/sbi/sbi_unit_tests.carray
+
+diff --git a/include/sbi/sbi_unit_test.h b/include/sbi/sbi_unit_test.h
+new file mode 100644
+index 000000000000..c63d900cbf3a
+--- /dev/null
++++ b/include/sbi/sbi_unit_test.h
+@@ -0,0 +1,71 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Author: Ivan Orlov <ivan.orlov0322@gmail.com>
++ */
++#ifdef CONFIG_SBIUNIT
++#ifndef __SBI_UNIT_H__
++#define __SBI_UNIT_H__
++
++#include <sbi/sbi_types.h>
++#include <sbi/sbi_console.h>
++#include <sbi/sbi_string.h>
++
++struct sbiunit_test_case {
++	const char *name;
++	bool failed;
++	void (*test_func)(struct sbiunit_test_case *test);
++};
++
++struct sbiunit_test_suite {
++	const char *name;
++	struct sbiunit_test_case *cases;
++};
++
++#define SBIUNIT_TEST_CASE(func)		\
++	{				\
++		.name = #func,		\
++		.failed = false,	\
++		.test_func = (func)	\
++	}
++
++#define SBIUNIT_END_CASE { }
++
++#define SBIUNIT_TEST_SUITE(suite_name, cases_arr)		\
++	struct sbiunit_test_suite suite_name = {		\
++		.name = #suite_name,				\
++		.cases = cases_arr				\
++	}
++
++#define _sbiunit_msg(test, msg) "[SBIUnit] [%s:%d]: %s: %s", __FILE__,	\
++				__LINE__, test->name, msg
++
++#define SBIUNIT_INFO(test, msg) sbi_printf(_sbiunit_msg(test, msg))
++#define SBIUNIT_PANIC(test, msg) sbi_panic(_sbiunit_msg(test, msg))
++
++#define SBIUNIT_EXPECT(test, cond) do {							\
++	if (!(cond)) {									\
++		test->failed = true;							\
++		SBIUNIT_INFO(test, "Condition \"" #cond "\" expected to be true!\n");	\
++	}										\
++} while (0)
++
++#define SBIUNIT_ASSERT(test, cond) do {						\
++	if (!(cond))								\
++		SBIUNIT_PANIC(test, "Condition \"" #cond "\" must be true!\n");	\
++} while (0)
++
++#define SBIUNIT_EXPECT_EQ(test, a, b) SBIUNIT_EXPECT(test, (a) == (b))
++#define SBIUNIT_ASSERT_EQ(test, a, b) SBIUNIT_ASSERT(test, (a) == (b))
++#define SBIUNIT_EXPECT_NE(test, a, b) SBIUNIT_EXPECT(test, (a) != (b))
++#define SBIUNIT_ASSERT_NE(test, a, b) SBIUNIT_ASSERT(test, (a) != (b))
++#define SBIUNIT_EXPECT_MEMEQ(test, a, b, len) SBIUNIT_EXPECT(test, !sbi_memcmp(a, b, len))
++#define SBIUNIT_ASSERT_MEMEQ(test, a, b, len) SBIUNIT_ASSERT(test, !sbi_memcmp(a, b, len))
++#define SBIUNIT_EXPECT_STREQ(test, a, b, len) SBIUNIT_EXPECT(test, !sbi_strncmp(a, b, len))
++#define SBIUNIT_ASSERT_STREQ(test, a, b, len) SBIUNIT_ASSERT(test, !sbi_strncmp(a, b, len))
++
++void run_all_tests(void);
++#endif
++#else
++#define run_all_tests()
++#endif
+diff --git a/lib/sbi/Kconfig b/lib/sbi/Kconfig
+index 81dd2db3967a..e3038ee3d28c 100644
+--- a/lib/sbi/Kconfig
++++ b/lib/sbi/Kconfig
+@@ -50,4 +50,8 @@ config SBI_ECALL_DBTR
+ 	bool "Debug Trigger Extension"
+ 	default y
+ 
++config SBIUNIT
++	bool "Enable SBIUNIT tests"
++	default n
++
+ endmenu
+diff --git a/lib/sbi/objects.mk b/lib/sbi/objects.mk
+index 0a50e95c30f1..08959f164113 100644
+--- a/lib/sbi/objects.mk
++++ b/lib/sbi/objects.mk
+@@ -11,6 +11,8 @@ libsbi-objs-y += riscv_asm.o
+ libsbi-objs-y += riscv_atomic.o
+ libsbi-objs-y += riscv_hardfp.o
+ libsbi-objs-y += riscv_locks.o
++libsbi-objs-$(CONFIG_SBIUNIT) += sbi_unit_test.o
++libsbi-objs-$(CONFIG_SBIUNIT) += sbi_unit_tests.o
+ 
+ libsbi-objs-y += sbi_ecall.o
+ libsbi-objs-y += sbi_ecall_exts.o
+diff --git a/lib/sbi/sbi_init.c b/lib/sbi/sbi_init.c
+index 804b01cd91cb..796cccceaaf0 100644
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -29,6 +29,7 @@
+ #include <sbi/sbi_timer.h>
+ #include <sbi/sbi_tlb.h>
+ #include <sbi/sbi_version.h>
++#include <sbi/sbi_unit_test.h>
+ 
+ #define BANNER                                              \
+ 	"   ____                    _____ ____ _____\n"     \
+@@ -398,6 +399,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
+ 
+ 	sbi_boot_print_hart(scratch, hartid);
+ 
++	run_all_tests();
++
+ 	/*
+ 	 * Configure PMP at last because if SMEPMP is detected,
+ 	 * M-mode access to the S/U space will be rescinded.
+diff --git a/lib/sbi/sbi_unit_test.c b/lib/sbi/sbi_unit_test.c
+new file mode 100644
+index 000000000000..1987838c52b1
+--- /dev/null
++++ b/lib/sbi/sbi_unit_test.c
+@@ -0,0 +1,43 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Author: Ivan Orlov <ivan.orlov0322@gmail.com>
++ */
++#include <sbi/sbi_unit_test.h>
++#include <sbi/sbi_types.h>
++#include <sbi/sbi_console.h>
++
++extern struct sbiunit_test_suite *sbi_unit_tests[];
++extern unsigned long sbi_unit_tests_size;
++
++static void run_test_suite(struct sbiunit_test_suite *suite)
++{
++	struct sbiunit_test_case *s_case;
++	u32 count_pass = 0, count_fail = 0;
++
++	sbi_printf("## Running test suite: %s\n", suite->name);
++
++	s_case = suite->cases;
++	while (s_case->test_func) {
++		s_case->test_func(s_case);
++		if (s_case->failed)
++			count_fail++;
++		else
++			count_pass++;
++		sbi_printf("[%s] %s\n", s_case->failed ? "FAILED" : "PASSED",
++			   s_case->name);
++		s_case++;
++	}
++	sbi_printf("%u PASSED / %u FAILED / %u TOTAL\n", count_pass, count_fail,
++		   count_pass + count_fail);
++}
++
++void run_all_tests(void)
++{
++	u32 i;
++
++	sbi_printf("\n# Running SBIUNIT tests #\n");
++
++	for (i = 0; i < sbi_unit_tests_size; i++)
++		run_test_suite(sbi_unit_tests[i]);
++}
+diff --git a/lib/sbi/sbi_unit_tests.carray b/lib/sbi/sbi_unit_tests.carray
+new file mode 100644
+index 000000000000..8d6069b28232
+--- /dev/null
++++ b/lib/sbi/sbi_unit_tests.carray
+@@ -0,0 +1,3 @@
++HEADER: sbi/sbi_unit_test.h
++TYPE: struct sbiunit_test_suite
++NAME: sbi_unit_tests
+-- 
+2.34.1
+

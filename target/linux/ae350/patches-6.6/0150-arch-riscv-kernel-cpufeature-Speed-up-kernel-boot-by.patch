@@ -1,0 +1,82 @@
+From 16f77e500a396176c08934e6bf4b8c16f5375ede Mon Sep 17 00:00:00 2001
+From: "alex749@andestech.com" <alex749@andestech.com>
+Date: Tue, 14 Jan 2025 11:37:41 +0800
+Subject: [PATCH 150/168] arch: riscv: kernel: cpufeature: Speed up kernel boot
+ by skipping unaligned access detection (#237)
+
+Introduce a Kconfig option to skip test for measuring misaligned access speed.
+This patch is dedicated for ast-54x, and ast-550 will use upstream Kconfigs
+introduced from kernel 6.9 instead.
+
+(f413aae) The commit that introduces new Kconfigs and achieves similiar result.
+
+Signed-off-by: Alex Chun-Ru Lin <alex749@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/237
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: alex749@andestech.com <alex749@andestech.com>
+Co-committed-by: alex749@andestech.com <alex749@andestech.com>
+---
+ arch/riscv/Kconfig                      | 12 ++++++++++++
+ arch/riscv/configs/andes-support.config |  1 +
+ arch/riscv/kernel/cpufeature.c          | 11 +++++++++++
+ 3 files changed, 24 insertions(+)
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 0f90eb6c5225..5c20e0968a6b 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -652,6 +652,18 @@ config ANDES_DSP
+ 	help
+ 	  Say N here if you want to disable Andes DSP support.
+ 
++config ANDES_EFFICIENT_MISALIGNED_ACCESS
++	bool "Andes efficient mis-aligned access support"
++	depends on RISCV && ARCH_ANDES
++	help
++	  Skip the test of measuring mis-aligned access speed on each CPU when
++	  system boot-up, which speed up the system boot time. The per-core
++	  variable to record the mis-aligned access performance (i.e.,
++	  misaligned_access_speed) is set to RISCV_HWPROBE_MISALIGNED_FAST.
++	  Currently all Andes CPUs support mis-aligned memory access, which
++	  can also be validated be checking the MSA bit of mmisc_ctl CSR.
++	  Say N here if you want to keep the test when system boot.
++
+ config FPU
+ 	bool "FPU support"
+ 	default y
+diff --git a/arch/riscv/configs/andes-support.config b/arch/riscv/configs/andes-support.config
+index 04f32feda377..4ddff090e0c8 100644
+--- a/arch/riscv/configs/andes-support.config
++++ b/arch/riscv/configs/andes-support.config
+@@ -35,3 +35,4 @@ CONFIG_RTC_DRV_ATCRTC100=y
+ 
+ CONFIG_ATCWDT200_WATCHDOG=y
+ CONFIG_ANDES_HVM=m
++CONFIG_ANDES_EFFICIENT_MISALIGNED_ACCESS=y
+\ No newline at end of file
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index 232f5411e9b3..0b1340aabb68 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -714,6 +714,17 @@ unsigned long riscv_get_elf_hwcap(void)
+ 
+ void check_unaligned_access(int cpu)
+ {
++	/*
++	 * Currently all Andes CPUs support unaligned access, so directly
++	 * set the value to RISCV_HWPROBE_MISALIGNED_FAST and skip the test
++	 */
++	if (IS_ENABLED(CONFIG_ANDES_EFFICIENT_MISALIGNED_ACCESS)) {
++		per_cpu(misaligned_access_speed, cpu) = RISCV_HWPROBE_MISALIGNED_FAST;
++		pr_info("cpu%d: CONFIG_ANDES_EFFICIENT_MISALIGNED_ACCESS is set, unaligned accesses are fast\n",
++			cpu);
++		return;
++	}
++
+ 	u64 start_cycles, end_cycles;
+ 	u64 word_cycles;
+ 	u64 byte_cycles;
+-- 
+2.34.1
+

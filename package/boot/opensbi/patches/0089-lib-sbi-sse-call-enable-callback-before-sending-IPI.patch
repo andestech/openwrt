@@ -1,0 +1,42 @@
+From ce3c82cb2e2d6e41912b97c4f99e8567fadf445e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:06 +0200
+Subject: [PATCH 089/172] lib: sbi: sse: call enable callback before sending
+ IPI
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Move the enable callback call before sending the IPI. Even though the
+event is locked and no race condition can happen, this is more logical.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reported-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index 2c7f78d255a1..fb327f026567 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -686,12 +686,12 @@ static int sse_event_enable(struct sbi_sse_event *e)
+ 	sse_event_set_state(e, SBI_SSE_STATE_ENABLED);
+ 	sse_event_add_to_list(e);
+ 
+-	if (sse_event_pending(e))
++	sse_event_invoke_cb(e, enable_cb);
++
++	if (sse_event_is_global(e) && sse_event_pending(e))
+ 		sbi_ipi_send_many(1, e->attrs.hartid, sse_ipi_inject_event,
+ 				  NULL);
+ 
+-	sse_event_invoke_cb(e, enable_cb);
+-
+ 	return SBI_OK;
+ }
+ 
+-- 
+2.34.1
+

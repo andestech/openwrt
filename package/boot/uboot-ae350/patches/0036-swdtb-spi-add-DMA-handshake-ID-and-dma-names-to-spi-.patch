@@ -1,0 +1,337 @@
+From b9b3a907d237c34f92724954a97d3f612552d131 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 17 Jan 2025 17:47:50 +0800
+Subject: [PATCH 36/53] swdtb: spi: add DMA handshake ID and dma-names to spi
+ node (#150)
+
+To support SPI DMA mode by default, add the DMA handshake ID and
+dma-names property to the SPI node.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/150
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        |   6 +-
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 123 ++++++++++++------
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |   7 +
+ .../common/swdtb_merger/swdtb_tool.c          |  64 ++++++++-
+ .../common/swdtb_merger/swdtb_tool.h          |   6 +
+ 5 files changed, 160 insertions(+), 46 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 4992b7d15ed4..5088ebbd9578 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -61,6 +61,10 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "add dma cell",		dma_cells_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "fix uart baud rate",		uart_baudrate_fixup},
++	{SWDTB_ENABLE,	1,
++	 "add dma spi_tx spi_rx",	spi_dma_rxtx_fixup},
++	{SWDTB_ENABLE,	1,
++	 "add dmas to spi",		spi_dma_dmas_fixup},
+ };
+ 
+ /*
+@@ -246,7 +250,7 @@ void swdtb_merger(void *fdt_blob, int is_hwdtb)
+ 	}
+ 
+ 	/* Increase fdt space */
+-	fdt_increase_size(fdt_blob, 2048);
++	fdt_increase_size(fdt_blob, 4096);
+ 
+ 	swdtb_find_node(fdt_blob);
+ }
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 309025b39330..fe07233451b6 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -817,7 +817,7 @@ int mmc_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+ 						    dma_names, dma_rxtx);
+ 			if (ret) {
+ 				printf("fdt_appendprop_string: err=%s\n",
+-				fdt_strerror(ret));
++				       fdt_strerror(ret));
+ 				return ret;
+ 			}
+ 
+@@ -838,53 +838,17 @@ int mmc_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+  */
+ int mmc_dma_dmas_fixup(void *fdt, int node, char *name, char *value)
+ {
+-#define DMA_DMAS_HANDSHAKE_ID	0x9
+ 	const char *target_node = "mmc";
+-	const char *dmas = "dmas";
+ 	const char *full_name;
+-	const char *dma_compat = "andestech,atcdmac300";
+-	const char *dma_compat_g = "andestech,atcdmac300g";
++	struct dmas dmas_array[1];
+ 
+-	int dmanode;
+-	int dma_phandle;
+-	int ret;
+-	fdt32_t dmas_array[2];
++	/* The even indices of the array store the DMA's phandle. */
++	dmas_array[0].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_MMC);
+ 
+ 	full_name = fdt_get_name(fdt, node, NULL);
+ 	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		const u32 *value;
+-
+-		value = fdt_getprop(fdt, node, dmas, NULL);
+-		if (value)
+-			return RETURN_DONE;
+-
+-		dmanode = find_node_for_gnog(fdt, dma_compat, dma_compat_g);
+-		if (dmanode <= 0)
+-			return dmanode;
+-
+-		dma_phandle = fdt_get_phandle(fdt, dmanode);
+-		if (!dma_phandle) {
+-			dma_phandle = fdt_create_phandle(fdt, dmanode);
+-			if (!dma_phandle) {
+-				dtb_error("Error on fdt_get_phandle: %s\n",
+-					  fdt_strerror(dma_phandle));
+-				return dma_phandle;
+-			}
+-		}
+-
+-		dmas_array[0] = cpu_to_fdt32(dma_phandle);
+-		dmas_array[1] = cpu_to_fdt32(DMA_DMAS_HANDSHAKE_ID);
+-
+-		ret = fdt_appendprop(fdt, node, dmas,
+-				     dmas_array, 2 * sizeof(fdt32_t));
+-		if (ret) {
+-			printf("fdt_appendprop: err=%s\n", fdt_strerror(ret));
+-			return ret;
+-		}
+-
+-		show_result_multi_num(fdt, node, dmas, 2);
+-
+-		return ret;
++		return dma_set_dmas_array(fdt, node, dmas_array,
++					  ARRAY_SIZE(dmas_array));
+ 	}
+ 
+ 	return !(RETURN_DONE);
+@@ -914,7 +878,7 @@ int dma_cells_fixup(void *fdt, int node, char *name, char *value)
+ 						  dma_cells, cells_value);
+ 			if (ret) {
+ 				printf("fdt_appendprop_string: err=%s\n",
+-				fdt_strerror(ret));
++				       fdt_strerror(ret));
+ 				return ret;
+ 			}
+ 
+@@ -1018,3 +982,76 @@ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 	return RETURN_DONE;
+ }
++
++/**
++ * This fixup will add the dma_names into spi node.
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int spi_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "spi";
++	const char *dma_names = "dma-names";
++	const char *dma_spi_tx = "spi_tx";
++	const char *dma_spi_rx = "spi_rx";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		const u32 *value;
++
++		value = fdt_getprop(fdt, node, dma_names, NULL);
++		if (!value) {
++			show_rawdtb(dma_spi_tx, target_node);
++			/* add default property of fixed link */
++			ret = fdt_appendprop_string(fdt, node,
++						    dma_names, dma_spi_tx);
++			if (ret) {
++				printf("fdt_appendprop_string: err=%s\n",
++				       fdt_strerror(ret));
++				return ret;
++			}
++
++			show_rawdtb(dma_spi_rx, target_node);
++			/* add default property of fixed link */
++			ret = fdt_appendprop_string(fdt, node,
++						    dma_names, dma_spi_rx);
++			if (ret) {
++				printf("fdt_appendprop_string: err=%s\n",
++				       fdt_strerror(ret));
++				return ret;
++			}
++
++			show_result(fdt, node, dma_names, RESULT_STRING);
++		}
++
++		return ret;
++	}
++
++	return !(RETURN_DONE);
++}
++
++/**
++ * This fixup will add the dmas into spi node.
++ * dmas has two variable, the first is point to the dma node,
++ * the second is the fixed handshake id.
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int spi_dma_dmas_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "spi";
++	const char *full_name;
++	struct dmas dmas_array[2];
++
++	/* The even indices of the array store the DMA's phandle. */
++	dmas_array[0].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_SPI_TX);
++	dmas_array[1].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_SPI_RX);
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		return dma_set_dmas_array(fdt, node, dmas_array,
++					  ARRAY_SIZE(dmas_array));
++	}
++
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 38ecc9aad323..0084ed457dc1 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -55,8 +55,15 @@ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int andespmu_event_fixup(void *fdt, int node, char *name, char *value);
+ 
++#define DMA_HANDSHAKE_ID_SPI_TX	0x0
++#define DMA_HANDSHAKE_ID_SPI_RX	0x1
++#define DMA_HANDSHAKE_ID_MMC	0x9
++
+ int mmc_dma_rxtx_fixup(void *fdt, int node, char *name, char *value);
+ int mmc_dma_dmas_fixup(void *fdt, int node, char *name, char *value);
++int spi_dma_rxtx_fixup(void *fdt, int node, char *name, char *value);
++int spi_dma_dmas_fixup(void *fdt, int node, char *name, char *value);
+ int dma_cells_fixup(void *fdt, int node, char *name, char *value);
++
+ int uart_baudrate_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 8c097b365700..8dddc13b8c04 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -147,6 +147,15 @@ int dma_type_to_node(void *fdt, int node, char *name, const char *target_node)
+ 	return ret;
+ }
+ 
++/*
++ * Find the DMA node by the compatible string, regardless of whether
++ * it ends with 'g' or not. To disregard the order of modification in
++ * DMA/MMC node compatible strings, it will search for both strings and
++ * return the appropriate one.
++ *
++ * Example_1: andestech,atfsdc010g or andestech,atfsdc010
++ * Example_2: andestech,atcdmac300g or aandestech,atcdmac300
++ */
+ int find_node_for_gnog(void *fdt, const char *node_nog, const char *node_g)
+ {
+ 	int offset_nog;
+@@ -206,7 +215,7 @@ void show_result(const void *fdt, int node, const char *prop_name, int type)
+ 		dtb_error("Error on fdt_getprop\n");
+ 
+ 	if (type == RESULT_STRING) {
+-		/* The data is of string type; just display it. */		
++		/* The data is of string type; just display it. */
+ 		count = fdt_stringlist_count(fdt, node, prop_name);
+ 
+ 		if (count == 1) {
+@@ -242,7 +251,8 @@ void show_result_multi_num(const void *fdt, int node,
+ 	if (!data)
+ 		dtb_error("Error on fdt_getprop\n");
+ 
+-	printf("Result: %s: %s", prop_name, KYEL);
++	printf("Result: %s in %s: %s",
++	       prop_name, fdt_get_name(fdt, node, NULL), KYEL);
+ 	for(idx = 0; idx < num_count; idx++) {
+ 		printf("%d ", fdt32_to_cpu(*((u32 *)data + idx)));
+ 	}
+@@ -296,3 +306,53 @@ int dma_type_fixup(void *fdt, int node, char *name,
+ 	}
+ 	return !(RETURN_DONE);
+ }
++
++int dma_set_dmas_array(void *fdt, int node, struct dmas *arr, int arr_sz)
++{
++	const char *dmas = "dmas";
++	const char *dma_compat = "andestech,atcdmac300";
++	const char *dma_compat_g = "andestech,atcdmac300g";
++	const u32 *value;
++	int dmanode;
++	int dma_phandle;
++	int ret;
++	int idx;
++	int total_size;
++	int count_fdt32;
++
++	value = fdt_getprop(fdt, node, dmas, NULL);
++	if (value)
++		return RETURN_DONE;
++
++	dmanode = find_node_for_gnog(fdt, dma_compat, dma_compat_g);
++	if (dmanode <= 0)
++		return dmanode;
++
++	dma_phandle = fdt_get_phandle(fdt, dmanode);
++	if (!dma_phandle) {
++		dma_phandle = fdt_create_phandle(fdt, dmanode);
++		if (!dma_phandle) {
++			dtb_error("Error on fdt_get_phandle: %s\n",
++				  fdt_strerror(dma_phandle));
++			return dma_phandle;
++		}
++	}
++
++	for (idx = 0; idx < arr_sz; idx++) {
++		/* Only even indices store the DMA's phandle */
++		arr[idx].phandle = cpu_to_fdt32(dma_phandle);
++	}
++
++	total_size = arr_sz * sizeof(struct dmas);
++	count_fdt32 = total_size / sizeof(fdt32_t);
++
++	ret = fdt_appendprop(fdt, node, dmas, arr, total_size);
++	if (ret) {
++		printf("fdt_appendprop: err=%s\n", fdt_strerror(ret));
++		return ret;
++	}
++
++	show_result_multi_num(fdt, node, dmas, count_fdt32);
++
++	return ret;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 1ce192d5274d..6e9a25d4f7a0 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -89,4 +89,10 @@ void show_result_multi_num(const void *fdt, int node,
+ 
+ int show_reserved_memory_node(const void *fdt, int node,
+ 			      const char *compatible);
++
++struct dmas {
++	fdt32_t phandle;
++	fdt32_t handshake_id;
++};
++int dma_set_dmas_array(void *fdt, int node, struct dmas *arr, int arr_sz);
+ #endif
+-- 
+2.34.1
+

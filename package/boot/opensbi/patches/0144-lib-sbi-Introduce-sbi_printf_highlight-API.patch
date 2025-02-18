@@ -1,0 +1,60 @@
+From ee8194ce4aa7d9cc8187106077ad6899ad27276d Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Tue, 17 Oct 2023 16:20:14 +0800
+Subject: [PATCH 144/172] lib: sbi: Introduce sbi_printf_highlight() API
+
+This patch introduces a new API sbi_printf_highlight(). It is used to
+highlight the printing messages in OpenSBI. If there are other error
+messages we want to highlight in the future, this API can help us
+easily spot the messages.
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ include/sbi/sbi_console.h |  2 ++
+ lib/sbi/sbi_console.c     | 17 +++++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/include/sbi/sbi_console.h b/include/sbi/sbi_console.h
+index 0979765240c7..2c7ad78c00c3 100644
+--- a/include/sbi/sbi_console.h
++++ b/include/sbi/sbi_console.h
+@@ -48,6 +48,8 @@ int __printf(3, 4) sbi_snprintf(char *out, u32 out_sz, const char *format, ...);
+ 
+ int __printf(1, 2) sbi_printf(const char *format, ...);
+ 
++int __printf(1, 2) sbi_printf_highlight(const char *format, ...);
++
+ int __printf(1, 2) sbi_dprintf(const char *format, ...);
+ 
+ void __printf(1, 2) __attribute__((noreturn)) sbi_panic(const char *format, ...);
+diff --git a/lib/sbi/sbi_console.c b/lib/sbi/sbi_console.c
+index d3ec4616f03c..943f70957c00 100644
+--- a/lib/sbi/sbi_console.c
++++ b/lib/sbi/sbi_console.c
+@@ -435,6 +435,23 @@ int sbi_printf(const char *format, ...)
+ 	return retval;
+ }
+ 
++int sbi_printf_highlight(const char *format, ...)
++{
++	va_list args;
++	int retval;
++	const char *highlight = "\n******************************\n\n";
++
++	spin_lock(&console_out_lock);
++	va_start(args, format);
++	print(NULL, NULL, highlight, NULL);
++	retval = print(NULL, NULL, format, args);
++	print(NULL, NULL, highlight, NULL);
++	va_end(args);
++	spin_unlock(&console_out_lock);
++
++	return retval;
++}
++
+ int sbi_dprintf(const char *format, ...)
+ {
+ 	va_list args;
+-- 
+2.34.1
+

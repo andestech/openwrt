@@ -1,0 +1,598 @@
+From 5eb724cb5b0c221b823fca433f7208efcdc29637 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 30 Jan 2023 15:08:54 +0800
+Subject: [PATCH 145/172] platform: generic: andes: Add AE350 trigger module
+ SBI call
+
+Reformed from the following patches on ast-v5_3_0-branch
+- (1b70e0f5a4c4) platform: andes: Add AE350 trigger module SBI call
+- (2c3ff75aa3df) platform: andes: trigger: use AE350_HART_COUNT_MAX defined in andesv5.h
+- (1062a41c6bc5) platform: andes: trigger: Fix typo of tdata1 CSR offset name (#72)
+- (48854e1419a1) platform: andes: Cleanup Andes SBI calls
+
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ platform/generic/Kconfig                   |   1 +
+ platform/generic/andes/Kconfig             |   5 +
+ platform/generic/andes/ae350.c             |  10 +-
+ platform/generic/andes/andes_sbi.c         |  16 +-
+ platform/generic/andes/objects.mk          |   1 +
+ platform/generic/andes/trigger.c           | 311 +++++++++++++++++++++
+ platform/generic/include/andes/andes_sbi.h |   7 +
+ platform/generic/include/andes/trigger.h   | 111 ++++++++
+ 8 files changed, 458 insertions(+), 4 deletions(-)
+ create mode 100644 platform/generic/andes/trigger.c
+ create mode 100644 platform/generic/include/andes/trigger.h
+
+diff --git a/platform/generic/Kconfig b/platform/generic/Kconfig
+index 6642a6eeaa1c..68bf4abb2fcd 100644
+--- a/platform/generic/Kconfig
++++ b/platform/generic/Kconfig
+@@ -33,6 +33,7 @@ config PLATFORM_ANDES_AE350
+ 	bool "Andes AE350 support"
+ 	select SYS_ATCSMU
+ 	select ANDES_PMU
++	select ANDES_SBI
+ 	default n
+ 
+ config PLATFORM_RENESAS_RZFIVE
+diff --git a/platform/generic/andes/Kconfig b/platform/generic/andes/Kconfig
+index 138710be598f..5d9b71c614fe 100644
+--- a/platform/generic/andes/Kconfig
++++ b/platform/generic/andes/Kconfig
+@@ -4,8 +4,13 @@ config ANDES_PMA
+ 	bool "Andes PMA support"
+ 	default n
+ 
++config ANDES_TRIGGER
++	bool "Andes Trigger support"
++	default n
++
+ config ANDES_SBI
+ 	bool "Andes SBI support"
++	select ANDES_TRIGGER
+ 	default n
+ 
+ config ANDES_PMU
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index 63c10bc465c7..406e2f30220f 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -18,7 +18,9 @@
+ #include <sbi/sbi_hsm.h>
+ #include <sbi/sbi_ipi.h>
+ #include <sbi/sbi_init.h>
++#include <andes/andes_sbi.h>
+ #include <andes/andes.h>
++#include <andes/trigger.h>
+ 
+ static struct smu_data smu = { 0 };
+ extern void __ae350_enable_coherency_warmboot(void);
+@@ -104,8 +106,11 @@ static void ae350_hsm_device_init(void)
+ 
+ static int ae350_final_init(bool cold_boot, const struct fdt_match *match)
+ {
+-	if (cold_boot)
+-		ae350_hsm_device_init();
++	if (!cold_boot)
++		return 0;
++
++	ae350_hsm_device_init();
++	trigger_init();
+ 
+ 	return 0;
+ }
+@@ -120,4 +125,5 @@ const struct platform_override andes_ae350 = {
+ 	.final_init  = ae350_final_init,
+ 	.extensions_init = andes_pmu_extensions_init,
+ 	.pmu_init = andes_pmu_init,
++	.vendor_ext_provider = andes_sbi_vendor_ext_provider,
+ };
+diff --git a/platform/generic/andes/andes_sbi.c b/platform/generic/andes/andes_sbi.c
+index 43bafdc76acf..385fcacb9e0c 100644
+--- a/platform/generic/andes/andes_sbi.c
++++ b/platform/generic/andes/andes_sbi.c
+@@ -7,10 +7,16 @@
+ #include <andes/andes_sbi.h>
+ #include <sbi/riscv_asm.h>
+ #include <sbi/sbi_error.h>
++#include <sbi/riscv_io.h>
++#include <sbi/sbi_bitops.h>
++#include <sbi/sbi_console.h>
++#include <sbi/sbi_types.h>
++#include <andes/trigger.h>
+ 
+ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_FID0 = 0, /* Reserved for future use */
+ 	SBI_EXT_ANDES_IOCP_SW_WORKAROUND,
++	SBI_EXT_ANDES_TRIGGER_SET = ANDES_SBI_INTERNAL_FID_START,
+ };
+ 
+ static bool andes_cache_controllable(void)
+@@ -37,14 +43,20 @@ int andes_sbi_vendor_ext_provider(long funcid,
+ 				  struct sbi_ecall_return *out,
+ 				  const struct fdt_match *match)
+ {
++	int ret = 0;
++
+ 	switch (funcid) {
+ 	case SBI_EXT_ANDES_IOCP_SW_WORKAROUND:
+ 		out->value = andes_apply_iocp_sw_workaround();
+ 		break;
++	case SBI_EXT_ANDES_TRIGGER_SET:
++		out->value = mcall_set_trigger(regs->a0, regs->a1, 0, 0, regs->a2);
++		break;
+ 
+ 	default:
+-		return SBI_EINVAL;
++		sbi_panic("%s(): funcid: %#lx is not supported\n", __func__, funcid);
++		break;
+ 	}
+ 
+-	return 0;
++	return ret;
+ }
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index a961d2369231..bafbd9d53dba 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -17,3 +17,4 @@ platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o
+ platform-objs-$(CONFIG_ANDES_PMA) += andes/andes_pma.o
+ platform-objs-$(CONFIG_ANDES_SBI) += andes/andes_sbi.o
+ platform-objs-$(CONFIG_ANDES_PMU) += andes/andes_pmu.o
++platform-objs-$(CONFIG_ANDES_TRIGGER) += andes/trigger.o
+diff --git a/platform/generic/andes/trigger.c b/platform/generic/andes/trigger.c
+new file mode 100644
+index 000000000000..484bb1a9df5f
+--- /dev/null
++++ b/platform/generic/andes/trigger.c
+@@ -0,0 +1,311 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2024 Andes Technology Corporation
++ *
++ * Authors:
++ *   Ben Zong-You Xie <ben717@andestech.com>
++ */
++
++#include <sbi/riscv_locks.h>
++#include <sbi/riscv_asm.h>
++#include <sbi/sbi_console.h>
++#include <sbi/sbi_error.h>
++#include <andes/andes.h>
++#include <andes/trigger.h>
++
++/* Record the status of trigger used by M-mode */
++static struct trigger_module trigger_modules[][TRIGGER_MAX] = {
++	[0 ... AE350_HART_COUNT_MAX - 1][0 ... TRIGGER_MAX - 1] = {
++		.used = 0, .type = TRIGGER_TYPE_MCONTROL}
++};
++static int total_triggers = TRIGGER_MAX;
++static spinlock_t trigger_lock = SPIN_LOCK_INITIALIZER;
++
++void trigger_init(void)
++{
++	uintptr_t tselect, tinfo;
++	int i;
++
++	for (i = 0; i < TRIGGER_MAX; i++) {
++		csr_write(CSR_TSELECT, i);
++		tselect = csr_read(CSR_TSELECT);
++		if (i != tselect)
++			break;
++
++		tinfo = csr_read(CSR_TINFO);
++		if (tinfo == 1)
++			break;
++	}
++
++	/* Only use the minimum number of trigger modules of all harts. */
++	spin_lock(&trigger_lock);
++	if (total_triggers > i)
++		total_triggers = i;
++	spin_unlock(&trigger_lock);
++}
++
++static int trigger_set_tselect(int val)
++{
++	uintptr_t ret;
++
++	csr_write(CSR_TSELECT, val);
++	ret = csr_read(CSR_TSELECT);
++
++	if (ret != val)
++		return SBI_EINVAL;
++
++	return 0;
++}
++
++static int trigger_set_tdata1(uintptr_t val)
++{
++	uintptr_t ret;
++
++	csr_write(CSR_TDATA1, val);
++	ret = csr_read(CSR_TDATA1);
++
++	if (ret != val)
++		return SBI_EINVAL;
++
++	return 0;
++}
++
++static int trigger_set_tdata2(uintptr_t val)
++{
++	uintptr_t ret;
++
++	csr_write(CSR_TDATA2, val);
++	ret = csr_read(CSR_TDATA2);
++
++	if (ret != val)
++		return SBI_EINVAL;
++
++	return 0;
++}
++
++static int trigger_set_tdata3(uintptr_t val)
++{
++	uintptr_t ret;
++
++	csr_write(CSR_TDATA3, val);
++	ret = csr_read(CSR_TDATA3);
++
++	if (ret != val)
++		return SBI_EINVAL;
++
++	return 0;
++}
++
++/* The triggers may be used by Debugger */
++static int trigger_used_by_dmode(int num)
++{
++	int dmode;
++
++	trigger_set_tselect(num);
++	dmode = (csr_read(CSR_TDATA1) & TDATA1_OFFSET_DMODE);
++
++	return dmode;
++}
++
++static int trigger_get_free(void)
++{
++	int i, hartid = csr_read(CSR_MHARTID);
++
++	for (i = 0; i < total_triggers; i++) {
++		if (!trigger_modules[hartid][i].used &&
++		    !trigger_used_by_dmode(i))
++			break;
++	}
++
++	return i;
++}
++
++static int trigger_get_used_by_type(int type)
++{
++	int i, hartid = csr_read(CSR_MHARTID);
++
++	for (i = 0; i < total_triggers; i++) {
++		if (trigger_modules[hartid][i].type == type &&
++		    trigger_modules[hartid][i].used)
++			break;
++	}
++
++	return i;
++}
++
++/* If there is no used trigger of the type, find a free one */
++static int trigger_get_available(int type)
++{
++	int num = trigger_get_used_by_type(type);
++
++	if (!TRIGGER_SUPPORT(num)) {
++		num = trigger_get_free();
++	}
++
++	return num;
++}
++
++static int trigger_set_icount(uintptr_t count, uintptr_t  m, uintptr_t s,
++			      uintptr_t u)
++{
++	uintptr_t val;
++	int num, err;
++	int hartid = csr_read(CSR_MHARTID);
++
++	num = trigger_get_available(TRIGGER_TYPE_ICOUNT);
++
++	if (!TRIGGER_SUPPORT(num)) {
++		sbi_printf("machine mode: trigger %d is not supported.\n", num);
++		return SBI_ENOTSUPP;
++	}
++
++	err = trigger_set_tselect(num);
++	if (err)
++		return err;
++
++	if (!TRIGGER_SUPPORT_TYPE(TRIGGER_TYPE_ICOUNT)) {
++		sbi_printf("machine mode: trigger %d is not support %ld type.\n",
++			   num, TRIGGER_TYPE_ICOUNT);
++		return SBI_ENOTSUPP;
++	}
++
++	val = (TRIGGER_TYPE_ICOUNT << TDATA1_OFFSET_TYPE)
++	       | (count << ICOUNT_OFFSET_COUNT)
++	       | (m << ICOUNT_OFFSET_M)
++	       | (s << ICOUNT_OFFSET_S)
++	       | (u << ICOUNT_OFFSET_U);
++	err = trigger_set_tdata1(val);
++	if (err)
++		return err;
++
++	val = (TEXTRA_SELECT_CONTEXT << TEXTRA_OFFSET_SSELECT)
++	       | (1 << TEXTRA_OFFSET_SVALUE);
++	err = trigger_set_tdata3(val);
++	if (err)
++		return err;
++
++	if (u) {
++		trigger_modules[hartid][num].used = 1;
++		trigger_modules[hartid][num].type = TRIGGER_TYPE_ICOUNT;
++	} else {
++		trigger_modules[hartid][num].used = 0;
++	}
++
++	return err;
++}
++
++static int trigger_set_itrigger(uintptr_t interrupt, uintptr_t m, uintptr_t s,
++				uintptr_t u)
++{
++	uintptr_t val;
++	int num, err;
++	int hartid = csr_read(CSR_MHARTID);
++
++	num = trigger_get_available(TRIGGER_TYPE_ITRIGGER);
++
++	if (!TRIGGER_SUPPORT(num)) {
++		sbi_printf("machine mode: trigger %d is not supported.\n", num);
++		return SBI_ENOTSUPP;
++	}
++
++	err = trigger_set_tselect(num);
++	if (err)
++		return err;
++
++	if (!TRIGGER_SUPPORT_TYPE(TRIGGER_TYPE_ITRIGGER)) {
++		sbi_printf("machine mode: trigger %d is not support %ld type.\n",
++			   num, TRIGGER_TYPE_ITRIGGER);
++		return SBI_ENOTSUPP;
++	}
++
++	val = (TRIGGER_TYPE_ITRIGGER << TDATA1_OFFSET_TYPE)
++	       | (m << ITRIGGER_OFFSET_M)
++	       | (s << ITRIGGER_OFFSET_S)
++	       | (u << ITRIGGER_OFFSET_U);
++	err = trigger_set_tdata1(val);
++	if (err)
++		return err;
++
++	err = trigger_set_tdata2(interrupt);
++	if (err)
++		return err;
++
++	if (u) {
++		trigger_modules[hartid][num].used = 1;
++		trigger_modules[hartid][num].type = TRIGGER_TYPE_ITRIGGER;
++	} else {
++		trigger_modules[hartid][num].used = 0;
++	}
++
++	return err;
++}
++
++static int trigger_set_etrigger(uintptr_t exception, uintptr_t m, uintptr_t s,
++				uintptr_t u)
++{
++	uintptr_t val;
++	int num, err;
++	int hartid = csr_read(CSR_MHARTID);
++
++	num = trigger_get_available(TRIGGER_TYPE_ETRIGGER);
++
++	if (!TRIGGER_SUPPORT(num)) {
++		sbi_printf("machine mode: trigger %d is not supported.\n", num);
++		return SBI_ENOTSUPP;
++	}
++
++	err = trigger_set_tselect(num);
++	if (err)
++		return err;
++
++	if (!TRIGGER_SUPPORT_TYPE(TRIGGER_TYPE_ETRIGGER)) {
++		sbi_printf("machine mode: trigger %d is not support %ld type.\n",
++			   num, TRIGGER_TYPE_ETRIGGER);
++		return SBI_ENOTSUPP;
++	}
++
++	val = (TRIGGER_TYPE_ETRIGGER << TDATA1_OFFSET_TYPE)
++	       | (m << ETRIGGER_OFFSET_M)
++	       | (s << ETRIGGER_OFFSET_S)
++	       | (u << ETRIGGER_OFFSET_U);
++	err = trigger_set_tdata1(val);
++	if (err)
++		return err;
++
++	err = trigger_set_tdata2(exception);
++	if (err)
++		return err;
++
++	if (u) {
++		trigger_modules[hartid][num].used = 1;
++		trigger_modules[hartid][num].type = TRIGGER_TYPE_ETRIGGER;
++	} else {
++		trigger_modules[hartid][num].used = 0;
++	}
++
++	return err;
++}
++
++unsigned long mcall_set_trigger(long type, uintptr_t data, unsigned int m,
++				unsigned int s, unsigned int u)
++{
++	int ret;
++	switch (type) {
++		case TRIGGER_TYPE_ICOUNT:
++			ret = trigger_set_icount(data, m, s, u);
++			break;
++		case TRIGGER_TYPE_ITRIGGER:
++			ret = trigger_set_itrigger(data, m, s, u);
++			break;
++		case TRIGGER_TYPE_ETRIGGER:
++			ret = trigger_set_etrigger(data, m, s, u);
++			break;
++		default:
++			ret = -1;
++			break;
++	}
++
++	return ret;
++}
++
+diff --git a/platform/generic/include/andes/andes_sbi.h b/platform/generic/include/andes/andes_sbi.h
+index 1288af81dd66..da26973ecfd8 100644
+--- a/platform/generic/include/andes/andes_sbi.h
++++ b/platform/generic/include/andes/andes_sbi.h
+@@ -7,6 +7,13 @@
+ #include <sbi/sbi_trap.h>
+ #include <sbi_utils/fdt/fdt_helper.h>
+ 
++/*
++ * Set Andes's internal SBI Call FID start at 64 to avoid the impact of
++ * upstream add or remove in sbi_ext_andes_fid{}. If the FID numbers
++ * change, our released OpenSBI will lose backward compatible.
++ */
++#define ANDES_SBI_INTERNAL_FID_START     64
++
+ int andes_sbi_vendor_ext_provider(long funcid,
+ 				  struct sbi_trap_regs *regs,
+ 				  struct sbi_ecall_return *out,
+diff --git a/platform/generic/include/andes/trigger.h b/platform/generic/include/andes/trigger.h
+new file mode 100644
+index 000000000000..f67b61b8795b
+--- /dev/null
++++ b/platform/generic/include/andes/trigger.h
+@@ -0,0 +1,111 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2024 Andes Technology Corporation
++ *
++ * Authors:
++ *   Ben Zong-You Xie <ben717@andestech.com>
++ */
++
++#ifndef _AE350_TRIGGER_H
++#define _AE350_TRIGGER_H
++
++#include <sbi/sbi_types.h>
++#include <sbi/riscv_asm.h>
++
++#define TRIGGER_MAX	16
++
++#define TRIGGER_TYPE_NOT_EXIST 		0UL
++#define TRIGGER_TYPE_SIFIVE		1UL
++#define TRIGGER_TYPE_MCONTROL		2UL
++#define TRIGGER_TYPE_ICOUNT		3UL
++#define TRIGGER_TYPE_ITRIGGER		4UL
++#define TRIGGER_TYPE_ETRIGGER		5UL
++#define TRIGGER_TYPE_NOT_AVAILABLE	15UL
++
++#if __riscv_xlen == 64
++#define RISCV_MXLEN	64
++#else
++#define RISCV_MXLEN	32
++#endif
++
++#define TDATA1_OFFSET_TYPE	(RISCV_MXLEN - 4)
++#define TDATA1_OFFSET_DMODE	(RISCV_MXLEN - 5)
++
++#define MCONTROL_OFFSET_MASKMAX	(RISCV_MXLEN - 11)
++#define MCONTROL_OFFSET_HIT	20
++#define MCONTROL_OFFSET_SELECT	19
++#define MCONTROL_OFFSET_TIMING	18
++#define MCONTROL_OFFSET_ACTION	12
++#define MCONTROL_OFFSET_CHAIN	11
++#define MCONTROL_OFFSET_MATCH	7
++#define MCONTROL_OFFSET_M	6
++#define MCONTROL_OFFSET_S	4
++#define MCONTROL_OFFSET_U	3
++#define MCONTROL_OFFSET_EXECUTE	2
++#define MCONTROL_OFFSET_STORE	1
++#define MCONTROL_OFFSET_LOAD	0
++
++#define ICOUNT_OFFSET_HIT	24
++#define ICOUNT_OFFSET_COUNT	10
++#define ICOUNT_OFFSET_M		9
++#define ICOUNT_OFFSET_S		7
++#define ICOUNT_OFFSET_U		6
++#define ICOUNT_OFFSET_ACTION	0
++
++#define ITRIGGER_OFFSET_HIT	(RISCV_MXLEN - 6)
++#define ITRIGGER_OFFSET_M	9
++#define ITRIGGER_OFFSET_S	7
++#define ITRIGGER_OFFSET_U	6
++#define ITRIGGER_OFFSET_ACTION	0
++
++#define ETRIGGER_OFFSET_HIT	(RISCV_MXLEN - 6)
++#define ETRIGGER_OFFSET_M	9
++#define ETRIGGER_OFFSET_S	7
++#define ETRIGGER_OFFSET_U	6
++#define ETRIGGER_OFFSET_ACTION	0
++
++#if __riscv_xlen == 64
++#define TEXTRA_OFFSET_MVALUE	51
++#define TEXTRA_OFFSET_MSELECT	50
++#else
++#define TEXTRA_OFFSET_MVALUE	26
++#define TEXTRA_OFFSET_MSELECT	25
++#endif
++#define TEXTRA_OFFSET_SVALUE	2
++#define TEXTRA_OFFSET_SSELECT	0
++#define TEXTRA_SELECT_IGNORE	0
++#define TEXTRA_SELECT_CONTEXT	1
++#define TEXTRA_SELECT_ASID	2
++
++#define TRIGGER_SUPPORT(n)	(n < total_triggers)
++#define TRIGGER_SUPPORT_TYPE(type) ({			\
++	uintptr_t __tmp;				\
++	uintptr_t __tinfo = csr_read(CSR_TINFO);	\
++	__tmp = (__tinfo & (1 << type));		\
++	__tmp; })					\
++
++struct trigger_module {
++	int type;
++	int used;
++};
++
++#ifdef CONFIG_ANDES_TRIGGER
++
++void trigger_init(void);
++unsigned long mcall_set_trigger(long type, uintptr_t data, unsigned int m,
++				unsigned int s, unsigned int u);
++
++#else
++
++static inline void trigger_init(void) { }
++static inline unsigned long mcall_set_trigger(long type, uintptr_t data,
++					      unsigned int m, unsigned int s,
++					      unsigned int u)
++{
++	return SBI_EINVAL;
++}
++
++#endif /* CONFIG_ANDES_TRIGGER */
++
++#endif /* _AE350_TRIGGER_H */
+-- 
+2.34.1
+

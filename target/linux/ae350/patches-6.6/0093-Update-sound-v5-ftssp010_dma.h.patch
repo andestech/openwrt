@@ -1,0 +1,26 @@
+From fab0ba9542920ddd00809ced99e868c9f640b0a5 Mon Sep 17 00:00:00 2001
+From: Tim Shih-Ting OuYang <tim609@andestech.com>
+Date: Fri, 13 Sep 2024 18:15:04 +0800
+Subject: [PATCH 093/168] Update sound/v5/ftssp010_dma.h
+
+---
+ sound/v5/ftssp010_dma.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/v5/ftssp010_dma.h b/sound/v5/ftssp010_dma.h
+index dc473ae1071c..1261d9ed17d2 100644
+--- a/sound/v5/ftssp010_dma.h
++++ b/sound/v5/ftssp010_dma.h
+@@ -412,8 +412,7 @@ typedef struct dmad_drb {
+ 
+ /******************************************************************************
+  * DMAD Driver Interface
+- ******************************************************************************
+- */
++ ******************************************************************************/
+ extern int dmad_channel_alloc(dmad_chreq *ch_req);
+ extern int dmad_channel_free(dmad_chreq *ch_req);
+ extern int dmad_channel_enable(const dmad_chreq *ch_req, u8 enable);
+-- 
+2.34.1
+

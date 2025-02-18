@@ -1,0 +1,44 @@
+From fe10bdb8e131cc0bf77433f069e7056257253fd9 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Tue, 26 Sep 2023 17:10:07 +0800
+Subject: [PATCH 004/168] riscv: andes: defconfig: drop CONFIG_EMBEDDED and
+ enable CONFIG_EXPERT
+
+CONFIG_DEBUG_KERNEL is selected when CONFIG_EXPERT is enabled,
+and CONFIG_DEBUG_EXPERT is selected when CONFIG_EMBEDDED is enabled.
+
+Previously, andes_defconfig would enable CONFIG_EMBEDDED, which also
+selected CONFIG_DEBUG_KERNEL, allowing users to debug the kernel.
+
+However, after a modification commit removed CONFIG_EMBEDDED,
+andes_defconfig now needs to enable CONFIG_EXPERT in order for
+CONFIG_DEBUG_KERNEL to be selected.
+
+commit ef815d2cba78 ("treewide: drop CONFIG_EMBEDDED")
+
+treewide: drop CONFIG_EMBEDDED
+
+There is only one Kconfig user of CONFIG_EMBEDDED and it can be switched
+to EXPERT or "if !ARCH_MULTIPLATFORM" (suggested by Arnd)
+
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+---
+ arch/riscv/configs/andes_defconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/riscv/configs/andes_defconfig b/arch/riscv/configs/andes_defconfig
+index 6c71f9944910..ad1b9ed8dbd7 100644
+--- a/arch/riscv/configs/andes_defconfig
++++ b/arch/riscv/configs/andes_defconfig
+@@ -24,7 +24,7 @@ CONFIG_INITRAMFS_SOURCE="rootfs-lite initramfs.txt.lite"
+ # CONFIG_RD_ZSTD is not set
+ # CONFIG_INITRAMFS_PRESERVE_MTIME is not set
+ # CONFIG_SYSFS_SYSCALL is not set
+-CONFIG_EMBEDDED=y
++CONFIG_EXPERT=y
+ CONFIG_PROFILING=y
+ CONFIG_ARCH_ANDES=y
+ CONFIG_SOC_VIRT=y
+-- 
+2.34.1
+

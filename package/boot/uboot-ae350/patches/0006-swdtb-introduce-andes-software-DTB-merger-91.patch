@@ -1,0 +1,413 @@
+From dbef5282deb1866059fe4f0fda3453c49d6e335b Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 2 Aug 2024 18:41:39 +0800
+Subject: [PATCH 06/53] swdtb: introduce andes software DTB merger (#91)
+
+1. configs: enable console record in ae350
+2. swdtb: show swdtb merger entry message in console record
+
+configs: enable console record in ae350:
+To display messages before serial initialization, enable console record,
+which allocates memory as a ring buffer. The printf function will place
+strings into the output ring buffer of the console record. After serial
+initialization is complete, messages from printf will no longer be placed
+in the ring buffer but will be directly displayed on the console.
+
+swdtb: show swdtb merger entry message in console record:
+When building with the SWDTB=1 option, both console recording and
+the SWDTB merger are enabled.
+
+The SWDTB merger entry is placed in the board_fdt_blob_setup function,
+which is the hook for the vendor board to obtain the FDT blob.
+
+To display the SWDTB merger message in the console record's ring buffer,
+the display function should be placed in spl_board_init_f,
+which is the U-Boot SPL initialization function for the vendor board.
+
+Signed-off-by: Randolph randolph@andestech.com
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/91
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ board/andestech/ae350/ae350.c                 | 35 ++++++--
+ board/andestech/common/Makefile               |  5 ++
+ board/andestech/common/swdtb_merger/Makefile  |  4 +
+ .../common/swdtb_merger/swdtb_config.h        | 30 +++++++
+ .../common/swdtb_merger/swdtb_merger.c        | 82 +++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger.h        | 27 ++++++
+ configs/ae350_rv32_falcon_defconfig           |  2 +
+ configs/ae350_rv32_falcon_xip_defconfig       |  2 +
+ configs/ae350_rv32_spl_defconfig              |  2 +
+ configs/ae350_rv32_spl_xip_defconfig          |  2 +
+ configs/ae350_rv64_falcon_defconfig           |  2 +
+ configs/ae350_rv64_falcon_xip_defconfig       |  2 +
+ configs/ae350_rv64_spl_defconfig              |  2 +
+ configs/ae350_rv64_spl_xip_defconfig          |  2 +
+ scripts/Makefile.build                        |  5 ++
+ 15 files changed, 199 insertions(+), 5 deletions(-)
+ create mode 100644 board/andestech/common/Makefile
+ create mode 100644 board/andestech/common/swdtb_merger/Makefile
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_config.h
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_merger.c
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_merger.h
+
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index fb8a59740c57..1d98dc181a4a 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -25,6 +25,10 @@
+ #include <dm/uclass-internal.h>
+ #include <spl.h>
+ 
++#ifdef ANDES_SWDTB_MERGER
++#include "../common/swdtb_merger/swdtb_merger.h"
++#endif
++
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+ #define IRQ_TARGET_NUM_REG(base)	((base) + 0x1100)
+@@ -84,10 +88,8 @@ ulong board_flash_get_legacy(ulong base, int banknum, flash_info_t *info)
+ }
+ 
+ #define ANDES_HW_DTB_ADDRESS	0xF2000000
+-void *board_fdt_blob_setup(int *err)
++void *ae350_find_fdt_blob(void)
+ {
+-	*err = 0;
+-
+ 	if (IS_ENABLED(CONFIG_OF_SEPARATE) || IS_ENABLED(CONFIG_OF_BOARD)) {
+ 		if (fdt_magic((uintptr_t)gd->arch.firmware_fdt_addr) == FDT_MAGIC)
+ 			return (void *)(ulong)gd->arch.firmware_fdt_addr;
+@@ -95,12 +97,29 @@ void *board_fdt_blob_setup(int *err)
+ 
+ 	if (fdt_magic(CONFIG_SYS_FDT_BASE) == FDT_MAGIC)
+ 		return (void *)CONFIG_SYS_FDT_BASE;
+-	return (void *)ANDES_HW_DTB_ADDRESS;
+ 
+-	*err = -EINVAL;
++	if (fdt_magic(ANDES_HW_DTB_ADDRESS) == FDT_MAGIC)
++		return (void *)ANDES_HW_DTB_ADDRESS;
++
+ 	return NULL;
+ }
+ 
++void *board_fdt_blob_setup(int *err)
++{
++	void *fdt_blob = ae350_find_fdt_blob();
++
++	if (!fdt_blob) {
++		*err = -EINVAL;
++	} else {
++		*err = 0;
++#ifdef ANDES_SWDTB_MERGER
++		swdtb_merger_hook_fdtblob(&fdt_blob);
++#endif
++	}
++
++	return fdt_blob;
++}
++
+ int spl_board_init_f(void)
+ {
+ 	u32 board_hart_count = 0, dts_hart_count = 0;
+@@ -108,6 +127,12 @@ int spl_board_init_f(void)
+ 	struct udevice *dev = 0;
+ 	int ret = 0;
+ 
++#ifdef ANDES_SWDTB_MERGER
++	ret = swdtb_merger_show_console_record();
++	if (ret < 0)
++		return ret;
++#endif
++
+ 	// 31---------------16-15--------------------- 0
+ 	// |   target count   | interrupt source count |
+ 	//  -------------------------------------------
+diff --git a/board/andestech/common/Makefile b/board/andestech/common/Makefile
+new file mode 100644
+index 000000000000..c575607403d1
+--- /dev/null
++++ b/board/andestech/common/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0+
++#
++# Copyright (C) 2024 Andes Technology Corporation
++obj-y	+= swdtb_merger/
++
+diff --git a/board/andestech/common/swdtb_merger/Makefile b/board/andestech/common/swdtb_merger/Makefile
+new file mode 100644
+index 000000000000..864de97f2c1d
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/Makefile
+@@ -0,0 +1,4 @@
++# SPDX-License-Identifier: GPL-2.0+
++#
++# Copyright (C) 2024 Andes Technology Corporation
++obj-y += swdtb_merger.o
+diff --git a/board/andestech/common/swdtb_merger/swdtb_config.h b/board/andestech/common/swdtb_merger/swdtb_config.h
+new file mode 100644
+index 000000000000..a1e284001b0d
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_config.h
+@@ -0,0 +1,30 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Configure header file for the swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++#ifndef __SWDTB_CONFIG_H_
++#define __SWDTB_CONFIG_H_
++
++#define ANDES_SWDTB_MERGER_CHECK	1
++
++/* Max string line per bytes for console record */
++#define MAX_STRING_BYTE			256
++
++/*
++ * Before enabling the option ANDES_SWDTB_MERGER_DEBUG_MSG, please increase
++ * the size of CONFIG_CONSOLE_RECORD_OUT_SIZE_F in the defconfig.
++ * It is highly recommended to add at least an additional 0x4000 in size.
++ */
++#define ANDES_SWDTB_MERGER_DEBUG_MSG	0
++#if ANDES_SWDTB_MERGER_DEBUG_MSG
++#define dtb_debug(fmt, args...) do {    \
++	printf("%s(): ", __func__);     \
++	printf(fmt, ##args);            \
++} while (0)
++#else
++#define dtb_debug(fmt, args...)
++#endif
++
++#endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+new file mode 100644
+index 000000000000..8b6c843f95cf
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -0,0 +1,82 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <console.h>
++#include <linux/ctype.h>
++#include <linux/libfdt.h>
++#include <fdt.h>
++#include "swdtb_merger.h"
++
++/**
++ * The main entry of swdtb merger
++ * @fdt_blob:	The address for the fdt_blob
++ */
++void swdtb_merger(void *fdt_blob)
++{
++	/* Cosnsole record for printf message before the serial initial */
++	console_record_init();
++	console_record_reset_enable();
++
++	printf("Using swdtb merger\n");
++}
++
++/**
++ * To hook the original fdt_blob, Use SWDTB_FDTBLOB instead.
++ * @fdt_blob:	The pointer to the address of fdt_blob
++ */
++void swdtb_merger_hook_fdtblob(void **fdt_blob)
++{
++#if CONFIG_IS_ENABLED(RISCV_MMODE)
++	memcpy((void *)SWDTB_FDTBLOB, *fdt_blob, fdt_totalsize(*fdt_blob));
++	*fdt_blob = map_sysmem(SWDTB_FDTBLOB, 0);
++	swdtb_merger((void *)SWDTB_FDTBLOB);
++#endif
++}
++
++/**
++ * To show the console record per line
++ * Should only be used after serial is initialized
++ *
++ * Return: 0 on success, or a negative error number
++ */
++int swdtb_merger_show_console_record(void)
++{
++	int ret;
++	char buf[MAX_STRING_BYTE] = { 0 };
++
++	while (1) {
++		/*
++		 * "sizeof(buf) - 5" refers to function fastboot_multiresponse
++		 * in drivers/fastboot
++		 */
++		ret = console_record_readline(buf, sizeof(buf) - 5);
++
++		if (ret > 1) {
++			printf("%s\n", buf);
++		} else if (ret < 0) {
++			printf("error on console_record_readline:%d\n", ret);
++			if (ret == -ENOSPC)
++				printf("please increase CONFIG_CONSOLE_RECORD_OUT_SIZE_F\n");
++			return ret;
++		} else if (*buf == '\0') {
++			/*
++			 * When ret == 1 and buf == '\0', it means we are done.
++			 * When ret == 0 and buf == '\0', it means that the
++			 * console record output mechanism hit an incomplete
++			 * string and then go to error handling.
++			 * In both cases, all of them need to be terminated.
++			 */
++			break;
++		}
++	}
++
++	return 0;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.h b/board/andestech/common/swdtb_merger/swdtb_merger.h
+new file mode 100644
+index 000000000000..11504529dee7
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.h
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Header file for the swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++#ifndef __SWDTB_MERGER_H_
++#define __SWDTB_MERGER_H_
++#include <mapmem.h>
++#include "swdtb_config.h"
++
++#if CONFIG_VAL(PAYLOAD_ARGS_ADDR)
++#define SWDTB_FDTBLOB	(CONFIG_SPL_PAYLOAD_ARGS_ADDR)
++#else
++#if CONFIG_IS_ENABLED(LOAD_FIT) || CONFIG_IS_ENABLED(LOAD_FIT_FULL)
++#if (CONFIG_TEXT_BASE < 0x100000)
++#error CONFIG_TEXT_BASE needs to be larger than 0x100000
++#endif
++#define SWDTB_FDTBLOB	(CONFIG_TEXT_BASE - 0x100000)
++#endif
++#endif
++
++void swdtb_merger(void *source);
++void swdtb_merger_hook_fdtblob(void **fdt_blob);
++int swdtb_merger_show_console_record(void);
++
++#endif
+diff --git a/configs/ae350_rv32_falcon_defconfig b/configs/ae350_rv32_falcon_defconfig
+index 3b3a4b4d08fd..ea2205d8ea47 100644
+--- a/configs/ae350_rv32_falcon_defconfig
++++ b/configs/ae350_rv32_falcon_defconfig
+@@ -60,3 +60,5 @@ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv32_falcon_xip_defconfig b/configs/ae350_rv32_falcon_xip_defconfig
+index dadd189ca694..5c6d43f01970 100644
+--- a/configs/ae350_rv32_falcon_xip_defconfig
++++ b/configs/ae350_rv32_falcon_xip_defconfig
+@@ -61,3 +61,5 @@ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+diff --git a/configs/ae350_rv32_spl_defconfig b/configs/ae350_rv32_spl_defconfig
+index db2e3dd8ecc7..fdaa25988188 100644
+--- a/configs/ae350_rv32_spl_defconfig
++++ b/configs/ae350_rv32_spl_defconfig
+@@ -64,3 +64,5 @@ CONFIG_ATCSPI200_SPI=y
+ CONFIG_WDT=y
+ CONFIG_WDT_ATCWDT200=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv32_spl_xip_defconfig b/configs/ae350_rv32_spl_xip_defconfig
+index b2813d0c3c42..e5beea04a86b 100644
+--- a/configs/ae350_rv32_spl_xip_defconfig
++++ b/configs/ae350_rv32_spl_xip_defconfig
+@@ -65,3 +65,5 @@ CONFIG_ATCSPI200_SPI=y
+ CONFIG_WDT=y
+ CONFIG_WDT_ATCWDT200=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv64_falcon_defconfig b/configs/ae350_rv64_falcon_defconfig
+index 804321cbad36..0d229207dfc9 100644
+--- a/configs/ae350_rv64_falcon_defconfig
++++ b/configs/ae350_rv64_falcon_defconfig
+@@ -60,3 +60,5 @@ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv64_falcon_xip_defconfig b/configs/ae350_rv64_falcon_xip_defconfig
+index 8cdc81280320..8834aa0b05e8 100644
+--- a/configs/ae350_rv64_falcon_xip_defconfig
++++ b/configs/ae350_rv64_falcon_xip_defconfig
+@@ -61,3 +61,5 @@ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv64_spl_defconfig b/configs/ae350_rv64_spl_defconfig
+index b396e9ba6958..7a7a628ed578 100644
+--- a/configs/ae350_rv64_spl_defconfig
++++ b/configs/ae350_rv64_spl_defconfig
+@@ -64,3 +64,5 @@ CONFIG_ATCSPI200_SPI=y
+ CONFIG_WDT=y
+ CONFIG_WDT_ATCWDT200=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/configs/ae350_rv64_spl_xip_defconfig b/configs/ae350_rv64_spl_xip_defconfig
+index 12c7659128c2..e56cd7cb19e5 100644
+--- a/configs/ae350_rv64_spl_xip_defconfig
++++ b/configs/ae350_rv64_spl_xip_defconfig
+@@ -65,3 +65,5 @@ CONFIG_ATCSPI200_SPI=y
+ CONFIG_WDT=y
+ CONFIG_WDT_ATCWDT200=y
+ # CONFIG_BINMAN_FDT is not set
++CONFIG_CONSOLE_RECORD=y
++CONFIG_CONSOLE_RECORD_OUT_SIZE_F=0x2000
+\ No newline at end of file
+diff --git a/scripts/Makefile.build b/scripts/Makefile.build
+index 97dd4a64f6ef..42ddf1adf313 100644
+--- a/scripts/Makefile.build
++++ b/scripts/Makefile.build
+@@ -61,6 +61,11 @@ asflags-y  += $(PLATFORM_CPPFLAGS)
+ ccflags-y  += $(PLATFORM_CPPFLAGS)
+ cppflags-y += $(PLATFORM_CPPFLAGS)
+ 
++ifeq ("1", "$(SWDTB)")
++asflags-y  += -DANDES_SWDTB_MERGER
++ccflags-y  += -DANDES_SWDTB_MERGER
++cppflags-y += -DANDES_SWDTB_MERGER
++endif
+ include scripts/Makefile.lib
+ 
+ # Do not include host rules unless needed
+-- 
+2.34.1
+

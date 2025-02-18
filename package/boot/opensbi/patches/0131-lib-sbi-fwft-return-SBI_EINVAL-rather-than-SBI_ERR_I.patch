@@ -1,0 +1,35 @@
+From caae2f7d455c78c509782e1eb8d47dfdd874b903 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Mon, 24 Jun 2024 12:29:09 +0200
+Subject: [PATCH 131/172] lib: sbi: fwft: return SBI_EINVAL rather than
+ SBI_ERR_INVALID_PARAM
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Error code returned by the ecall handles should use the defines from
+sbi_ecall_interface.h rather than sbi_error.h.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Andrew Jones <ajones@ventanamicro.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_fwft.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/sbi/sbi_fwft.c b/lib/sbi/sbi_fwft.c
+index 595819b6877f..f1ae91592fbc 100644
+--- a/lib/sbi/sbi_fwft.c
++++ b/lib/sbi/sbi_fwft.c
+@@ -196,7 +196,7 @@ int sbi_fwft_set(enum sbi_fwft_feature_t feature, unsigned long value,
+ 		return ret;
+ 
+ 	if ((flags & ~SBI_FWFT_SET_FLAG_LOCK) != 0)
+-		return SBI_ERR_INVALID_PARAM;
++		return SBI_EINVAL;
+ 
+ 	if (conf->flags & SBI_FWFT_SET_FLAG_LOCK)
+ 		return SBI_EDENIED;
+-- 
+2.34.1
+

@@ -1,0 +1,64 @@
+From 5f158e991d2693bfe83cdd15224456ebc7e167d7 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 26 Apr 2024 13:50:38 +0800
+Subject: [PATCH 031/168] riscv: andes: add CONFIG_PHYS_ADDR_T_64BIT for Andes
+ RV32
+
+Enabling PHYS_ADDR_T_64BIT allows andes-cache.c to perform cache
+operations using 64-bit physical addresses on a 32-bit system.
+
+When enabling PHYS_ADDR_T_64BIT on RV32, it is necessary to
+set MAX_POSSIBLE_PHYSMEM_BITS. This setting is located
+in arch/riscv/include/asm/pgtable-32.h.
+
+However, including arch/riscv/include/asm/xip_fixup.h,
+which in turn includes <linux/pgtable.h>,
+references the following condition in include/linux/pgtable.h:
+
+if !defined(MAX_POSSIBLE_PHYSMEM_BITS) && !defined(CONFIG_64BIT)
+error Missing MAX_POSSIBLE_PHYSMEM_BITS definition
+
+This causes a compilation error:
+
+In file included from ./arch/riscv/include/asm/xip_fixup.h:8,
+   from arch/riscv/kernel/head.S:17:
+   ./include/linux/pgtable.h:1578:2: error: #error Missing
+   MAX_POSSIBLE_PHYSMEM_BITS definition
+   1578 | #error Missing MAX_POSSIBLE_PHYSMEM_BITS definition
+   make[4]:[scripts/Makefile.build:360: arch/riscv/kernel/head.o] Error 1
+   make[3]:[scripts/Makefile.build:480: arch/riscv/kernel] Error 2
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/Kconfig.socs            | 1 +
+ arch/riscv/include/asm/xip_fixup.h | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/Kconfig.socs b/arch/riscv/Kconfig.socs
+index 5052dd79bba7..477700eb4cda 100644
+--- a/arch/riscv/Kconfig.socs
++++ b/arch/riscv/Kconfig.socs
+@@ -6,6 +6,7 @@ config ARCH_ANDES
+ 	select ERRATA_ANDES
+ 	select ERRATA_ANDES_CMO
+ 	select ANDES_CACHE
++	select PHYS_ADDR_T_64BIT if 32BIT
+ 	help
+ 	  This enables support for Andes platform hardware.
+ 
+diff --git a/arch/riscv/include/asm/xip_fixup.h b/arch/riscv/include/asm/xip_fixup.h
+index b65bf6306f69..f7e37dec8ecc 100644
+--- a/arch/riscv/include/asm/xip_fixup.h
++++ b/arch/riscv/include/asm/xip_fixup.h
+@@ -5,7 +5,7 @@
+ #ifndef _ASM_RISCV_XIP_FIXUP_H
+ #define _ASM_RISCV_XIP_FIXUP_H
+ 
+-#include <linux/pgtable.h>
++#include <asm/pgtable.h>
+ 
+ #ifdef CONFIG_XIP_KERNEL
+ .macro XIP_FIXUP_OFFSET reg
+-- 
+2.34.1
+

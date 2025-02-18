@@ -1,0 +1,252 @@
+From 69bf265923cd73b8c64d4004dfa9efcb1aaa2e40 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 23 Aug 2024 14:36:55 +0800
+Subject: [PATCH 20/53] swdtb: skip inserting node into reserved memory if
+ already exists (#119)
+
+Due to the policy change, the SWDTB merger will skip inserting a
+new node into reserved memory if the reserved memory node already
+exists in the DTB.
+
+The range of the node in reserved memory is too large, and it's a
+highly customized node. Skipping the insertion of new nodes is a
+simpler approach. Users should ensure its safety on their own.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/119
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 79 ++++++++-----------
+ .../common/swdtb_merger/swdtb_tool.c          | 14 +---
+ .../common/swdtb_merger/swdtb_tool.h          |  8 ++
+ 3 files changed, 42 insertions(+), 59 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index f7d1fd012fe7..65830f17f506 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -161,14 +161,6 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 			old_xv5_idx = 1;
+ 		}
+ 
+-		if (global_dtb_type == DTB_TYPE_USER) {
+-			if (!new_dsp_idx || old_xv5_idx) {
+-				printf("Warning: The %s (%s) needs to be changed\n",
+-				       prop_name, old_str);
+-			}
+-			return RETURN_DONE;
+-		}
+-
+ 		while (idx < strlen(old_str)) {
+ 			if (!strncmp(&old_str[idx], rv_str, strlen(rv_str))) {
+ 				strncat(new_str, rv_str, strlen(rv_str));
+@@ -360,12 +352,6 @@ int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 		value = fdt_getprop(fdt, node, target_name, NULL);
+ 		if (!value) {
+-			if (global_dtb_type == DTB_TYPE_USER) {
+-				dtb_info("Warning: The %s node need (%s)\n",
+-					 target_node, target_name);
+-				return RETURN_DONE;
+-			}
+-
+ 			show_rawdtb(target_name, target_node);
+ 
+ 			fdt_refer_node = fdt_path_offset(fdt, refer_node);
+@@ -430,14 +416,6 @@ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value)
+ 	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+ 		const u32 *value;
+ 
+-		if (global_dtb_type == DTB_TYPE_USER) {
+-			/*
+-			 * The L2C interrupts does not affect booting process,
+-			 * just skip it when not in use with the built-in DTB.
+-			 */
+-			return RETURN_DONE;
+-		}
+-
+ 		value = fdt_getprop(fdt, node, target, NULL);
+ 		if (value) {
+ 			/* Find the target in the node skip */
+@@ -530,14 +508,6 @@ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
+ 	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+ 		const u32 *value;
+ 
+-		if (global_dtb_type == DTB_TYPE_USER) {
+-			/*
+-			 * The SPI quad mode does not affect booting process
+-			 * just skip it.
+-			 */
+-			return RETURN_DONE;
+-		}
+-
+ 		value = fdt_getprop(fdt, node, tx_name, NULL);
+ 		if (!value) {
+ 			show_rawdtb(tx_name, target_node);
+@@ -612,7 +582,8 @@ int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value)
+ /**
+  * The insert_inject_node() function will add the injection node to
+  * reserved-memory. If reserved-memory does not exist, this function
+- * will create it as well.
++ * will create it as well. If the reserved-memory node exists before
++ * the CPU starts, the SWDTB merger will skip inserting the inject node.
+  * reserved-memory {
+  *     #address-cells = <0x02>;
+  *     #size-cells = <0x02>;
+@@ -642,16 +613,19 @@ int insert_inject_node(void *fdt, int node, char *name, char *value)
+ 	u32 phandle;
+ 	u32 rmem_offset;
+ 
+-	if (global_dtb_type == DTB_TYPE_USER) {
+-		/*
+-		 * The inject node does not affect booting process,
+-		 * just skip it when not in use with the built-in DTB.
+-		 */
+-		return RETURN_DONE;
+-	}
+-
+ 	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
+ 	if (reserved_off > 0) {
++		if (global_reserved_type == RESERVED_MEM_INIT)
++			global_reserved_type = RESERVED_MEM_IN_DTB;
++
++		if (global_reserved_type == RESERVED_MEM_IN_DTB) {
++			printf("%sReserved-memory node exists in the DTB%s\n",
++			       KYEL, KNRM);
++			printf("%sSkip insertion of %s%s\n",
++			       KYEL, node_name, KNRM);
++			return RETURN_DONE;
++		}
++
+ 		inject_off = fdt_subnode_offset(fdt, reserved_off, node_name);
+ 		if (inject_off > 0) {
+ 			/* The target node andes_inject already exists */
+@@ -659,6 +633,9 @@ int insert_inject_node(void *fdt, int node, char *name, char *value)
+ 		}
+ 	}
+ 
++	if (global_reserved_type == RESERVED_MEM_INIT)
++		global_reserved_type = RESERVED_MEM_EMPTY;
++
+ 	/* Inject the reserved-memory nodes into the DTS */
+ 	ret = fdtdec_add_reserved_memory(fdt, node_name, &inject_node,
+ 					 &compatible, 1, &phandle, flags);
+@@ -684,6 +661,8 @@ int insert_inject_node(void *fdt, int node, char *name, char *value)
+ /**
+  * This fixup will add the injection node to reserved-memory.
+  * If reserved-memory does not exist, this fixup will create it as well.
++ * If the reserved-memory node exists before the CPU starts, the SWDTB
++ * merger will skip inserting the dma_global_pool0 node.
+  * reserved-memory {
+  *     #address-cells = <0x02>;
+  *      #size-cells = <0x02>;
+@@ -717,16 +696,19 @@ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value)
+ 	u32 phandle;
+ 	u32 rmem_offset;
+ 
+-	if (global_dtb_type == DTB_TYPE_USER) {
+-		/*
+-		 * The dma global pool node does not affect booting process,
+-		 * just skip it when not in use with the built-in DTB.
+-		 */
+-		return RETURN_DONE;
+-	}
+-
+ 	reserved_off = fdt_path_offset(fdt, "/reserved-memory");
+ 	if (reserved_off > 0) {
++		if (global_reserved_type == RESERVED_MEM_INIT)
++			global_reserved_type = RESERVED_MEM_IN_DTB;
++
++		if (global_reserved_type == RESERVED_MEM_IN_DTB) {
++			printf("%sReserved-memory node exists in the DTB%s\n",
++			       KYEL, KNRM);
++			printf("%sSkip insertion of %s%s\n",
++			       KYEL, node_name, KNRM);
++			return RETURN_DONE;
++		}
++
+ 		dma_off = fdt_subnode_offset(fdt, reserved_off, node_name);
+ 		if (dma_off > 0) {
+ 			/* The target node dma_global_pool0 already exists */
+@@ -734,6 +716,9 @@ int dma_global_pool_fixup(void *fdt, int node, char *name, char *value)
+ 		}
+ 	}
+ 
++	if (global_reserved_type == RESERVED_MEM_INIT)
++		global_reserved_type = RESERVED_MEM_EMPTY;
++
+ 	/* Inject the reserved-memory nodes into the DTS */
+ 	ret = fdtdec_add_reserved_memory(fdt, node_name, &dma_pool,
+ 					 &compatible, 1, &phandle, flags);
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index e549acac93b3..9daa8d6e6a94 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -14,6 +14,7 @@
+  */
+ enum dma_type global_dma_type;
+ enum dtb_type global_dtb_type;
++enum reserved_mem_type global_reserved_type;
+ 
+ void swdtb_global_initial(void)
+ {
+@@ -23,6 +24,7 @@ void swdtb_global_initial(void)
+ 	 */
+ 	global_dma_type = DMA_TYPE_INIT;
+ 	global_dtb_type = DTB_TYPE_INIT;
++	global_reserved_type = RESERVED_MEM_INIT;
+ }
+ 
+ bool fdt_data_is_one_string(const char *data, int len)
+@@ -45,12 +47,6 @@ int compatible_change(void *fdt, int node, char *name, char *value,
+ 	    (strcmp(value, old_str) == 0)) {
+ 		dtb_info("RAW: %s: %s\n", (char *)name, (char *)value);
+ 
+-		if (global_dtb_type == DTB_TYPE_USER) {
+-			printf("Warning: The %s (%s) need changed!\n",
+-			       prop_name, old_str);
+-			return RETURN_DONE;
+-		}
+-
+ 		ret = fdt_setprop(fdt, node, name, new_str,
+ 				  strlen(new_str) + 1);
+ 		if (ret) {
+@@ -101,12 +97,6 @@ int dma_type_to_node(void *fdt, int node, char *name, const char *target_node)
+ 	show_rawdtb(target_1, target_node);
+ 	show_rawdtb(target_2, target_node);
+ 
+-	if (global_dtb_type == DTB_TYPE_USER) {
+-		dtb_info("The node %s may need to set %s/%s\n",
+-			 target_node, target_1, target_2);
+-		return RETURN_DONE;
+-	}
+-
+ 	/* find global dma type coherent / noncoherent type */
+ 	if (global_dma_type == DMA_TYPE_INIT) {
+ 		const u32 *target_1_idx;
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 1db6ca0b8901..28184965b02a 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -53,6 +53,14 @@ enum dtb_type {
+ 
+ extern enum dtb_type global_dtb_type;
+ 
++enum reserved_mem_type {
++	RESERVED_MEM_INIT = 0,
++	RESERVED_MEM_IN_DTB = 1,
++	RESERVED_MEM_EMPTY = 2,
++};
++
++extern enum reserved_mem_type global_reserved_type;
++
+ void swdtb_global_initial(void);
+ 
+ bool fdt_data_is_one_string(const char *data, int len);
+-- 
+2.34.1
+

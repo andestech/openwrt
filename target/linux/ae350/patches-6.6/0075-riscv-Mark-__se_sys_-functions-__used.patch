@@ -1,0 +1,60 @@
+From e286f29bdfa3edc03151a9cfe87368e45327745e Mon Sep 17 00:00:00 2001
+From: Sami Tolvanen <samitolvanen@google.com>
+Date: Tue, 26 Mar 2024 15:37:13 +0000
+Subject: [PATCH 075/168] riscv: Mark __se_sys_* functions __used
+
+Clang doesn't think ___se_sys_* functions used even though they are
+aliased to __se_sys_*, resulting in -Wunused-function warnings when
+building rv32. For example:
+
+   mm/oom_kill.c:1195:1: warning: unused function '___se_sys_process_mrelease' [-Wunused-function]
+    1195 | SYSCALL_DEFINE2(process_mrelease, int, pidfd, unsigned int, flags)
+         | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   include/linux/syscalls.h:221:36: note: expanded from macro 'SYSCALL_DEFINE2'
+     221 | #define SYSCALL_DEFINE2(name, ...) SYSCALL_DEFINEx(2, _##name, __VA_ARGS__)
+         |                                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   include/linux/syscalls.h:231:2: note: expanded from macro 'SYSCALL_DEFINEx'
+     231 |         __SYSCALL_DEFINEx(x, sname, __VA_ARGS__)
+         |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   arch/riscv/include/asm/syscall_wrapper.h:81:2: note: expanded from macro '__SYSCALL_DEFINEx'
+      81 |         __SYSCALL_SE_DEFINEx(x, sys, name, __VA_ARGS__)                         \
+         |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   arch/riscv/include/asm/syscall_wrapper.h:40:14: note: expanded from macro '__SYSCALL_SE_DEFINEx'
+      40 |         static long ___se_##prefix##name(__MAP(x,__SC_LONG,__VA_ARGS__))
+         |                     ^~~~~~~~~~~~~~~~~~~~
+   <scratch space>:30:1: note: expanded from here
+      30 | ___se_sys_process_mrelease
+         | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+   1 warning generated.
+
+Mark the functions __used explicitly to fix the Clang warnings.
+
+Fixes: a9ad73295cc1 ("riscv: Fix syscall wrapper for >word-size arguments")
+Reported-by: Linux Kernel Functional Testing <lkft@linaro.org>
+Tested-by: Linux Kernel Functional Testing <lkft@linaro.org>
+Signed-off-by: Sami Tolvanen <samitolvanen@google.com>
+Reviewed-by: Alexandre Ghiti <alexghiti@rivosinc.com>
+Tested-by: Conor Dooley <conor.dooley@microchip.com>
+Link: https://lore.kernel.org/r/20240326153712.1839482-2-samitolvanen@google.com
+Signed-off-by: Palmer Dabbelt <palmer@rivosinc.com>
+---
+ arch/riscv/include/asm/syscall_wrapper.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/include/asm/syscall_wrapper.h b/arch/riscv/include/asm/syscall_wrapper.h
+index 980094c2e976..ac80216549ff 100644
+--- a/arch/riscv/include/asm/syscall_wrapper.h
++++ b/arch/riscv/include/asm/syscall_wrapper.h
+@@ -36,7 +36,8 @@ asmlinkage long __riscv_sys_ni_syscall(const struct pt_regs *);
+ 					ulong)						\
+ 			__attribute__((alias(__stringify(___se_##prefix##name))));	\
+ 	__diag_pop();									\
+-	static long noinline ___se_##prefix##name(__MAP(x,__SC_LONG,__VA_ARGS__));	\
++	static long noinline ___se_##prefix##name(__MAP(x,__SC_LONG,__VA_ARGS__))	\
++			__used;								\
+ 	static long ___se_##prefix##name(__MAP(x,__SC_LONG,__VA_ARGS__))
+ 
+ #define SC_RISCV_REGS_TO_ARGS(x, ...) \
+-- 
+2.34.1
+

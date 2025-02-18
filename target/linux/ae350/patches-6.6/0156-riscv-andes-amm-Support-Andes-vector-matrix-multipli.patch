@@ -1,0 +1,307 @@
+From 7a57bda56a3afda2f10920b93e6868c49b373200 Mon Sep 17 00:00:00 2001
+From: Charles Wu <dminus@andestech.com>
+Date: Fri, 7 Feb 2025 08:51:51 +0800
+Subject: [PATCH 156/168] riscv: andes: amm: Support Andes vector matrix
+ multiplication extension (AMM) (#247)
+
+Preserve the contents of the AMM uzobctl CSR during context switch and
+handle illegal instruction exception caused by AMM instructions.
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/247
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Charles Wu <dminus@andestech.com>
+Co-committed-by: Charles Wu <dminus@andestech.com>
+---
+ arch/riscv/Kconfig                       |  8 +++++
+ arch/riscv/include/asm/hwcap.h           |  1 +
+ arch/riscv/include/asm/processor.h       |  1 +
+ arch/riscv/include/asm/switch_to.h       | 33 +++++++++++++++++-
+ arch/riscv/include/uapi/asm/ptrace.h     |  4 +++
+ arch/riscv/include/uapi/asm/sigcontext.h |  1 +
+ arch/riscv/kernel/cpufeature.c           |  3 +-
+ arch/riscv/kernel/process.c              |  4 +++
+ arch/riscv/kernel/signal.c               | 44 ++++++++++++++++++++++++
+ arch/riscv/kernel/vector.c               |  6 ++++
+ include/linux/soc/andes/csr.h            |  1 +
+ include/linux/soc/andes/extension.h      | 11 ++++++
+ 12 files changed, 115 insertions(+), 2 deletions(-)
+ create mode 100644 include/linux/soc/andes/extension.h
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 5c20e0968a6b..752a8da4dd78 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -652,6 +652,14 @@ config ANDES_DSP
+ 	help
+ 	  Say N here if you want to disable Andes DSP support.
+ 
++config AMM
++	bool "Andes Vector Matrix Multiplication extension (AMM) support"
++	default y
++	help
++	  Provide specialized vector instructions to accelerate
++	  large matrix operations.
++	  Say N here if you want to disable AMM extension support.
++
+ config ANDES_EFFICIENT_MISALIGNED_ACCESS
+ 	bool "Andes efficient mis-aligned access support"
+ 	depends on RISCV && ARCH_ANDES
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index 45b3094b6d53..58fe3b4e8d18 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -80,6 +80,7 @@
+ #define RISCV_ISA_EXT_SMNPM		88
+ #define RISCV_ISA_EXT_SSNPM		89
+ 
++#define RISCV_ISA_EXT_XANDESVMM		125
+ #define RISCV_ISA_EXT_XANDESPMU		126
+ #define RISCV_ISA_EXT_XANDESDSP		127
+ 
+diff --git a/arch/riscv/include/asm/processor.h b/arch/riscv/include/asm/processor.h
+index 8454557d1aa9..d073de9e6186 100644
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -124,6 +124,7 @@ struct thread_struct {
+ 	struct __riscv_v_ext_state vstate;
+ 	struct __riscv_v_ext_state kernel_vstate;
+ 	struct __riscv_andesdsp_ext_state andesdsp_state;
++	struct __riscv_amm_ext_state amm_state;
+ };
+ 
+ /* Whitelist the fstate from the task_struct for hardened usercopy */
+diff --git a/arch/riscv/include/asm/switch_to.h b/arch/riscv/include/asm/switch_to.h
+index 6e822d05e73a..079743c66f4a 100644
+--- a/arch/riscv/include/asm/switch_to.h
++++ b/arch/riscv/include/asm/switch_to.h
+@@ -110,6 +110,35 @@ static __always_inline bool has_andesdsp(void) { return false; }
+ #define __switch_to_andesdsp(__prev, __next) do { } while (0)
+ #endif /* CONFIG_ANDES_DSP */
+ 
++#ifdef CONFIG_AMM
++static inline void amm_state_save(struct task_struct *task)
++{
++	task->thread.amm_state.uzobctl = csr_read(CSR_UZOBCTL);
++}
++
++static inline void amm_state_restore(struct task_struct *task)
++{
++	csr_write(CSR_UZOBCTL, task->thread.amm_state.uzobctl);
++}
++
++static inline void __switch_to_amm(struct task_struct *prev,
++				   struct task_struct *next)
++{
++	amm_state_save(prev);
++	amm_state_restore(next);
++}
++
++static __always_inline bool has_amm(void)
++{
++	return riscv_has_extension_likely(RISCV_ISA_EXT_XANDESVMM);
++}
++#else
++static __always_inline bool has_amm(void) { return false; }
++#define amm_state_save(task) do { } while (0)
++#define amm_state_restore(task) do { } while (0)
++#define __switch_to_amm(__prev, __next) do { } while (0)
++#endif /* CONFIG_AMM */
++
+ extern struct task_struct *__switch_to(struct task_struct *,
+ 				       struct task_struct *);
+ 
+@@ -121,7 +150,9 @@ do {							\
+ 		__switch_to_fpu(__prev, __next);	\
+ 	if (has_andesdsp())				\
+ 		__switch_to_andesdsp(__prev, __next);	\
+-	if (has_vector())					\
++	if (has_amm())					\
++		__switch_to_amm(__prev, __next);	\
++	if (has_vector())				\
+ 		__switch_to_vector(__prev, __next);	\
+ 	((last) = __switch_to(__prev, __next));		\
+ } while (0)
+diff --git a/arch/riscv/include/uapi/asm/ptrace.h b/arch/riscv/include/uapi/asm/ptrace.h
+index 512275986b1c..562a60ac464d 100644
+--- a/arch/riscv/include/uapi/asm/ptrace.h
++++ b/arch/riscv/include/uapi/asm/ptrace.h
+@@ -60,6 +60,10 @@ struct __riscv_andesdsp_ext_state {
+ 	unsigned long ucode;
+ };
+ 
++struct __riscv_amm_ext_state {
++	unsigned long uzobctl;
++};
++
+ struct __riscv_f_ext_state {
+ 	__u32 f[32];
+ 	__u32 fcsr;
+diff --git a/arch/riscv/include/uapi/asm/sigcontext.h b/arch/riscv/include/uapi/asm/sigcontext.h
+index e27edc93feeb..41be1f8b5f16 100644
+--- a/arch/riscv/include/uapi/asm/sigcontext.h
++++ b/arch/riscv/include/uapi/asm/sigcontext.h
+@@ -30,6 +30,7 @@ struct __sc_riscv_v_state {
+ struct sigcontext {
+ 	struct user_regs_struct sc_regs;
+ 	struct __riscv_andesdsp_ext_state sc_andesdsp_regs;
++	struct __riscv_amm_ext_state sc_amm_regs;
+ 	union {
+ 		union __riscv_fp_state sc_fpregs;
+ 		struct __riscv_extra_ext_header sc_extdesc;
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index e3a3e20f1098..001fd228f8e8 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -298,9 +298,10 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+ 	__RISCV_ISA_EXT_DATA(svinval, RISCV_ISA_EXT_SVINVAL),
+ 	__RISCV_ISA_EXT_DATA(svnapot, RISCV_ISA_EXT_SVNAPOT),
+ 	__RISCV_ISA_EXT_DATA(svpbmt, RISCV_ISA_EXT_SVPBMT),
++	__RISCV_ISA_EXT_DATA(svvptc, RISCV_ISA_EXT_SVVPTC),
+ 	__RISCV_ISA_EXT_DATA(xandespmu, RISCV_ISA_EXT_XANDESPMU),
+ 	__RISCV_ISA_EXT_DATA(xandesdsp, RISCV_ISA_EXT_XANDESDSP),
+-	__RISCV_ISA_EXT_DATA(svvptc, RISCV_ISA_EXT_SVVPTC),
++	__RISCV_ISA_EXT_DATA(xandesvmm, RISCV_ISA_EXT_XANDESVMM),
+ };
+ 
+ const size_t riscv_isa_ext_count = ARRAY_SIZE(riscv_isa_ext);
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index 9ae2717334d5..deadbdb30755 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -158,6 +158,10 @@ void flush_thread(void)
+ 	memset(&current->thread.andesdsp_state, 0,
+ 	       sizeof(current->thread.andesdsp_state));
+ #endif
++#ifdef CONFIG_AMM
++	memset(&current->thread.amm_state, 0,
++	       sizeof(current->thread.amm_state));
++#endif
+ #ifdef CONFIG_RISCV_ISA_V
+ 	/* Reset vector state */
+ 	riscv_v_vstate_ctrl_init(current);
+diff --git a/arch/riscv/kernel/signal.c b/arch/riscv/kernel/signal.c
+index c45e69eba682..c3f7e23753f9 100644
+--- a/arch/riscv/kernel/signal.c
++++ b/arch/riscv/kernel/signal.c
+@@ -181,6 +181,41 @@ save_andesdsp_state(struct pt_regs *regs,
+ #define restore_andesdsp_state(task, regs) (0)
+ #endif /* CONFIG_ANDES_DSP */
+ 
++#ifdef CONFIG_AMM
++static long
++restore_amm_state(struct pt_regs *regs,
++		  struct __riscv_amm_ext_state *sc_amm_regs)
++{
++	long err;
++
++	err = __copy_from_user(&current->thread.amm_state.uzobctl,
++			       &sc_amm_regs->uzobctl,
++			       sizeof(unsigned long));
++	if (unlikely(err))
++		return err;
++	amm_state_restore(current);
++	return 0;
++}
++
++static long
++save_amm_state(struct pt_regs *regs,
++	       struct __riscv_amm_ext_state *sc_amm_regs)
++{
++	long err;
++
++	amm_state_save(current);
++	err = __copy_to_user(&sc_amm_regs->uzobctl,
++			     &current->thread.amm_state.uzobctl,
++			     sizeof(unsigned long));
++	if (unlikely(err))
++		return err;
++	return 0;
++}
++#else
++#define save_amm_state(task, regs) (0)
++#define restore_amm_state(task, regs) (0)
++#endif /* CONFIG_AMM */
++
+ static long restore_sigcontext(struct pt_regs *regs,
+ 	struct sigcontext __user *sc)
+ {
+@@ -241,6 +276,12 @@ static long restore_sigcontext(struct pt_regs *regs,
+ 			return err;
+ 	}
+ 
++	if (has_amm()) {
++		err = restore_amm_state(regs, &sc->sc_amm_regs);
++		if (unlikely(err))
++			return err;
++	}
++
+ 	return err;
+ }
+ 
+@@ -330,6 +371,9 @@ static long setup_sigcontext(struct rt_sigframe __user *frame,
+ 	/* Save the ANDES_DSP state. */
+ 	if (has_andesdsp())
+ 		err |= save_andesdsp_state(regs, &sc->sc_andesdsp_regs);
++	/* Save the AMM state. */
++	if (has_amm())
++		err |= save_amm_state(regs, &sc->sc_amm_regs);
+ 	/* Write zero to fp-reserved space and check it on restore_sigcontext */
+ 	err |= __put_user(0, &sc->sc_extdesc.reserved);
+ 	/* And put END __riscv_ctx_hdr at the end. */
+diff --git a/arch/riscv/kernel/vector.c b/arch/riscv/kernel/vector.c
+index 32c3ceb3c4db..c1704e04ba32 100644
+--- a/arch/riscv/kernel/vector.c
++++ b/arch/riscv/kernel/vector.c
+@@ -20,6 +20,8 @@
+ #include <asm/ptrace.h>
+ #include <asm/bug.h>
+ 
++#include <linux/soc/andes/extension.h>
++
+ static bool riscv_v_implicit_uacc = IS_ENABLED(CONFIG_RISCV_ISA_V_DEFAULT_ENABLE);
+ static struct kmem_cache *riscv_v_user_cachep;
+ #ifdef CONFIG_RISCV_ISA_V_PREEMPTIVE
+@@ -94,6 +96,10 @@ static bool insn_is_vector(u32 insn_buf)
+ 		if ((csr >= CSR_VSTART && csr <= CSR_VCSR) ||
+ 		    (csr >= CSR_VL && csr <= CSR_VLENB))
+ 			return true;
++#ifdef CONFIG_AMM
++	case AMM_OPCODE:
++		return true;
++#endif
+ 	}
+ 
+ 	return false;
+diff --git a/include/linux/soc/andes/csr.h b/include/linux/soc/andes/csr.h
+index 1e302f2c976c..a4dd37b1096e 100644
+--- a/include/linux/soc/andes/csr.h
++++ b/include/linux/soc/andes/csr.h
+@@ -31,6 +31,7 @@
+ /* User mode control registers */
+ #define CSR_UITB			0x800
+ #define CSR_UCODE			0x801
++#define CSR_UZOBCTL			0x808 /* AMM : Zero Overhead Boundary Control Register */
+ #define CSR_UDCAUSE			0x809
+ #define CCTL_REG_UCCTLBEGINADDR_NUM	0x80b
+ #define CCTL_REG_UCCTLCOMMAND_NUM	0x80c
+diff --git a/include/linux/soc/andes/extension.h b/include/linux/soc/andes/extension.h
+new file mode 100644
+index 000000000000..183586606031
+--- /dev/null
++++ b/include/linux/soc/andes/extension.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2025 Andes Technology Corporation.
++ */
++
++#ifndef __LINUX_SOC_ANDES_EXTENSION_H
++#define __LINUX_SOC_ANDES_EXTENSION_H
++
++#define AMM_OPCODE	0x5b
++
++#endif /* !__LINUX_SOC_ANDES_EXTENSION_H */
+-- 
+2.34.1
+

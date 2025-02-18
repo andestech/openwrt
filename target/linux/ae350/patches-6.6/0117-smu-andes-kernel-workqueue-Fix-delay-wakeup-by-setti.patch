@@ -1,0 +1,35 @@
+From eb0865a59c4e7fff53543419f03f3254ce429990 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Tue, 3 Sep 2024 14:29:30 +0800
+Subject: [PATCH 117/168] smu: andes: kernel/workqueue: Fix delay wakeup by
+ setting default workqueue scope affinity to NUMA (#164)
+
+We git bisected and found that the commit 63c5484e7495
+("workqueue: Add multiple affinity scopes and interface to select them")
+would cause the system to wakeup after, but not as soon as, wakeup event is triggered.
+
+Instead of reverting the commit, changing the default workqueue attribute alone
+to NUMA like before could solve this issue.
+
+Fixes: 63c5484e7495 ("workqueue: Add multiple affinity scopes and interface to select them")
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ kernel/workqueue.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c
+index 8c7bafbee1b1..41dd330a6898 100644
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -339,7 +339,7 @@ struct wq_pod_type {
+ };
+ 
+ static struct wq_pod_type wq_pod_types[WQ_AFFN_NR_TYPES];
+-static enum wq_affn_scope wq_affn_dfl = WQ_AFFN_CACHE;
++static enum wq_affn_scope wq_affn_dfl = WQ_AFFN_NUMA;
+ 
+ static const char *wq_affn_names[WQ_AFFN_NR_TYPES] = {
+ 	[WQ_AFFN_DFL]			= "default",
+-- 
+2.34.1
+

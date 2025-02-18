@@ -1,0 +1,552 @@
+From afbb78892e57f35e0e09f84cb288f5d1490e236d Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 2 Aug 2024 18:45:00 +0800
+Subject: [PATCH 07/53] swdtb: fixup DTB compatible strings (#94)
+
+1. swdtb: plicsw: change the compatible string
+2. swdtb: dma: change the compatible string
+3. swdtb: mmc: change the compatible string
+4. swdtb: ax25: change the compatible string to ae350
+5. swdtb: plmt: change the compatible string
+
+*Change the compatible string:
+In interrupt-controller@e6400000 node
+    compatible = "riscv,plic1"
+==>
+    compatible = "andestech,plicsw"
+
+*Change the compatible string:
+In dma@f0c00000 node
+    compatible = "andestech,atcdmac300g"
+==>
+    compatible = "andestech,atcdmac300"
+
+*Change the compatible string:
+In mmc@f0e00000 node
+    compatible = "andestech,atfsdc010g"
+==>
+    compatible = "andestech,atfsdc010"
+
+*Change the compatible string to "ae350":
+Example: in AX25
+    "andestech,ax25"
+==>
+    "andestech,ae350"
+
+*Change the compatible string:
+Example: in plmt0@e6000000 node
+    "riscv,plmt0"
+==>
+    "andestech,plmt0"
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/94
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ board/andestech/common/swdtb_merger/Makefile  |   2 +
+ .../common/swdtb_merger/swdtb_config.h        |  15 ++
+ .../common/swdtb_merger/swdtb_merger.c        | 148 ++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger.h        |   2 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  |  98 ++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |  37 +++++
+ .../common/swdtb_merger/swdtb_tool.c          |  68 ++++++++
+ .../common/swdtb_merger/swdtb_tool.h          |  46 ++++++
+ 8 files changed, 416 insertions(+)
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_tool.c
+ create mode 100644 board/andestech/common/swdtb_merger/swdtb_tool.h
+
+diff --git a/board/andestech/common/swdtb_merger/Makefile b/board/andestech/common/swdtb_merger/Makefile
+index 864de97f2c1d..b59b70f9f74b 100644
+--- a/board/andestech/common/swdtb_merger/Makefile
++++ b/board/andestech/common/swdtb_merger/Makefile
+@@ -2,3 +2,5 @@
+ #
+ # Copyright (C) 2024 Andes Technology Corporation
+ obj-y += swdtb_merger.o
++obj-y += swdtb_merger_fixup.o
++obj-y += swdtb_tool.o
+diff --git a/board/andestech/common/swdtb_merger/swdtb_config.h b/board/andestech/common/swdtb_merger/swdtb_config.h
+index a1e284001b0d..3011ad40b6ea 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_config.h
++++ b/board/andestech/common/swdtb_merger/swdtb_config.h
+@@ -27,4 +27,19 @@
+ #define dtb_debug(fmt, args...)
+ #endif
+ 
++#if ANDES_SWDTB_MERGER_CHECK
++#define dtb_info(fmt, args...) do {     \
++	printf(fmt, ##args);            \
++} while (0)
++#else
++#define dtb_info(fmt, args...)
++#endif
++
++#define dtb_error(fmt, args...) do {                      \
++	printf("********** Warning! **********\n");       \
++	printf("%s(): ", __func__);                       \
++	printf(fmt, ##args);                              \
++	printf("******************************\n");       \
++} while (0)
++
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 8b6c843f95cf..272a75996bcd 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -15,6 +15,144 @@
+ #include <fdt.h>
+ #include "swdtb_merger.h"
+ 
++/*
++ * The table for adding property or changing node information.
++ * Assign the value of the first element to be SWDTB_ENABLE
++ * or SWDTB_DISABLE to enable or disable a sub-feature.
++ */
++struct swdtb_table dtb_merge_table[] = {
++	{SWDTB_ENABLE,	1,
++	 "plicsw compatible string",	plicsw_fixup},
++	{SWDTB_ENABLE,	1,
++	 "plmt compatible string",	plmt_fixup},
++	{SWDTB_ENABLE,	1,
++	 "using generic dma",		using_generic_dma},
++	{SWDTB_ENABLE,	1,
++	 "using generic sdc",		using_generic_sdc},
++	{SWDTB_ENABLE,	1,
++	 "change ax25 to ae350",	ae350_fixup},
++};
++
++static void process_string_data(void *blob, int node, char *name, char *value)
++{
++	int element_cnt;
++	int ret;
++
++	dtb_debug("Name(s): %s: %s\n", name, value);
++	element_cnt = sizeof(dtb_merge_table) / sizeof(struct swdtb_table);
++
++	for (int idx = 0 ; idx < element_cnt; idx++) {
++		if (dtb_merge_table[idx].enable &&
++		    dtb_merge_table[idx].count) {
++			ret = dtb_merge_table[idx].fixup((void *)blob, node,
++							 (char *)name, value);
++			if (!ret && dtb_merge_table[idx].count &&
++			    dtb_merge_table[idx].count < COUNT_MAX) {
++				/* to reduce the loop */
++				dtb_merge_table[idx].count--;
++			}
++		}
++	}
++}
++
++static void process_numeral_data(void *blob, int node, char *name, int len)
++{
++#if ANDES_SWDTB_MERGER_DEBUG_MSG
++	const u32 *value;
++
++	value = fdt_getprop(blob, node, name, NULL);
++	if ((value) && (len % 4 == 0)) {
++		for (int idx = 0; idx < len / 4; idx++) {
++			dtb_debug("Name: %s: %08x\n",
++				  name, fdt32_to_cpu(*(value + idx)));
++		}
++	}
++#endif
++	/* Still no code here */
++}
++
++/**
++ * List all properties in a node, one per line.
++ * @blob:	FDT blob
++ * @node:	Node to display
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++static int list_properties(const void *blob, int node)
++{
++	const struct fdt_property *data;
++	const char *name;
++	u32 len;
++	int prop;
++
++	prop = fdt_first_property_offset(blob, node);
++	do {
++		/* Stop silently when there are no more properties */
++		if (prop < 0)
++			return prop == -FDT_ERR_NOTFOUND ? 0 : prop;
++
++		data = fdt_get_property_by_offset(blob, prop, &len);
++		name = fdt_string(blob, fdt32_to_cpu(data->nameoff));
++		if (name) {
++			if (fdt_data_is_one_string(data->data, len)) {
++				/* The String data */
++				process_string_data((void *)blob, node,
++						    (char *)name,
++						    (char *)data->data);
++			} else {
++				/* The numeral data */
++				process_numeral_data((void *)blob, node,
++						     (char *)name, len);
++			}
++		}
++		prop = fdt_next_property_offset(blob, prop);
++	} while (1);
++}
++
++/**
++ * Traverse all of node and its property
++ * support 3 sub-layer under "/"", ae350 max is 4 layer.
++ * the order is root -> node -> subnode -> childnode
++ * The time complexity is O(M x N)
++ * M is the properties of the target DTB
++ * N is the element of dtb_merge_table
++ * @fdt_blob:	The address for the fdt_blob
++ */
++static int swdtb_find_node(void *fdt)
++{
++	int parent, node, subnode, childnode;
++
++	dtb_debug("Address:%016lx\n", (unsigned long)fdt);
++
++	parent = fdt_path_offset(fdt, "/");
++	if (parent < 0) {
++		log_err("Error on find /\n");
++		return -ENODEV;
++	}
++
++	/* For root node property, like compatible string */
++	list_properties(fdt, node);
++
++	fdt_for_each_subnode(node, fdt, parent) {
++		list_properties(fdt, node);
++
++		fdt_for_each_subnode(subnode, fdt, node) {
++			list_properties(fdt, subnode);
++
++			/* For the changed Flash information under the node of
++			 * the SPI, we need add one more layer.
++			 * It's full path is "/" => "soc" => spi => flash
++			 */
++			fdt_for_each_subnode(childnode, fdt, subnode) {
++				/* For level 3 subnode */
++				list_properties(fdt, childnode);
++			}
++		}
++	}
++
++	return 0;
++}
++
+ /**
+  * The main entry of swdtb merger
+  * @fdt_blob:	The address for the fdt_blob
+@@ -26,6 +164,16 @@ void swdtb_merger(void *fdt_blob)
+ 	console_record_reset_enable();
+ 
+ 	printf("Using swdtb merger\n");
++
++	if (fdt_magic((void *)fdt_blob) != FDT_MAGIC) {
++		printf("FDT_MAGIC is not match\n");
++		return;
++	}
++
++	/* Increase fdt space */
++	fdt_increase_size(fdt_blob, 2048);
++
++	swdtb_find_node(fdt_blob);
+ }
+ 
+ /**
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.h b/board/andestech/common/swdtb_merger/swdtb_merger.h
+index 11504529dee7..988a9ea32144 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.h
+@@ -8,6 +8,8 @@
+ #define __SWDTB_MERGER_H_
+ #include <mapmem.h>
+ #include "swdtb_config.h"
++#include "swdtb_tool.h"
++#include "swdtb_merger_fixup.h"
+ 
+ #if CONFIG_VAL(PAYLOAD_ARGS_ADDR)
+ #define SWDTB_FDTBLOB	(CONFIG_SPL_PAYLOAD_ARGS_ADDR)
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+new file mode 100644
+index 000000000000..5c88fe8fbc6e
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -0,0 +1,98 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <linux/ctype.h>
++#include <linux/libfdt.h>
++#include <log.h>
++#include <fdt.h>
++#include <fdtdec.h>
++#include "swdtb_merger_fixup.h"
++#include "swdtb_merger.h"
++#include "swdtb_tool.h"
++
++/**
++ * The plicsw_fixup() search the old_str and replace it using new_str
++ * in interrupt-controller@e6400000 node
++ * "riscv,plic1" ==> "andestech,plicsw"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int plicsw_fixup(void *fdt, int node, char *name, char *value)
++{
++	char *old_str = "riscv,plic1";
++	char *new_str = "andestech,plicsw";
++
++	return compatible_change(fdt, node, name, value, old_str, new_str);
++}
++
++/**
++ * The using_generic_dma() search the old_str and replace it using new_str
++ * in dma@f0c00000 node
++ * "andestech,atcdmac300g" ==> "andestech,atcdmac300"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int using_generic_dma(void *fdt, int node, char *name, char *value)
++{
++	char *old_str = "andestech,atcdmac300g";
++	char *new_str = "andestech,atcdmac300";
++
++	return compatible_change(fdt, node, name, value, old_str, new_str);
++}
++
++/**
++ * The using_generic_sdc() search the old_str and replace it using new_str
++ * in mmc@f0e00000 node
++ * "andestech,atfsdc010g" ==> "andestech,atfsdc010"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int using_generic_sdc(void *fdt, int node, char *name, char *value)
++{
++	char *old_str = "andestech,atfsdc010g";
++	char *new_str = "andestech,atfsdc010";
++
++	return compatible_change(fdt, node, name, value, old_str, new_str);
++}
++
++/**
++ * The ae350_fixup() search the old_str and replace it using new_str
++ * in root node
++ * "andestech,ax25" ==> "andestech,ae350"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int ae350_fixup(void *fdt, int node, char *name, char *value)
++{
++#if defined(CONFIG_ARCH_RV64I)
++	char *old_str = "andestech,ax25";
++#else
++	char *old_str = "andestech,a25";
++#endif
++	char *new_str = "andestech,ae350";
++
++	return compatible_change(fdt, node, name, value, old_str, new_str);
++}
++
++/**
++ * The plmt_fixup() search the old_str and replace it using new_str
++ * in plmt0@e6000000 node
++ * "riscv,plmt0" ==> "andestech,plmt0"
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int plmt_fixup(void *fdt, int node, char *name, char *value)
++{
++	char *old_str = "riscv,plmt0";
++	char *new_str = "andestech,plmt0";
++
++	return compatible_change(fdt, node, name, value, old_str, new_str);
++}
+\ No newline at end of file
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+new file mode 100644
+index 000000000000..9ff5e1e58811
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -0,0 +1,37 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Header file for the swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++#ifndef __SWDTB_MERGER_FIXUP_H_
++#define __SWDTB_MERGER_FIXUP_H_
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include "swdtb_tool.h"
++#include "swdtb_config.h"
++
++/* For the uncountable */
++#define COUNT_INFINITE	(0xFFFFFFFF)
++#define COUNT_MAX	(4096)
++
++#define SWDTB_ENABLE	(1)
++#define SWDTB_DISABLE	(0)
++
++struct swdtb_table {
++	unsigned int enable;
++	unsigned int count;
++	char *name;
++	int (*fixup)(void *fdt, int node, char *name, char *value);
++};
++
++int plicsw_fixup(void *fdt, int node, char *name, char *value);
++int using_generic_dma(void *fdt, int node, char *name, char *value);
++int using_generic_sdc(void *fdt, int node, char *name, char *value);
++int ae350_fixup(void *fdt, int node, char *name, char *value);
++int plmt_fixup(void *fdt, int node, char *name, char *value);
++
++#endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+new file mode 100644
+index 000000000000..376bd2c7d55b
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ *
++ */
++
++#include "swdtb_tool.h"
++
++bool fdt_data_is_one_string(const char *data, int len)
++{
++	return ((len > 0) && (strnlen(data, len) == len - 1));
++}
++
++/*
++ * The basic function for change compatible from old_str ot new_str
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int compatible_change(void *fdt, int node, char *name, char *value,
++		      char *old_str, char *new_str)
++{
++	char *prop_name = "compatible";
++	int ret;
++
++	if ((strcmp(name, prop_name) == 0) &&
++	    (strcmp(value, old_str) == 0)) {
++		dtb_info("RAW: %s: %s\n", (char *)name, (char *)value);
++
++		ret = fdt_setprop(fdt, node, name, new_str,
++				  strlen(new_str) + 1);
++		if (ret) {
++			dtb_error("Error on fdt_setprop: %s\n",
++				  fdt_strerror(ret));
++		}
++
++		show_result(fdt, node, prop_name, RESULT_STRING);
++
++		return ret;
++	}
++
++	return !(RETURN_DONE);
++}
++
++void show_rawdtb(const char *prop_name, const char *node_name)
++{
++	dtb_info("No %s in %s\n", prop_name, node_name);
++}
++
++void show_result(const void *fdt, int node, const char *prop_name, int type)
++{
++#ifdef ANDES_SWDTB_MERGER_CHECK
++	const char *data;
++
++	data = (char *)fdt_getprop(fdt, node, prop_name, NULL);
++	if (!data)
++		dtb_error("Error on fdt_getprop\n");
++
++	if (type == RESULT_STRING) {
++		/* The data is of string type; just display it. */
++		printf("Result: %s: %s%s%s\n", prop_name, KYEL, data, KNRM);
++	} else {
++		printf("Result: %s: %s%d%s\n",
++		       prop_name, KYEL, fdt32_to_cpu(*(u32 *)data), KNRM);
++	}
++#endif
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+new file mode 100644
+index 000000000000..1f51eb25bc20
+--- /dev/null
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -0,0 +1,46 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Header file for the swdtb merger for Andes dtb
++ *
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
++#ifndef __SWDTB_TOOL_H_
++#define __SWDTB_TOOL_H_
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <linux/libfdt.h>
++#include <linux/ctype.h>
++#include <fdtdec.h>
++#include <fdt_support.h>
++#include "swdtb_config.h"
++#include "swdtb_merger_fixup.h"
++#include "swdtb_merger.h"
++#include "swdtb_tool.h"
++#include "../../../scripts/dtc/libfdt/libfdt_internal.h"
++
++typedef u32 cell_t;
++
++#define KNRM  "\x1B[0m"
++#define KRED  "\x1B[31m"
++#define KGRN  "\x1B[32m"
++#define KYEL  "\x1B[33m"
++#define KBLU  "\x1B[34m"
++#define KMAG  "\x1B[35m"
++#define KCYN  "\x1B[36m"
++#define KWHT  "\x1B[37m"
++
++bool fdt_data_is_one_string(const char *data, int len);
++
++int compatible_change(void *fdt, int node, char *name, char *value,
++		      char *old_str, char *new_str);
++void show_rawdtb(const char *prop_name, const char *node_name);
++
++#define RETURN_DONE	0
++#define RESULT_STRING	0
++#define RESULT_NUMERAL	1
++void show_result(const void *fdt, int node, const char *prop_name, int type);
++
++#endif
+-- 
+2.34.1
+

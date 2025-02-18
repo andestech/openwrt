@@ -1,0 +1,43 @@
+From a0b28b88cd14a039b46520469de57698ed2754ff Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Thu, 6 Apr 2023 10:40:59 +0800
+Subject: [PATCH 152/172] lib: sbi: sbi_init: Print the number of bits of
+ performance counters
+
+This patch displays implemented bits of performance counters
+(including mcycle/minstret) in the boot message:
+
+  Boot HART ID              : 1
+  Boot HART Domain          : root
+  Boot HART Priv Version    : v1.11
+  Boot HART Base ISA        : rv64imafdcnx
+  Boot HART ISA Extensions  : sscofpmf
+  Boot HART PMP Count       : 16
+  Boot HART PMP Granularity : 8
+  Boot HART PMP Address Bits: 30
+  Boot HART MHPM Count      : 4
+> Boot HART MHPM Bits       : 64
+  Boot HART MIDELEG         : 0x0000000000000222
+  Boot HART MEDELEG         : 0x000000000000b109
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+---
+ lib/sbi/sbi_init.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib/sbi/sbi_init.c b/lib/sbi/sbi_init.c
+index 0f9e14cc390b..0792ea1846a0 100644
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -188,6 +188,8 @@ static void sbi_boot_print_hart(struct sbi_scratch *scratch, u32 hartid)
+ 		   sbi_hart_mhpm_mask(scratch));
+ 	sbi_printf("Boot HART Debug Triggers  : %d triggers\n",
+ 		   sbi_dbtr_get_total_triggers());
++	sbi_printf("Boot HART MHPM Bits       : %d\n",
++		   sbi_hart_mhpm_bits(scratch));
+ 	sbi_hart_delegation_dump(scratch, "Boot HART ", "         ");
+ }
+ 
+-- 
+2.34.1
+

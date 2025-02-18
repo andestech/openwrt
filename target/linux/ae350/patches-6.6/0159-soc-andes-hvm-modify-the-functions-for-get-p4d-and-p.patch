@@ -1,0 +1,47 @@
+From 83428560922cd3c747c69b5518e41b5262e6af6b Mon Sep 17 00:00:00 2001
+From: Charles Wu <dminus@andestech.com>
+Date: Fri, 7 Feb 2025 15:44:53 +0800
+Subject: [PATCH 159/168] soc: andes: hvm: modify the functions for get p4d and
+ pud due to kernel API updates (#250)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Build failed in Jenkins: build_linux_64bit_smp_image #1616 [1]
+Error message [2]
+
+[1]：http://atcsi06:8080/job/build_linux_64bit_smp_image/1616/
+[2]：http://atcsi06:8080/job/build_linux_64bit_smp_image/1616/console
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/250
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Charles Wu <dminus@andestech.com>
+Co-committed-by: Charles Wu <dminus@andestech.com>
+---
+ arch/riscv/mm/pgtable.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/riscv/mm/pgtable.c b/arch/riscv/mm/pgtable.c
+index 2c3d524a82bd..621b7e1f0ec1 100644
+--- a/arch/riscv/mm/pgtable.c
++++ b/arch/riscv/mm/pgtable.c
+@@ -49,6 +49,7 @@ pud_t *pud_offset(p4d_t *p4d, unsigned long address)
+ 
+ 	return (pud_t *)p4d;
+ }
++EXPORT_SYMBOL_GPL(pud_offset);
+ 
+ p4d_t *p4d_offset(pgd_t *pgd, unsigned long address)
+ {
+@@ -57,6 +58,7 @@ p4d_t *p4d_offset(pgd_t *pgd, unsigned long address)
+ 
+ 	return (p4d_t *)pgd;
+ }
++EXPORT_SYMBOL_GPL(p4d_offset);
+ #endif
+ 
+ #ifdef CONFIG_HAVE_ARCH_HUGE_VMAP
+-- 
+2.34.1
+

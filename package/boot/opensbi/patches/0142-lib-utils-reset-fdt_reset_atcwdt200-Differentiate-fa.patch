@@ -1,0 +1,50 @@
+From 6aa8fcc60e350baadf807bd75a95cc4465725a79 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Thu, 9 Mar 2023 16:57:58 +0800
+Subject: [PATCH 142/172] lib: utils: reset: fdt_reset_atcwdt200: Differentiate
+ failures in ae350_system_reset function
+
+Improve error messaging by distinguishing between failure of
+reset vector write to SMU and failure of WDT triggering software
+reset signal.
+
+Reported-by: Randolph Sheng-Kai Lin <randolph@andestech.com>
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+---
+ lib/utils/reset/fdt_reset_atcwdt200.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/lib/utils/reset/fdt_reset_atcwdt200.c b/lib/utils/reset/fdt_reset_atcwdt200.c
+index 03d547b9dd7b..fccb663a3bcd 100644
+--- a/lib/utils/reset/fdt_reset_atcwdt200.c
++++ b/lib/utils/reset/fdt_reset_atcwdt200.c
+@@ -9,6 +9,7 @@
+ 
+ #include <libfdt.h>
+ #include <sbi/riscv_io.h>
++#include <sbi/sbi_console.h>
+ #include <sbi/sbi_ecall_interface.h>
+ #include <sbi/sbi_error.h>
+ #include <sbi/sbi_hart.h>
+@@ -63,15 +64,15 @@ static void ae350_system_reset(u32 type, u32 reason)
+ 
+ 	for (int i = 0; i < sbi_platform_hart_count(plat); i++)
+ 		if (smu_set_reset_vector(&smu, FLASH_BASE, i))
+-			goto fail;
++			sbi_panic("ERR %s: Failed to program reset vector\n", __func__);
+ 
+ 	/* Program WDT control register  */
+ 	writew(ATCWDT200_WP_NUM, wdt_addr + WREN_REG);
+ 	writel(INT_CLK_32768 | INT_EN | RST_CLK_128 | RST_EN | WDT_EN,
+ 	       wdt_addr + CTRL_REG);
+ 
+-fail:
+-	sbi_hart_hang();
++	/* Should never reach here */
++	sbi_panic("ERR %s: WDT software reset failed\n", __func__);
+ }
+ 
+ static struct sbi_system_reset_device atcwdt200_reset = {
+-- 
+2.34.1
+

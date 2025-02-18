@@ -1,0 +1,34 @@
+From a25cc99a111a188c254cf19c13f5b1a9aabfde0a Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 12 Dec 2024 19:10:09 +0800
+Subject: [PATCH 29/53] andes: cpu: fix SYS_DCACHE_OFF support (#135)
+
+SYS_DCACHE_OFF config may be useful for debugging
+but current support is not complete, fix it.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/135
+Reviewed-by: Jimmy Xi-He Zheng <jimmyzhe@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ arch/riscv/cpu/andes/cpu.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/cpu/andes/cpu.c b/arch/riscv/cpu/andes/cpu.c
+index a6ccab0be743..64ed654e671e 100644
+--- a/arch/riscv/cpu/andes/cpu.c
++++ b/arch/riscv/cpu/andes/cpu.c
+@@ -23,7 +23,8 @@ int cleanup_before_linux(void)
+ 
+ 	cache_flush();
+ 
+-	dcache_enable();
++	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
++		dcache_enable();
+ 
+ #ifdef CONFIG_SYS_NONCACHED_MEMORY
+ 	noncached_free();
+-- 
+2.34.1
+

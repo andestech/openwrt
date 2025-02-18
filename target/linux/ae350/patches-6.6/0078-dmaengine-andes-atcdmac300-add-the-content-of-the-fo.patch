@@ -1,0 +1,93 @@
+From 65416674ac8e76455d405735fdb8d904fc446f50 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Thu, 29 Aug 2024 15:45:34 +0800
+Subject: [PATCH 078/168] dmaengine: andes: atcdmac300: add the content of the
+ follow-up changes for PR #156 (#176)
+
+The content of PR #156 was already merged in a previous commit (de3c459c26).
+The follow-up changes [1] are added here.
+
+[1] https://gitea.andestech.com/RD-SW/linux/compare/01d1ae22c9ab20726915cab6c82d386d4d27062a..c94d7e80569465af5feb2cb652b7e8dad2a7679c
+
+Signed-off-by: charles <dminus@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/176
+Reviewed-by: CL Chin-Long Wang <cl634@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Co-authored-by: charles <dminus@andestech.com>
+Co-committed-by: charles <dminus@andestech.com>
+---
+ drivers/dma/atcdmac300.c | 22 +++++++++++-----------
+ drivers/dma/atcdmac300.h |  2 +-
+ 2 files changed, 12 insertions(+), 12 deletions(-)
+ mode change 100755 => 100644 drivers/dma/atcdmac300.c
+
+diff --git a/drivers/dma/atcdmac300.c b/drivers/dma/atcdmac300.c
+old mode 100755
+new mode 100644
+index b182b148099e..df2178ff42c8
+--- a/drivers/dma/atcdmac300.c
++++ b/drivers/dma/atcdmac300.c
+@@ -26,12 +26,13 @@
+ 	BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) |\
+ 	BIT(DMA_SLAVE_BUSWIDTH_4_BYTES))
+ 
+-#define INIT_DESC(desc) do {					\
+-				desc->at = NULL;		\
+-				desc->cyclic = false;		\
+-				desc->num_sg = 0;		\
+-				INIT_LIST_HEAD(&desc->tx_list);	\
+-			} while (0)
++#define INIT_DESC(desc)				\
++	do {					\
++		desc->at = NULL;		\
++		desc->cyclic = false;		\
++		desc->num_sg = 0;		\
++		INIT_LIST_HEAD(&desc->tx_list);	\
++	} while (0)
+ 
+ static unsigned int init_nr_desc_per_channel = 64;
+ module_param(init_nr_desc_per_channel, uint, 0644);
+@@ -143,8 +144,9 @@ static struct v5_desc *v5_desc_get(struct v5_dma_chan *v5chan)
+ /**
+  * v5_desc_put_nolock - move a descriptor to the free list.
+  *
+- * This function does not use a lock to protect the free linked list,
+- * so please remember to add a proper lock when calling the function.
++ * This function does not use a lock to protect any linked lists in
++ * 'struct v5_dma_chan', so please remember to add a proper lock when
++ * calling the function.
+  *
+  * @v5chan: channel we work on
+  * @desc: descriptor, at the head of a chain, to move to free list
+@@ -163,13 +165,11 @@ static void v5_desc_put_nolock(struct v5_dma_chan *v5chan, struct v5_desc *desc)
+ 		INIT_DESC(desc);
+ 		list_add_tail(&desc->desc_node, &v5chan->free_list);
+ 
+-		index = 1;
+-		while (index < num_sg) {
++		for (index = 1; index < num_sg; index++) {
+ 			desc = list_entry(next_node, struct v5_desc, desc_node);
+ 			next_node = desc->desc_node.next;
+ 			INIT_DESC(desc);
+ 			list_add_tail(&desc->desc_node, &v5chan->free_list);
+-			index++;
+ 		}
+ 	}
+ }
+diff --git a/drivers/dma/atcdmac300.h b/drivers/dma/atcdmac300.h
+index 6744f29317d7..4aeb5d88dcde 100644
+--- a/drivers/dma/atcdmac300.h
++++ b/drivers/dma/atcdmac300.h
+@@ -237,7 +237,7 @@ enum v5_status {
+  * .device_config
+  * @lock: serializes enqueue/dequeue operations to descriptors lists
+  * @chan_used: This variable shows that the DMA channel is in use and
+-               prevents new DMA operations on it.
++ *	       prevents new DMA operations on it.
+  * @active_list: list of descriptors dmaengine is being running on
+  * @queue: list of descriptors ready to be submitted to engine
+  * @free_list: list of descriptors usable by the channel
+-- 
+2.34.1
+

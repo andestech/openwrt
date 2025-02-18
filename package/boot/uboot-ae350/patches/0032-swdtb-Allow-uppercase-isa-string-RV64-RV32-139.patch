@@ -1,0 +1,29 @@
+From 1854a8499054a92a514478e424493dcb1010fa09 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 25 Dec 2024 11:12:12 +0800
+Subject: [PATCH 32/53] swdtb: Allow uppercase isa string (RV64|RV32) (#139)
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/139
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+---
+ board/andestech/common/swdtb_merger/swdtb_merger_fixup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index edea7c7619b5..da15fcc3c6f5 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -172,7 +172,7 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 		}
+ 
+ 		while (idx < strlen(old_str)) {
+-			if (!strncmp(&old_str[idx], rv_str, strlen(rv_str))) {
++			if (!strncasecmp(&old_str[idx], rv_str, strlen(rv_str))) {
+ 				strncat(new_str, rv_str, strlen(rv_str));
+ 
+ 				idx += strlen(rv_str);
+-- 
+2.34.1
+

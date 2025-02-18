@@ -1,0 +1,79 @@
+From 4aea17fc6697165eaaa67536fe3122933fc35b29 Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Mon, 30 Sep 2024 13:35:34 +0800
+Subject: [PATCH 110/168] dmaengine: andes: atcdmac300: Fix the descriptor
+ timeout issue (#167)
+
+In v5_advance_work, v5_complete_all() moves the descriptors from the queue
+to the active_list. If active_list is empty, the operation of this DMA
+channel is stopped and the DMA channel is set to idle (chan_used = 0).
+However, if a new descriptor is added to the queue between the calls
+to v5_complete_all() and the check for list_empty(&v5chan->active_list),
+this descriptor will not be executed.
+
+	if (list_is_singular(&v5chan->active_list)) {
+		v5_complete_all(v5chan);
+	} ...
+
+	if (list_empty(&v5chan->active_list))
+		v5chan->chan_used = 0;
+	else
+		v5_dostart(v5chan, v5_first_active(v5chan));
+
+The solution is to process the new descriptor in the queue before
+stopping the DMA channel if there is a new descriptor in the queue.
+
+	if (list_is_singular(&v5chan->active_list)) {
+		v5_complete_all(v5chan);
+	} ...
+
+	spin_lock(&v5chan->lock);
+	if (list_empty(&v5chan->active_list)) {
+		if (!list_empty(&v5chan->queue)) {
+		list_move(v5chan->queue.next, &v5chan->active_list);
+	...
+
+Signed-off-by: CL Wang <cl634@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/167
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Co-authored-by: CL Wang <cl634@andestech.com>
+Co-committed-by: CL Wang <cl634@andestech.com>
+---
+ drivers/dma/atcdmac300.c | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/atcdmac300.c b/drivers/dma/atcdmac300.c
+index e490a95c3bf4..b5b30de52728 100644
+--- a/drivers/dma/atcdmac300.c
++++ b/drivers/dma/atcdmac300.c
+@@ -315,10 +315,23 @@ static void v5_advance_work(struct v5_dma_chan *v5chan)
+ 				DMA_TRANS_NOERROR);
+ 		}
+ 
+-		if (list_empty(&v5chan->active_list))
+-			v5chan->chan_used = 0;
+-		else
++		spin_lock(&v5chan->lock);
++		if (list_empty(&v5chan->active_list)) {
++			if (!list_empty(&v5chan->queue)) {
++				list_move(v5chan->queue.next,
++					  &v5chan->active_list);
++				spin_unlock(&v5chan->lock);
++				v5_dostart(v5chan,
++					   v5_first_active(v5chan));
++
++			} else {
++				v5chan->chan_used = 0;
++				spin_unlock(&v5chan->lock);
++			}
++		} else {
++			spin_unlock(&v5chan->lock);
+ 			v5_dostart(v5chan, v5_first_active(v5chan));
++		}
+ 	} else {
+ 		/* For cyclic mode */
+ 		struct dmaengine_result res;
+-- 
+2.34.1
+

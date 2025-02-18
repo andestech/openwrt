@@ -1,0 +1,70 @@
+From 96a35db63af01977aea403b10ca80a77e101f7e4 Mon Sep 17 00:00:00 2001
+From: Inochi Amaoto <inochiama@outlook.com>
+Date: Fri, 23 Feb 2024 16:18:15 +0800
+Subject: [PATCH 030/172] docs/firmware: document new options for jump and
+ payload firmwares
+
+Adding relocatable address brings new configuration options for jump
+and payload firmwares. Describe these new options in documentation.
+
+Signed-off-by: Inochi Amaoto <inochiama@outlook.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ docs/firmware/fw_jump.md    | 17 ++++++++++++++---
+ docs/firmware/fw_payload.md |  5 +++++
+ 2 files changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/docs/firmware/fw_jump.md b/docs/firmware/fw_jump.md
+index 3e883fa814f3..2ee6b291fa04 100644
+--- a/docs/firmware/fw_jump.md
++++ b/docs/firmware/fw_jump.md
+@@ -31,9 +31,14 @@ follows:
+ 
+ * **FW_JUMP_ADDR** - Address of the entry point of the booting stage to be
+   executed following OpenSBI firmware. This address generally corresponds
+-  exactly to the address where this next booting stage was loaded. This is a
+-  mandatory parameter. Compilation errors will result from not defining this
+-  address.
++  exactly to the address where this next booting stage was loaded.
++  At least one of *FW_JUMP_ADDR* and *FW_JUMP_OFFSET* (see below) should be
++  defined. Compilation errors will result from not defining one of them.
++
++* **FW_JUMP_OFFSET** - Address offset from the *FW_TEXT_START* where the
++  entry point of the next booting stage is located. This offset is used as
++  relocatable address of the next booting stage entry point. If *FW_JUMP_ADDR*
++  is also defined, the firmware will prefer *FW_JUMP_ADDR*.
+ 
+ * **FW_JUMP_FDT_ADDR** - Address where the *flattened device tree (FDT file)*
+   passed by the prior booting stage will be placed in memory before executing
+@@ -57,6 +62,12 @@ follows:
+   echo fdt overlaps kernel, increase FW_JUMP_FDT_ADDR
+   ```
+ 
++* **FW_JUMP_FDT_OFFSET** - Address offset from the *FW_TEXT_START* where
++  the FDT will be passed to the next booting stage. This offset is used
++  as relocatable address of the FDT passed to the next booting stage. If
++  *FW_JUMP_FDT_ADDR* is also defined, the firmware will prefer
++  *FW_JUMP_FDT_ADDR*.
++
+ *FW_JUMP* Example
+ -----------------
+ 
+diff --git a/docs/firmware/fw_payload.md b/docs/firmware/fw_payload.md
+index 113604a8b11e..a67fc50b8682 100644
+--- a/docs/firmware/fw_payload.md
++++ b/docs/firmware/fw_payload.md
+@@ -62,6 +62,11 @@ file. The parameters currently defined are as follows:
+   firmware will pass the FDT address passed by the previous booting stage
+   to the next booting stage.
+ 
++* **FW_PAYLOAD_FDT_OFFSET** - Address offset from the *FW_TEXT_START* where
++  the FDT will be passed to the next booting stage. This offset is used as
++  relocatable address of the FDT passed to the next booting stage. If
++  *FW_PAYLOAD_FDT_ADDR* is also defined, the firmware will prefer *FW_PAYLOAD_FDT_ADDR*.
++
+ *FW_PAYLOAD* Example
+ --------------------
+ 
+-- 
+2.34.1
+

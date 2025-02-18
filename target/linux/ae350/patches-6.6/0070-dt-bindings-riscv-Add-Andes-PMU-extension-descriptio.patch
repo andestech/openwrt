@@ -1,0 +1,37 @@
+From d7414ec50124f0dacad9dab2ac4ad0d5a23b6545 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 29 Jan 2024 17:25:51 +0800
+Subject: [PATCH 070/168] dt-bindings: riscv: Add Andes PMU extension
+ description
+
+Document the ISA string for Andes Technology performance monitor
+extension which provides counter overflow interrupt and mode
+filtering mechanisms.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Reviewed-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+---
+ Documentation/devicetree/bindings/riscv/extensions.yaml | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/riscv/extensions.yaml b/Documentation/devicetree/bindings/riscv/extensions.yaml
+index cc1f546fdbdc..b7dbe0bebb9f 100644
+--- a/Documentation/devicetree/bindings/riscv/extensions.yaml
++++ b/Documentation/devicetree/bindings/riscv/extensions.yaml
+@@ -246,5 +246,12 @@ properties:
+             in commit 2e5236 ("Ztso is now ratified.") of the
+             riscv-isa-manual.
+ 
++        - const: xandespmu
++          description:
++            The Andes Technology performance monitor extension for counter overflow
++            and privilege mode filtering. For more details, see Counter Related
++            Registers in the AX45MP datasheet.
++            https://www.andestech.com/wp-content/uploads/AX45MP-1C-Rev.-5.0.0-Datasheet.pdf
++
+ additionalProperties: true
+ ...
+-- 
+2.34.1
+

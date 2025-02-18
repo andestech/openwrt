@@ -1,0 +1,221 @@
+From 260990fb8bb10534a453e927510810ea1cb30aef Mon Sep 17 00:00:00 2001
+From: Che-Wei Chuang <cnoize@andestech.com>
+Date: Mon, 23 Dec 2024 13:56:44 +0800
+Subject: [PATCH 30/53] configs: Change default baud rate to 115200 (#140)
+
+Updated DTS and configuration files to set the default baud rate from 38400 to 115200.
+
+Signed-off-by: Che-Wei Chuang <cnoize@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/140
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Cynthia Lan-Ya Huang <cynthia@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Che-Wei Chuang <cnoize@andestech.com>
+Co-committed-by: Che-Wei Chuang <cnoize@andestech.com>
+---
+ arch/riscv/dts/ae350_32.dts             | 4 ++--
+ arch/riscv/dts/ae350_64.dts             | 4 ++--
+ configs/ae350_rv32_defconfig            | 2 +-
+ configs/ae350_rv32_falcon_defconfig     | 2 +-
+ configs/ae350_rv32_falcon_xip_defconfig | 2 +-
+ configs/ae350_rv32_spl_defconfig        | 2 +-
+ configs/ae350_rv32_spl_xip_defconfig    | 2 +-
+ configs/ae350_rv32_xip_defconfig        | 2 +-
+ configs/ae350_rv64_defconfig            | 2 +-
+ configs/ae350_rv64_falcon_defconfig     | 2 +-
+ configs/ae350_rv64_falcon_xip_defconfig | 2 +-
+ configs/ae350_rv64_spl_defconfig        | 2 +-
+ configs/ae350_rv64_spl_xip_defconfig    | 2 +-
+ configs/ae350_rv64_xip_defconfig        | 2 +-
+ 14 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/arch/riscv/dts/ae350_32.dts b/arch/riscv/dts/ae350_32.dts
+index 61af6d5465ec..cf2d429c7c01 100644
+--- a/arch/riscv/dts/ae350_32.dts
++++ b/arch/riscv/dts/ae350_32.dts
+@@ -17,8 +17,8 @@
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/arch/riscv/dts/ae350_64.dts b/arch/riscv/dts/ae350_64.dts
+index 8c7db29b4f2b..1928221fa3cc 100644
+--- a/arch/riscv/dts/ae350_64.dts
++++ b/arch/riscv/dts/ae350_64.dts
+@@ -17,8 +17,8 @@
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/configs/ae350_rv32_defconfig b/configs/ae350_rv32_defconfig
+index 35ad62c845d4..d2065d399ed0 100644
+--- a/configs/ae350_rv32_defconfig
++++ b/configs/ae350_rv32_defconfig
+@@ -46,7 +46,7 @@ CONFIG_SYS_FLASH_USE_BUFFER_WRITE=y
+ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv32_falcon_defconfig b/configs/ae350_rv32_falcon_defconfig
+index 53952589163f..6cd2e11aea34 100644
+--- a/configs/ae350_rv32_falcon_defconfig
++++ b/configs/ae350_rv32_falcon_defconfig
+@@ -55,7 +55,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv32_falcon_xip_defconfig b/configs/ae350_rv32_falcon_xip_defconfig
+index 39c0846f7e29..91a8d0c32bdf 100644
+--- a/configs/ae350_rv32_falcon_xip_defconfig
++++ b/configs/ae350_rv32_falcon_xip_defconfig
+@@ -56,7 +56,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv32_spl_defconfig b/configs/ae350_rv32_spl_defconfig
+index 4b4caa0032ed..6c16dd275036 100644
+--- a/configs/ae350_rv32_spl_defconfig
++++ b/configs/ae350_rv32_spl_defconfig
+@@ -56,7 +56,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv32_spl_xip_defconfig b/configs/ae350_rv32_spl_xip_defconfig
+index edf3c3156807..88614b1fbbe0 100644
+--- a/configs/ae350_rv32_spl_xip_defconfig
++++ b/configs/ae350_rv32_spl_xip_defconfig
+@@ -57,7 +57,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv32_xip_defconfig b/configs/ae350_rv32_xip_defconfig
+index 95863595d2d4..2d62107199d0 100644
+--- a/configs/ae350_rv32_xip_defconfig
++++ b/configs/ae350_rv32_xip_defconfig
+@@ -47,7 +47,7 @@ CONFIG_SYS_FLASH_USE_BUFFER_WRITE=y
+ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_defconfig b/configs/ae350_rv64_defconfig
+index 988214285a40..a583fc317b7d 100644
+--- a/configs/ae350_rv64_defconfig
++++ b/configs/ae350_rv64_defconfig
+@@ -46,7 +46,7 @@ CONFIG_SYS_FLASH_USE_BUFFER_WRITE=y
+ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_falcon_defconfig b/configs/ae350_rv64_falcon_defconfig
+index a984ce51a70f..b53c9febf48c 100644
+--- a/configs/ae350_rv64_falcon_defconfig
++++ b/configs/ae350_rv64_falcon_defconfig
+@@ -55,7 +55,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_falcon_xip_defconfig b/configs/ae350_rv64_falcon_xip_defconfig
+index b2da60b82f94..92d73acf3b5d 100644
+--- a/configs/ae350_rv64_falcon_xip_defconfig
++++ b/configs/ae350_rv64_falcon_xip_defconfig
+@@ -56,7 +56,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_spl_defconfig b/configs/ae350_rv64_spl_defconfig
+index 03739935d234..ceb092f8d7fd 100644
+--- a/configs/ae350_rv64_spl_defconfig
++++ b/configs/ae350_rv64_spl_defconfig
+@@ -56,7 +56,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_spl_xip_defconfig b/configs/ae350_rv64_spl_xip_defconfig
+index daa133d09cad..517dc5474187 100644
+--- a/configs/ae350_rv64_spl_xip_defconfig
++++ b/configs/ae350_rv64_spl_xip_defconfig
+@@ -57,7 +57,7 @@ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_SPI_FLASH_MX25U1635E=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+diff --git a/configs/ae350_rv64_xip_defconfig b/configs/ae350_rv64_xip_defconfig
+index 835f0209903e..7adb1298e838 100644
+--- a/configs/ae350_rv64_xip_defconfig
++++ b/configs/ae350_rv64_xip_defconfig
+@@ -47,7 +47,7 @@ CONFIG_SYS_FLASH_USE_BUFFER_WRITE=y
+ CONFIG_SYS_FLASH_CFI=y
+ CONFIG_SPI_FLASH_MACRONIX=y
+ CONFIG_FTMAC100=y
+-CONFIG_BAUDRATE=38400
++CONFIG_BAUDRATE=115200
+ CONFIG_SYS_NS16550=y
+ CONFIG_SPI=y
+ CONFIG_ATCSPI200_SPI=y
+-- 
+2.34.1
+

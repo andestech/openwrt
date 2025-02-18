@@ -1,0 +1,41 @@
+From 019a8e69a1dc0c0f011fabd0372e1ba80e40dd7c Mon Sep 17 00:00:00 2001
+From: Yangyu Chen <cyy@cyyself.name>
+Date: Sun, 21 Apr 2024 23:52:09 +0800
+Subject: [PATCH 097/172] platform: generic: thead: add Canaan Kendryte K230
+
+Canaan Kendryte K230 SoC has T-Head C908 cores inside. The dt-binding has
+been merged into the linux kernel [1]. However, it has early version of
+C908 core which does not have Sscofpmf and need to use T-Head PMU
+extension. Thus, we add a K230 compatible string to thead_generic_match
+and set quirk for T-Head PMU.
+
+[1] https://lore.kernel.org/linux-riscv/tencent_4D85743622F39109466913393EE2F6C5980A@qq.com/
+
+Signed-off-by: Yangyu Chen <cyy@cyyself.name>
+Reviewed-by: Inochi Amaoto <inochiama@outlook.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/thead/thead-generic.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/platform/generic/thead/thead-generic.c b/platform/generic/thead/thead-generic.c
+index da55e054c57e..3b59a0d21c0b 100644
+--- a/platform/generic/thead/thead-generic.c
++++ b/platform/generic/thead/thead-generic.c
+@@ -45,8 +45,13 @@ static struct thead_generic_quirks thead_th1520_quirks = {
+ 	.errata = THEAD_QUIRK_ERRATA_TLB_FLUSH | THEAD_QUIRK_ERRATA_THEAD_PMU,
+ };
+ 
++static struct thead_generic_quirks canaan_k230_quirks = {
++	.errata = THEAD_QUIRK_ERRATA_THEAD_PMU,
++};
++
+ static const struct fdt_match thead_generic_match[] = {
+ 	{ .compatible = "thead,th1520", .data = &thead_th1520_quirks },
++	{ .compatible = "canaan,kendryte-k230", .data = &canaan_k230_quirks },
+ 	{ },
+ };
+ 
+-- 
+2.34.1
+

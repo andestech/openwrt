@@ -1,0 +1,542 @@
+From ecb5f4ef2c7aad305f3cc7ad8ef2cc324b214bd0 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Tue, 30 Jul 2024 10:43:49 +0800
+Subject: [PATCH 018/168] riscv: dts: andes: remove undefined properties from
+ the device tree specification
+
+Use the following commands to verify the accuracy of the DTS:
+$ make dtbs
+$ make dt_binding_check -j $(nproc)
+$ dt-validate -p \
+  <linux>/Documentation/devicetree/bindings/processed-schema.json \
+  <ae350>.dtb
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ .../andes/a25_c1_d_dsp_noncoherent_ae350.dts  |  2 --
+ .../boot/dts/andes/a25mp_c4_d_dsp_ae350.dts   | 12 -----------
+ .../a27l2_c1_d_dsp_noncoherent_ae350.dts      |  6 ------
+ .../andes/a45_c1_d_dsp_noncoherent_ae350.dts  |  2 --
+ .../boot/dts/andes/a45mp_c4_d_dsp_ae350.dts   | 12 -----------
+ .../andes/ax25_c1_d_dsp_noncoherent_ae350.dts |  2 --
+ .../dts/andes/ax25mp_amp_c2_64_d_ae350.dts    |  8 --------
+ .../boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts  | 12 -----------
+ .../ax27l2_c1_d_dsp_noncoherent_ae350.dts     |  6 ------
+ .../andes/ax45_c1_d_dsp_noncoherent_ae350.dts |  2 --
+ .../boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts  | 12 -----------
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts | 20 -------------------
+ .../boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts | 12 -----------
+ .../boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts  |  8 --------
+ 14 files changed, 116 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 56f5be2132e4..dcc2a10c974b 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 86137562beea..c43d459a69c7 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,10 +131,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 6b01d0d52634..cc947de55a4b 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,10 +53,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index b43576fb0fdf..64381c80e7b3 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 7b101d595557..e601f0743c49 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv32imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv32";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,10 +131,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 244883cd0a31..74e7c1629595 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index 804bf9958169..81ea08add1aa 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -17,8 +17,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes";
+-			riscv,priv-major = <0x1>;
+-			riscv,priv-minor = <0xa>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -40,8 +38,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes";
+-			riscv,priv-major = <0x1>;
+-			riscv,priv-minor = <0xa>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -65,10 +61,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x2>;
+ 		cache-size = <0x40000>;
+ 		reg = <0x0 0xe0500000 0x0 0x40000>;
+-		andes,inst-prefetch = <0x3>;
+-		andes,data-prefetch = <0x3>;
+-		andes,tag-ram-ctl = <0x0 0x0>;
+-		andes,data-ram-ctl = <0x0 0x0>;
+ 		phandle = <0x1>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index cb58ed19ddd8..bfc7db6704ff 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,10 +131,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 19612e17deaf..e7c3f02871ea 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,10 +53,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 9f87dfbd54a7..8c1544a7c925 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index f7ad922d4960..7af7c2d7bea8 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,10 +131,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index dc0c9cbc2d9a..7f7240b2cc19 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,8 +131,6 @@ cpu@4 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -167,8 +157,6 @@ cpu@5 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -195,8 +183,6 @@ cpu@6 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -223,8 +209,6 @@ cpu@7 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imac_xandes_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv39";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -251,10 +235,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index 3097323dbfc9..69d47882c597 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -27,8 +27,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -55,8 +53,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -83,8 +79,6 @@ cpu@2 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -111,8 +105,6 @@ cpu@3 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdcv_xandes_xdsp_xandespmu";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+ 			i-cache-size = <0x8000>;
+@@ -139,10 +131,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index e482a93754bc..5e96b057fd28 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -28,8 +28,6 @@ cpu@0 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			riscv,cbom-block-size = <0x40>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+@@ -57,8 +55,6 @@ cpu@1 {
+ 			status = "okay";
+ 			compatible = "riscv";
+ 			riscv,isa = "rv64imafdc_zba_zbb_zbc_zbkb_zbkc_zbkx_zbs_zicbom_zkn_zknd_zkne_zknh_zks_zksed_zksh_zkt_smepmp_sscofpmf_svinval_svnapot_svpbmt_xandes_xdsp";
+-			riscv,priv-major = <0x01>;
+-			riscv,priv-minor = <0x0a>;
+ 			riscv,cbom-block-size = <0x40>;
+ 			mmu-type = "riscv,sv48";
+ 			clock-frequency = <0x3938700>;
+@@ -86,10 +82,6 @@ l2-cache@e0500000 {
+ 		cache-level = <0x02>;
+ 		cache-size = <0x200000>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+-		andes,inst-prefetch = <0x03>;
+-		andes,data-prefetch = <0x03>;
+-		andes,tag-ram-ctl = <0x00 0x00>;
+-		andes,data-ram-ctl = <0x00 0x00>;
+ 		phandle = <0x01>;
+ 	};
+ 
+-- 
+2.34.1
+

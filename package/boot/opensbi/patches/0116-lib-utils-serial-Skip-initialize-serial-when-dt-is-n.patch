@@ -1,0 +1,43 @@
+From 179e00a320df905f22cf2788880d5e1455795bf7 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Tue, 11 Jun 2024 19:19:31 +0800
+Subject: [PATCH 116/172] lib: utils/serial: Skip initialize serial when dt is
+ not enabled
+
+When the dt node has a status property and the value is not ok or
+okay, skip initializing serial.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/serial/fdt_serial.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/lib/utils/serial/fdt_serial.c b/lib/utils/serial/fdt_serial.c
+index 0baa72281174..8b6e6b977428 100644
+--- a/lib/utils/serial/fdt_serial.c
++++ b/lib/utils/serial/fdt_serial.c
+@@ -40,6 +40,10 @@ int fdt_serial_init(void)
+ 			else
+ 				noff = fdt_path_offset(fdt, prop);
+ 		}
++		if (-1 < noff) {
++			if (!fdt_node_is_enabled(fdt, noff))
++				noff = -1;
++		}
+ 	}
+ 
+ 	/* First check DT node pointed by stdout-path */
+@@ -68,6 +72,9 @@ int fdt_serial_init(void)
+ 		if (noff < 0)
+ 			continue;
+ 
++		if (!fdt_node_is_enabled(fdt, noff))
++			continue;
++
+ 		/* drv->init must not be NULL */
+ 		if (drv->init == NULL)
+ 			return SBI_EFAIL;
+-- 
+2.34.1
+

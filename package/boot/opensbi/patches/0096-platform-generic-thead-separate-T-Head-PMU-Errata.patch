@@ -1,0 +1,60 @@
+From 33e21c9476e225064464ad045ce11cf58c2c3204 Mon Sep 17 00:00:00 2001
+From: Yangyu Chen <cyy@cyyself.name>
+Date: Sun, 21 Apr 2024 23:52:08 +0800
+Subject: [PATCH 096/172] platform: generic: thead: separate T-Head PMU Errata
+
+As Guo Ren said from the kernel mailing list [1], future T-Head CPUs,
+including the newer versions of T-Head C908, will feature standard
+Sscofpmf extension. For these CPUs, T-Head's implementation of PMU
+Overflow Interrupts may not needed anymore. In this case, we shouldn't
+apply T-Head PMU for all T-Head CPUs. Thus, this patch separated T-Head PMU
+errata.
+
+[1] https://lore.kernel.org/linux-riscv/Zh9sUUUT09LZb0MO@gmail.com/
+
+Signed-off-by: Yangyu Chen <cyy@cyyself.name>
+Reviewed-by: Inochi Amaoto <inochiama@outlook.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/include/thead/c9xx_errata.h | 1 +
+ platform/generic/thead/thead-generic.c       | 8 ++++++--
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/platform/generic/include/thead/c9xx_errata.h b/platform/generic/include/thead/c9xx_errata.h
+index bf9793840480..40c1587bcf70 100644
+--- a/platform/generic/include/thead/c9xx_errata.h
++++ b/platform/generic/include/thead/c9xx_errata.h
+@@ -7,6 +7,7 @@
+  * stale entrie avoid incorrect memory access.
+  */
+ #define THEAD_QUIRK_ERRATA_TLB_FLUSH		BIT(0)
++#define THEAD_QUIRK_ERRATA_THEAD_PMU		BIT(1)
+ 
+ void thead_register_tlb_flush_trap_handler(void);
+ 
+diff --git a/platform/generic/thead/thead-generic.c b/platform/generic/thead/thead-generic.c
+index 72f4aaacce79..da55e054c57e 100644
+--- a/platform/generic/thead/thead-generic.c
++++ b/platform/generic/thead/thead-generic.c
+@@ -33,12 +33,16 @@ static int thead_generic_early_init(bool cold_boot,
+ static int thead_generic_extensions_init(const struct fdt_match *match,
+ 					 struct sbi_hart_features *hfeatures)
+ {
+-	thead_c9xx_register_pmu_device();
++	struct thead_generic_quirks *quirks = (void *)match->data;
++
++	if (quirks->errata & THEAD_QUIRK_ERRATA_THEAD_PMU)
++		thead_c9xx_register_pmu_device();
++
+ 	return 0;
+ }
+ 
+ static struct thead_generic_quirks thead_th1520_quirks = {
+-	.errata = THEAD_QUIRK_ERRATA_TLB_FLUSH,
++	.errata = THEAD_QUIRK_ERRATA_TLB_FLUSH | THEAD_QUIRK_ERRATA_THEAD_PMU,
+ };
+ 
+ static const struct fdt_match thead_generic_match[] = {
+-- 
+2.34.1
+

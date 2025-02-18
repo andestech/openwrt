@@ -1,0 +1,44 @@
+From a17600c186e80bca6d8641757d7ff1ccbf8fface Mon Sep 17 00:00:00 2001
+From: Bo Gan <ganboing@gmail.com>
+Date: Tue, 5 Mar 2024 18:35:36 -0800
+Subject: [PATCH 047/172] lib: sbi: change prototype of sbi_trap_redirect
+
+sbi_trap_redirect now uses const pointer to `trap`.
+This ensures the caller that we never change `trap` in sbi_trap_redirect.
+
+Signed-off-by: Bo Gan <ganboing@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/sbi_trap.h | 2 +-
+ lib/sbi/sbi_trap.c     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/sbi/sbi_trap.h b/include/sbi/sbi_trap.h
+index a562b95e8832..2727bdbcffda 100644
+--- a/include/sbi/sbi_trap.h
++++ b/include/sbi/sbi_trap.h
+@@ -225,7 +225,7 @@ static inline unsigned long sbi_regs_gva(const struct sbi_trap_regs *regs)
+ }
+ 
+ int sbi_trap_redirect(struct sbi_trap_regs *regs,
+-		      struct sbi_trap_info *trap);
++		      const struct sbi_trap_info *trap);
+ 
+ struct sbi_trap_regs *sbi_trap_handler(struct sbi_trap_regs *regs);
+ 
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+index 145db4b448cd..10249811453b 100644
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -84,7 +84,7 @@ static void __noreturn sbi_trap_error(const char *msg, int rc,
+  * @return 0 on success and negative error code on failure
+  */
+ int sbi_trap_redirect(struct sbi_trap_regs *regs,
+-		      struct sbi_trap_info *trap)
++		      const struct sbi_trap_info *trap)
+ {
+ 	ulong hstatus, vsstatus, prev_mode;
+ #if __riscv_xlen == 32
+-- 
+2.34.1
+

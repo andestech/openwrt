@@ -1,0 +1,148 @@
+From 825c5c684faf9518a0add792322f66c47b7f17a5 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 15 Dec 2023 05:11:09 +0800
+Subject: [PATCH 028/168] riscv: andes: dts: add cache-line-size to device tree
+ node l2c
+
+During cache initialization, the cache-line-size from the l2c
+device tree node will be read.
+
+In the dma-noncoherent configuration, this will be used for cache operations.
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts              | 1 +
+ arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 1 +
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts              | 1 +
+ arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts          | 1 +
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts             | 1 +
+ arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 1 +
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts             | 1 +
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts                   | 1 +
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts            | 1 +
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts             | 1 +
+ 10 files changed, 10 insertions(+)
+
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 9cda0417da7f..602d578189e6 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -130,6 +130,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
++		cache-line-size = <32>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 6187339cbc70..0ce346b77448 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -52,6 +52,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index b322f40660eb..9e157c4c6927 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -130,6 +130,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index 86ad2eed56ea..088bc948ef1a 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -60,6 +60,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x2>;
+ 		cache-size = <0x40000>;
++		cache-line-size = <32>;
+ 		reg = <0x0 0xe0500000 0x0 0x40000>;
+ 		phandle = <0x1>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index cade7883a8bc..46d661592af6 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -130,6 +130,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
++		cache-line-size = <32>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index cdac9a8a478d..c320a613206b 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -52,6 +52,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x1000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index 8ff46b37320c..97c89bf583be 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -130,6 +130,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index 5c0d76c79477..082a36589a88 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -234,6 +234,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x40000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index e15cd13bbc04..327d938de72d 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -130,6 +130,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x80000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index 36b2d27d3a5f..fa004da7d7ca 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -81,6 +81,7 @@ l2-cache@e0500000 {
+ 		compatible = "cache";
+ 		cache-level = <0x02>;
+ 		cache-size = <0x200000>;
++		cache-line-size = <64>;
+ 		reg = <0x00 0xe0500000 0x00 0x10000>;
+ 		phandle = <0x01>;
+ 	};
+-- 
+2.34.1
+

@@ -1,0 +1,129 @@
+From ae5ef1848d8404e1acdaed5dc460dd1bf2d33140 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Thu, 16 May 2024 14:30:28 +0200
+Subject: [PATCH 110/172] lib: sbi: sse: handle missing writable attributes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The spec states that a6, a7, flags and sepc are writable but the
+implementation was not allowing that. Add support for these 4 writable
+attributes.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 66 +++++++++++++++++++++++++++++++++--------------
+ 1 file changed, 47 insertions(+), 19 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index 0cd6ba6b9e21..e39963f13b7d 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -335,30 +335,49 @@ static int sse_event_set_hart_id_check(struct sbi_sse_event *e,
+ static int sse_event_set_attr_check(struct sbi_sse_event *e, uint32_t attr_id,
+ 				    unsigned long val)
+ {
+-	int ret = SBI_OK;
+-
+ 	switch (attr_id) {
+ 	case SBI_SSE_ATTR_CONFIG:
++		if (sse_event_state(e) >= SBI_SSE_STATE_ENABLED)
++			return SBI_EINVALID_STATE;
++
+ 		if (val & ~SBI_SSE_ATTR_CONFIG_ONESHOT)
+-			ret = SBI_EINVAL;
+-		break;
++			return SBI_EINVAL;
++
++		return SBI_OK;
+ 	case SBI_SSE_ATTR_PRIO:
++		if (sse_event_state(e) >= SBI_SSE_STATE_ENABLED)
++			return SBI_EINVALID_STATE;
++
+ #if __riscv_xlen > 32
+-		if (val != (uint32_t)val) {
+-			ret = SBI_EINVAL;
+-			break;
+-		}
++		if (val != (uint32_t)val)
++			return SBI_EINVAL;
+ #endif
+-		break;
++		return SBI_OK;
+ 	case SBI_SSE_ATTR_PREFERRED_HART:
+-		ret = sse_event_set_hart_id_check(e, val);
+-		break;
++		if (sse_event_state(e) >= SBI_SSE_STATE_ENABLED)
++			return SBI_EINVALID_STATE;
++
++		return sse_event_set_hart_id_check(e, val);
++	case SBI_SSE_ATTR_INTERRUPTED_FLAGS:
++		if (val & ~(SBI_SSE_ATTR_INTERRUPTED_FLAGS_STATUS_SPP |
++			    SBI_SSE_ATTR_INTERRUPTED_FLAGS_STATUS_SPIE |
++			    SBI_SSE_ATTR_INTERRUPTED_FLAGS_HSTATUS_SPV |
++			    SBI_SSE_ATTR_INTERRUPTED_FLAGS_HSTATUS_SPVP))
++			return SBI_EINVAL;
++		__attribute__((__fallthrough__));
++	case SBI_SSE_ATTR_INTERRUPTED_SEPC:
++	case SBI_SSE_ATTR_INTERRUPTED_A6:
++	case SBI_SSE_ATTR_INTERRUPTED_A7:
++		if (sse_event_state(e) != SBI_SSE_STATE_RUNNING)
++			return SBI_EINVALID_STATE;
++
++		if (current_hartid() != e->attrs.hartid)
++			return SBI_EINVAL;
++
++		return SBI_OK;
+ 	default:
+-		ret = SBI_EBAD_RANGE;
+-		break;
++		return SBI_EBAD_RANGE;
+ 	}
+-
+-	return ret;
+ }
+ 
+ static void sse_event_set_attr(struct sbi_sse_event *e, uint32_t attr_id,
+@@ -375,6 +394,19 @@ static void sse_event_set_attr(struct sbi_sse_event *e, uint32_t attr_id,
+ 		e->attrs.hartid = val;
+ 		sse_event_invoke_cb(e, set_hartid_cb, val);
+ 		break;
++
++	case SBI_SSE_ATTR_INTERRUPTED_SEPC:
++		e->attrs.interrupted.sepc = val;
++		break;
++	case SBI_SSE_ATTR_INTERRUPTED_FLAGS:
++		e->attrs.interrupted.flags = val;
++		break;
++	case SBI_SSE_ATTR_INTERRUPTED_A6:
++		e->attrs.interrupted.a6 = val;
++		break;
++	case SBI_SSE_ATTR_INTERRUPTED_A7:
++		e->attrs.interrupted.a7 = val;
++		break;
+ 	}
+ }
+ 
+@@ -903,9 +935,6 @@ static int sse_write_attrs(struct sbi_sse_event *e, uint32_t base_attr_id,
+ 	uint32_t id, end_id = base_attr_id + attr_count;
+ 	unsigned long *attrs = (unsigned long *)input_phys;
+ 
+-	if (sse_event_state(e) >= SBI_SSE_STATE_ENABLED)
+-		return SBI_EINVALID_STATE;
+-
+ 	sbi_hart_map_saddr(input_phys, sizeof(unsigned long) * attr_count);
+ 
+ 	for (id = base_attr_id; id < end_id; id++) {
+@@ -944,7 +973,6 @@ int sbi_sse_write_attrs(uint32_t event_id, uint32_t base_attr_id,
+ 		return SBI_EINVAL;
+ 
+ 	ret = sse_write_attrs(e, base_attr_id, attr_count, input_phys_lo);
+-
+ 	sse_event_put(e);
+ 
+ 	return ret;
+-- 
+2.34.1
+

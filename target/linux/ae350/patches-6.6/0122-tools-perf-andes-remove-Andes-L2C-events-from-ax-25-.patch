@@ -1,0 +1,73 @@
+From a598976408d9f8fa555e8628f3ad07c1782d5fab Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Mon, 30 Sep 2024 17:20:02 +0800
+Subject: [PATCH 122/168] tools: perf: andes: remove Andes L2C events from
+ ax[25|45|65]/firmware.json (#205)
+
+It's required that events in ax[25|45|65]/firmware.json are consistent
+with riscv-sbi-firmware.json. Thus, remove Andes custom firmware events
+since astv540 OpenSBI does not support this function.
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/205
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-committed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ tools/perf/pmu-events/arch/riscv/andes/ax25/firmware.json | 6 ------
+ tools/perf/pmu-events/arch/riscv/andes/ax45/firmware.json | 6 ------
+ tools/perf/pmu-events/arch/riscv/andes/ax65/firmware.json | 6 ------
+ 3 files changed, 18 deletions(-)
+
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax25/firmware.json b/tools/perf/pmu-events/arch/riscv/andes/ax25/firmware.json
+index 61e42c1813fa..9b4a032186a7 100644
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax25/firmware.json
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax25/firmware.json
+@@ -64,11 +64,5 @@
+   },
+   {
+     "ArchStdEvent": "FW_HFENCE_VVMA_ASID_RECEIVED"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESSES"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESS_MISSES"
+   }
+ ]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax45/firmware.json b/tools/perf/pmu-events/arch/riscv/andes/ax45/firmware.json
+index 61e42c1813fa..9b4a032186a7 100644
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax45/firmware.json
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax45/firmware.json
+@@ -64,11 +64,5 @@
+   },
+   {
+     "ArchStdEvent": "FW_HFENCE_VVMA_ASID_RECEIVED"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESSES"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESS_MISSES"
+   }
+ ]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax65/firmware.json b/tools/perf/pmu-events/arch/riscv/andes/ax65/firmware.json
+index 61e42c1813fa..9b4a032186a7 100644
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax65/firmware.json
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax65/firmware.json
+@@ -64,11 +64,5 @@
+   },
+   {
+     "ArchStdEvent": "FW_HFENCE_VVMA_ASID_RECEIVED"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESSES"
+-  },
+-  {
+-    "ArchStdEvent": "ANDES_L2C_ACCESS_MISSES"
+   }
+ ]
+-- 
+2.34.1
+

@@ -1,0 +1,39 @@
+From 1d1960ade23b8dfede341933ba1e204a0a67b24b Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 29 Jan 2024 17:25:49 +0800
+Subject: [PATCH 068/168] perf: RISC-V: Eliminate redundant interrupt
+ enable/disable operations
+
+The interrupt enable/disable operations are already performed by the
+IRQ chip functions riscv_intc_irq_unmask()/riscv_intc_irq_mask() during
+enable_percpu_irq()/disable_percpu_irq(). It can be done only once.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Reviewed-by: Atish Patra <atishp@rivosinc.com>
+---
+ drivers/perf/riscv_pmu_sbi.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/perf/riscv_pmu_sbi.c b/drivers/perf/riscv_pmu_sbi.c
+index 901da688ea3f..22e3efff6e36 100644
+--- a/drivers/perf/riscv_pmu_sbi.c
++++ b/drivers/perf/riscv_pmu_sbi.c
+@@ -781,7 +781,6 @@ static int pmu_sbi_starting_cpu(unsigned int cpu, struct hlist_node *node)
+ 	if (riscv_pmu_use_irq) {
+ 		cpu_hw_evt->irq = riscv_pmu_irq;
+ 		csr_clear(CSR_IP, BIT(riscv_pmu_irq_num));
+-		csr_set(CSR_IE, BIT(riscv_pmu_irq_num));
+ 		enable_percpu_irq(riscv_pmu_irq, IRQ_TYPE_NONE);
+ 	}
+ 
+@@ -792,7 +791,6 @@ static int pmu_sbi_dying_cpu(unsigned int cpu, struct hlist_node *node)
+ {
+ 	if (riscv_pmu_use_irq) {
+ 		disable_percpu_irq(riscv_pmu_irq);
+-		csr_clear(CSR_IE, BIT(riscv_pmu_irq_num));
+ 	}
+ 
+ 	/* Disable all counters access for user mode now */
+-- 
+2.34.1
+

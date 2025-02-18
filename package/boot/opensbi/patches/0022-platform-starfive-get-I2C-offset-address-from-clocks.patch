@@ -1,0 +1,88 @@
+From 4d8569df7bd73238d8a02bb5ec850ed3c3c97093 Mon Sep 17 00:00:00 2001
+From: Nam Cao <namcao@linutronix.de>
+Date: Thu, 22 Feb 2024 09:16:15 +0100
+Subject: [PATCH 022/172] platform: starfive: get I2C offset address from
+ clocks property
+
+The current code gets the I2C offset address using the device tree node
+name: it get the I2C device index from the 4th character in the node
+name (for example, "i2c5" -> i2c device 5). However, the device tree
+node's name in U-Boot is actually just "i2c" without the number, so the
+current code cannot be used with the device tree from U-Boot.
+
+Get the I2C offset address from the "clocks" property instead.
+
+Signed-off-by: Nam Cao <namcao@linutronix.de>
+Reviewed-by: Minda Chen <minda.chen@starfivetech.com>
+Tested-by: Minda Chen <minda.chen@starfivetech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/starfive/jh7110.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/platform/generic/starfive/jh7110.c b/platform/generic/starfive/jh7110.c
+index 4b221750e0b5..efa4029f8bb5 100644
+--- a/platform/generic/starfive/jh7110.c
++++ b/platform/generic/starfive/jh7110.c
+@@ -29,7 +29,7 @@ struct pmic {
+ struct jh7110 {
+ 	u64 pmu_reg_base;
+ 	u64 clk_reg_base;
+-	u32 i2c_index;
++	u32 i2c_clk_offset;
+ };
+ 
+ static struct pmic pmic_inst;
+@@ -67,7 +67,6 @@ static u32 selected_hartid = -1;
+ #define AXP15060_POWER_OFF_BIT		BIT(7)
+ #define AXP15060_RESET_BIT		BIT(6)
+ 
+-#define I2C_APB_CLK_OFFSET		0x228
+ #define I2C_APB_CLK_ENABLE_BIT		BIT(31)
+ 
+ static int pm_system_reset_check(u32 type, u32 reason)
+@@ -163,10 +162,7 @@ static void pmic_i2c_clk_enable(void)
+ 	unsigned long clock_base;
+ 	unsigned int val;
+ 
+-	clock_base = jh7110_inst.clk_reg_base +
+-		I2C_APB_CLK_OFFSET +
+-		(jh7110_inst.i2c_index << 2);
+-
++	clock_base = jh7110_inst.clk_reg_base + jh7110_inst.i2c_clk_offset;
+ 	val = readl((void *)clock_base);
+ 
+ 	if (!val)
+@@ -241,7 +237,8 @@ static struct fdt_reset fdt_reset_pmic = {
+ static int starfive_jh7110_inst_init(void *fdt)
+ {
+ 	int noff, rc = 0;
+-	const char *name;
++	const fdt32_t *val;
++	int len;
+ 	u64 addr;
+ 
+ 	noff = fdt_node_offset_by_compatible(fdt, -1, "starfive,jh7110-pmu");
+@@ -261,9 +258,16 @@ static int starfive_jh7110_inst_init(void *fdt)
+ 	}
+ 
+ 	if (pmic_inst.adapter) {
+-		name = fdt_get_name(fdt, pmic_inst.adapter->id, NULL);
+-		if (!sbi_strncmp(name, "i2c", 3))
+-			jh7110_inst.i2c_index = name[3] - '0';
++		/*
++		 * The clocks property looks like this:
++		 *    clocks = <&syscrg JH7110_SYSCLK_I2C5_APB>;
++		 *
++		 * So, check that the length is 8 bytes, and get
++		 * the offset from the second value.
++		 */
++		val = fdt_getprop(fdt, pmic_inst.adapter->id, "clocks", &len);
++		if (val && len == 8)
++			jh7110_inst.i2c_clk_offset = fdt32_to_cpu(val[1]) << 2;
+ 		else
+ 			rc = SBI_EINVAL;
+ 	}
+-- 
+2.34.1
+

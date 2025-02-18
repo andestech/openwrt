@@ -1,0 +1,29 @@
+From 0e45b634713d8a67d8a905e8970e93682c1db64f Mon Sep 17 00:00:00 2001
+From: Jacob Lin <lovetaeyeon507@gmail.com>
+Date: Thu, 27 Jun 2024 11:21:37 +0800
+Subject: [PATCH 132/172] docs: Fix wrong filename
+
+Correct the compiled FW_PAYLOAD firmware ELF filename.
+
+Signed-off-by: Jacob Lin <lovetaeyeon507@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ docs/firmware/fw_payload.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/firmware/fw_payload.md b/docs/firmware/fw_payload.md
+index d25be600c6a3..9b00e322674c 100644
+--- a/docs/firmware/fw_payload.md
++++ b/docs/firmware/fw_payload.md
+@@ -23,7 +23,7 @@ The *FW_PAYLOAD* firmware can be enabled by any of the following methods:
+ 2. Specifying `FW_PAYLOAD=y` in the target platform *objects.mk* configuration
+    file.
+ 
+-The compiled *FW_PAYLOAD* firmware ELF file is named *fw_jump.elf*. Its
++The compiled *FW_PAYLOAD* firmware ELF file is named *fw_payload.elf*. Its
+ expanded image file is *fw_payload.bin*. Both files are created in the
+ platform-specific build directory under the
+ *build/platform/<platform_subdir>/firmware* directory.
+-- 
+2.34.1
+

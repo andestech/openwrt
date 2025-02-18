@@ -1,0 +1,44 @@
+From 1a448567a11283fd9575df4b3f4db322c95118d2 Mon Sep 17 00:00:00 2001
+From: Charles Ci-Jyun Wu <dminus@andestech.com>
+Date: Mon, 30 Sep 2024 17:59:24 +0800
+Subject: [PATCH 124/168] riscv: fpu: refine FPU save flow (#207)
+
+When Kernel first time run to arch_dup_task_struct(),
+it will check if sstatus.FS is dirty. If it is dirty,
+then it will do FPU save flow. But this field is
+floating currently. Meanwhile if the combination between
+platform(HW) and Kernel(SW) about FPU configuration
+is mismatch. eq: The platform is without FPU and Kernel
+is with FPU. Then Kernel may trigger illegal instruction
+here.
+
+Hence it shall check by has_fpu before do FPU save flow
+in arch_dup_task_struct().
+
+Signed-off-by: Rick Chen <rick@andestech.com>
+
+Co-authored-by: Rick Chen <rick@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/207
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/kernel/process.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index 296bad8078d4..440f15b545fd 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -175,7 +175,8 @@ void arch_release_task_struct(struct task_struct *tsk)
+ 
+ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+ {
+-	fstate_save(src, task_pt_regs(src));
++	if (has_fpu())
++		fstate_save(src, task_pt_regs(src));
+ 	*dst = *src;
+ 	/* clear entire V context, including datap for a new task */
+ 	memset(&dst->thread.vstate, 0, sizeof(struct __riscv_v_ext_state));
+-- 
+2.34.1
+

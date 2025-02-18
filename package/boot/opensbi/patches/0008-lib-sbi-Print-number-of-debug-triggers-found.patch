@@ -1,0 +1,29 @@
+From bb90a9ebf6d9a2fe7726978d594e82cdbaad7799 Mon Sep 17 00:00:00 2001
+From: Himanshu Chauhan <hchauhan@ventanamicro.com>
+Date: Tue, 9 Jan 2024 22:30:20 +0530
+Subject: [PATCH 008/172] lib: sbi: Print number of debug triggers found
+
+Print the total number of triggers found on the boot hart.
+
+Signed-off-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_init.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib/sbi/sbi_init.c b/lib/sbi/sbi_init.c
+index 0dcde27dddb6..804b01cd91cb 100644
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -184,6 +184,8 @@ static void sbi_boot_print_hart(struct sbi_scratch *scratch, u32 hartid)
+ 	sbi_printf("Boot HART MHPM Info       : %lu (0x%08x)\n",
+ 		   sbi_popcount(sbi_hart_mhpm_mask(scratch)),
+ 		   sbi_hart_mhpm_mask(scratch));
++	sbi_printf("Boot HART Debug Triggers  : %d triggers\n",
++		   sbi_dbtr_get_total_triggers());
+ 	sbi_hart_delegation_dump(scratch, "Boot HART ", "         ");
+ }
+ 
+-- 
+2.34.1
+

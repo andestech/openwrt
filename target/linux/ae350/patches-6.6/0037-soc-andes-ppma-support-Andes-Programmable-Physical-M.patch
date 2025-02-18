@@ -1,0 +1,371 @@
+From ef1b9ad6d3bb13edf4cff96d4659056e76ba54d1 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Fri, 26 Apr 2024 13:28:15 +0800
+Subject: [PATCH 037/168] soc: andes: ppma: support Andes Programmable Physical
+ Memory Attribute (PPMA)
+
+If the device want a non-cacheable memory region, it calls
+ioremap_wc() to get a VA which maps to non-cacheable memory region.
+The CONFIG_ANDES_PPMA must be set.
+
+Reformed from the following patches on RISCV-Linux-5.4:
+- riscv: Support PMA(Physical Memory Attribute) on linux5.4.
+- FTLCD100: Fix ioremap_nocache() causing LCD kernel panic issue.
+- Complete the programmable PMA implementation with IPI
+- Fix compilation error for (884f011d)
+- andes: rename sbi calls of andes vendor extension
+- riscv: fix compilation warnings
+- RISC-V: skip PMA setting for non-memory region
+
+Reformed from the following patches on RISCV-Linux-6.1:
+- soc: andes: ppma: support Andes PPMA(Programmable Physical Memory
+  Attribute) in Linux 6.1
+- soc: andes: ppma: Support IPI in andes_free_ppma()
+- soc: andes: ppma: fix complier error when disable ppma
+- soc: andes: ppma:Replacing smp_processor_id() with get/put_cpu()
+  for preemption control
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/configs/andes-support.config |  1 +
+ arch/riscv/errata/andes/errata.c        |  4 +
+ arch/riscv/mm/ioremap.c                 |  8 ++
+ drivers/soc/Kconfig                     |  1 +
+ drivers/soc/Makefile                    |  1 +
+ drivers/soc/andes/Kconfig               | 14 ++++
+ drivers/soc/andes/Makefile              |  5 ++
+ drivers/soc/andes/andes_sbi.c           | 31 ++++++++
+ drivers/soc/andes/ppma.c                | 98 +++++++++++++++++++++++++
+ include/linux/soc/andes/ppma.h          | 35 +++++++++
+ include/linux/soc/andes/sbi.h           |  6 ++
+ 11 files changed, 204 insertions(+)
+ create mode 100644 drivers/soc/andes/Kconfig
+ create mode 100644 drivers/soc/andes/Makefile
+ create mode 100644 drivers/soc/andes/andes_sbi.c
+ create mode 100644 drivers/soc/andes/ppma.c
+ create mode 100644 include/linux/soc/andes/ppma.h
+
+diff --git a/arch/riscv/configs/andes-support.config b/arch/riscv/configs/andes-support.config
+index 376591a30097..6f0473c95dd0 100644
+--- a/arch/riscv/configs/andes-support.config
++++ b/arch/riscv/configs/andes-support.config
+@@ -1,2 +1,3 @@
+ CONFIG_DEFAULT_HOSTNAME="andes-test"
+ CONFIG_ARCH_ANDES=y
++CONFIG_ANDES_PPMA=y
+diff --git a/arch/riscv/errata/andes/errata.c b/arch/riscv/errata/andes/errata.c
+index 779f9a6eefe3..932757c9b112 100644
+--- a/arch/riscv/errata/andes/errata.c
++++ b/arch/riscv/errata/andes/errata.c
+@@ -18,6 +18,7 @@
+ #include <asm/vendorid_list.h>
+ #include <linux/soc/andes/sbi.h>
+ #include <linux/soc/andes/andes.h>
++#include <linux/soc/andes/ppma.h>
+ 
+ #define ANDES_AX45MP_MARCHID		0x8000000000008a45UL
+ #define ANDES_AX45MP_MIMPID		0x500UL
+@@ -107,6 +108,9 @@ static bool errata_support_uncache(unsigned int stage,
+ 	riscv_cbom_block_size = 1;
+ 	riscv_noncoherent_supported();
+ 
++	if (andes_probe_ppma())
++		return true;
++
+ 	csr_write(satp, SATP_PPN);
+ 	andes_pfn_msb = (csr_read(satp) + 1) >> 1;
+ 
+diff --git a/arch/riscv/mm/ioremap.c b/arch/riscv/mm/ioremap.c
+index 6347fc6c9d76..4e00d2fa979d 100644
+--- a/arch/riscv/mm/ioremap.c
++++ b/arch/riscv/mm/ioremap.c
+@@ -6,6 +6,8 @@
+ #include <linux/export.h>
+ #include <linux/io.h>
+ #include <linux/pgtable.h>
++#include <linux/soc/andes/andes.h>
++#include <linux/soc/andes/ppma.h>
+ 
+ void __iomem *ioremap_wc(phys_addr_t phys_addr, size_t size)
+ {
+@@ -16,12 +18,18 @@ void __iomem *ioremap_wc(phys_addr_t phys_addr, size_t size)
+ 
+ 	ret = ioremap_prot(phys_addr, size, pgprot_val(prot));
+ 
++	if (ret && !andes_pfn_msb)
++		andes_set_ppma(phys_addr, ret, size);
++
+ 	return ret;
+ }
+ EXPORT_SYMBOL(ioremap_wc);
+ 
+ void iounmap(volatile void __iomem *addr)
+ {
++	if (!andes_pfn_msb)
++		andes_free_ppma((void *)addr);
++
+ 	generic_iounmap(addr);
+ }
+ EXPORT_SYMBOL(iounmap);
+diff --git a/drivers/soc/Kconfig b/drivers/soc/Kconfig
+index d21e75d69294..9574672ad72d 100644
+--- a/drivers/soc/Kconfig
++++ b/drivers/soc/Kconfig
+@@ -3,6 +3,7 @@ menu "SOC (System On Chip) specific Drivers"
+ 
+ source "drivers/soc/actions/Kconfig"
+ source "drivers/soc/amlogic/Kconfig"
++source "drivers/soc/andes/Kconfig"
+ source "drivers/soc/apple/Kconfig"
+ source "drivers/soc/aspeed/Kconfig"
+ source "drivers/soc/atmel/Kconfig"
+diff --git a/drivers/soc/Makefile b/drivers/soc/Makefile
+index 0706a27d13be..7c8c31825783 100644
+--- a/drivers/soc/Makefile
++++ b/drivers/soc/Makefile
+@@ -3,6 +3,7 @@
+ # Makefile for the Linux Kernel SOC specific device drivers.
+ #
+ 
++obj-$(CONFIG_ARCH_ANDES)	+= andes/
+ obj-y				+= apple/
+ obj-y				+= aspeed/
+ obj-$(CONFIG_ARCH_AT91)		+= atmel/
+diff --git a/drivers/soc/andes/Kconfig b/drivers/soc/andes/Kconfig
+new file mode 100644
+index 000000000000..2dd6443f5a5f
+--- /dev/null
++++ b/drivers/soc/andes/Kconfig
+@@ -0,0 +1,14 @@
++# SPDX-License-Identifier: GPL-2.0
++menu "Andes AE350 platform drivers"
++
++config ANDES_PPMA
++	bool "Andes PPMA Support"
++	depends on ARCH_ANDES
++	depends on ERRATA_ANDES
++	depends on ERRATA_ANDES_CMO
++	help
++	  When calling memremap with MEMREMAP_WC flag,
++	  Andes programmable physical memory attributes (PPMA)
++	  can map memory as non-cacheable bufferable PMA region.
++
++endmenu
+diff --git a/drivers/soc/andes/Makefile b/drivers/soc/andes/Makefile
+new file mode 100644
+index 000000000000..fc25ab9c031f
+--- /dev/null
++++ b/drivers/soc/andes/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0
++# Copyright (C) 2023 Andes Technology Corporation.
++
++obj-y	+= andes_sbi.o
++obj-$(CONFIG_ANDES_PPMA)	+= ppma.o
+diff --git a/drivers/soc/andes/andes_sbi.c b/drivers/soc/andes/andes_sbi.c
+new file mode 100644
+index 000000000000..4bcf72dc538f
+--- /dev/null
++++ b/drivers/soc/andes/andes_sbi.c
+@@ -0,0 +1,31 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2023 Andes Technology Corporation.
++ */
++
++#include <linux/soc/andes/sbi.h>
++
++void sbi_andes_set_ppma(void *arg)
++{
++	phys_addr_t phys_addr = ((struct ppma_arg_t *)arg)->phys_addr;
++	unsigned long va_addr = ((struct ppma_arg_t *)arg)->va_addr;
++	size_t size = ((struct ppma_arg_t *)arg)->size;
++
++	sbi_ecall(ANDES_SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_SET,
++		  phys_addr, va_addr, size, 0, 0, 0);
++}
++
++void sbi_andes_free_ppma(void *addr)
++{
++	sbi_ecall(ANDES_SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_FREE,
++		  (unsigned long)addr, 0, 0, 0, 0, 0);
++}
++
++long sbi_andes_probe_ppma(void)
++{
++	struct sbiret ret;
++
++	ret = sbi_ecall(ANDES_SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_PROBE,
++			0, 0, 0, 0, 0, 0);
++	return ret.value;
++}
+diff --git a/drivers/soc/andes/ppma.c b/drivers/soc/andes/ppma.c
+new file mode 100644
+index 000000000000..045407df6d05
+--- /dev/null
++++ b/drivers/soc/andes/ppma.c
+@@ -0,0 +1,98 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2023 Andes Technology Corporation.
++ */
++
++#include <linux/export.h>
++#include <linux/smp.h>
++#include <linux/types.h>
++#include <linux/mm.h>
++#include <linux/printk.h>
++#include <asm/page.h>
++#include <linux/soc/andes/sbi.h>
++
++struct ppma_arg_t ppma_arg;
++
++long andes_probe_ppma(void)
++{
++	return sbi_andes_probe_ppma();
++}
++EXPORT_SYMBOL(andes_probe_ppma);
++
++void andes_set_ppma(phys_addr_t phys_addr, void *va_addr, size_t size)
++{
++	int cpu_num = num_online_cpus();
++	int id;
++	int i, err;
++	bool within_memory = pfn_valid(phys_addr >> PAGE_SHIFT);
++
++	/*
++	 * PPMA/Non-cacheability setting only
++	 * when the given PA is within main memory range,
++	 * and the given size is power of 2 (NAPOT).
++	 */
++	if (!within_memory)
++		return;
++
++	if ((size & (size - 1)) != 0) {
++		pr_info("The value of size is not power of 2\n");
++		BUG();
++	}
++
++	/*
++	 * FIXME: this is not protected.
++	 */
++	ppma_arg.phys_addr = phys_addr;
++	ppma_arg.va_addr = (unsigned long)va_addr;
++	ppma_arg.size = size;
++
++	/*
++	 * Send IPI
++	 * FIXME: we need online CPU mask, not the number
++	 */
++	id = get_cpu();
++	for (i = 0; i < cpu_num; i++) {
++		if (i == id)
++			continue;
++
++		err = smp_call_function_single(i, sbi_andes_set_ppma,
++					       (void *)&ppma_arg, true);
++
++		if (err) {
++			pr_err("Core %d fails to set ppma\nError Code: %d\n",
++				i, err);
++		}
++	}
++
++	sbi_andes_set_ppma(&ppma_arg);
++	put_cpu();
++}
++EXPORT_SYMBOL(andes_set_ppma);
++
++void andes_free_ppma(void *addr)
++{
++	int cpu_num = num_online_cpus();
++	int id;
++	int i, err;
++
++	/*
++	 * Send IPI
++	 * FIXME: we need online CPU mask, not the number
++	 */
++	id = get_cpu();
++	for (i = 0; i < cpu_num; i++) {
++		if (i == id)
++			continue;
++
++		err = smp_call_function_single(i, sbi_andes_free_ppma,
++					       (void *)addr, true);
++		if (err) {
++			pr_err("Core %d fails to free ppma\n"
++				"Error Code: %d\n", i, err);
++		}
++	}
++
++	sbi_andes_free_ppma(addr);
++	put_cpu();
++}
++EXPORT_SYMBOL(andes_free_ppma);
+diff --git a/include/linux/soc/andes/ppma.h b/include/linux/soc/andes/ppma.h
+new file mode 100644
+index 000000000000..2fa56d3b55c5
+--- /dev/null
++++ b/include/linux/soc/andes/ppma.h
+@@ -0,0 +1,35 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2023 Andes Technology Corporation.
++ */
++
++#ifndef __LINUX_SOC_ANDES_PPMA_H
++#define __LINUX_SOC_ANDES_PPMA_H
++
++#include <linux/types.h>
++
++struct ppma_arg_t {
++	phys_addr_t phys_addr;
++	unsigned long va_addr;
++	size_t size;
++};
++
++extern struct ppma_arg_t ppma_arg;
++
++#ifdef CONFIG_ANDES_PPMA
++void andes_set_ppma(phys_addr_t phys_addr,
++		    void *va_addr,
++		    size_t size);
++void andes_free_ppma(void *addr);
++long andes_probe_ppma(void);
++#else
++static inline void andes_set_ppma(phys_addr_t phys_addr,
++				  void *va_addr,
++				  size_t size) {}
++static inline void andes_free_ppma(void *addr) {}
++static inline long andes_probe_ppma(void)
++{
++	return 0;
++}
++#endif /* CONFIG_ANDES_PPMA */
++#endif /* !__LINUX_SOC_ANDES_PPMA_H */
+diff --git a/include/linux/soc/andes/sbi.h b/include/linux/soc/andes/sbi.h
+index d21ba2cc5819..05e1bcf1dd2d 100644
+--- a/include/linux/soc/andes/sbi.h
++++ b/include/linux/soc/andes/sbi.h
+@@ -7,6 +7,7 @@
+ 
+ #include <asm/sbi.h>
+ #include <asm/vendorid_list.h>
++#include <linux/soc/andes/ppma.h>
+ 
+ #define ANDES_SBI_EXT_ANDES	0x0900031E
+ 
+@@ -40,4 +41,9 @@ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_SUSPEND_MODE_ENTER,
+ };
+ 
++/* Programmable physical memory attributes (PPMA) */
++void sbi_andes_set_ppma(void *arg);
++void sbi_andes_free_ppma(void *addr);
++long sbi_andes_probe_ppma(void);
++
+ #endif /* !__LINUX_SOC_ANDES_SBI_H */
+-- 
+2.34.1
+

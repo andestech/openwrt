@@ -1,0 +1,123 @@
+From d84e7eb7f0848225e10131ca4b9e1571d78cdabd Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Mon, 11 Mar 2024 17:53:41 +0530
+Subject: [PATCH 060/172] lib: sbi: Remove regs paramter of
+ sbi_irqchip_process()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The irqchip handlers will typically not need pointer to trap registers
+so remove regs parameter of sbi_irqchip_process().
+
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+Reviewed-by: Samuel Holland <samuel.holland@sifive.com>
+Tested-by: Samuel Holland <samuel.holland@sifive.com>
+Reviewed-by: Clément Léger <cleger@rivosinc.com>
+---
+ include/sbi/sbi_irqchip.h |  5 ++---
+ lib/sbi/sbi_irqchip.c     | 10 +++++-----
+ lib/sbi/sbi_trap.c        |  4 ++--
+ lib/utils/irqchip/imsic.c |  2 +-
+ 4 files changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/include/sbi/sbi_irqchip.h b/include/sbi/sbi_irqchip.h
+index 6acc6e3f5a55..0ed02eb4ac95 100644
+--- a/include/sbi/sbi_irqchip.h
++++ b/include/sbi/sbi_irqchip.h
+@@ -13,7 +13,6 @@
+ #include <sbi/sbi_types.h>
+ 
+ struct sbi_scratch;
+-struct sbi_trap_regs;
+ 
+ /**
+  * Set external interrupt handling function
+@@ -23,7 +22,7 @@ struct sbi_trap_regs;
+  *
+  * @param fn function pointer for handling external irqs
+  */
+-void sbi_irqchip_set_irqfn(int (*fn)(struct sbi_trap_regs *regs));
++void sbi_irqchip_set_irqfn(int (*fn)(void));
+ 
+ /**
+  * Process external interrupts
+@@ -33,7 +32,7 @@ void sbi_irqchip_set_irqfn(int (*fn)(struct sbi_trap_regs *regs));
+  *
+  * @param regs pointer for trap registers
+  */
+-int sbi_irqchip_process(struct sbi_trap_regs *regs);
++int sbi_irqchip_process(void);
+ 
+ /** Initialize interrupt controllers */
+ int sbi_irqchip_init(struct sbi_scratch *scratch, bool cold_boot);
+diff --git a/lib/sbi/sbi_irqchip.c b/lib/sbi/sbi_irqchip.c
+index 24128bece5ad..0ae604aa672d 100644
+--- a/lib/sbi/sbi_irqchip.c
++++ b/lib/sbi/sbi_irqchip.c
+@@ -10,22 +10,22 @@
+ #include <sbi/sbi_irqchip.h>
+ #include <sbi/sbi_platform.h>
+ 
+-static int default_irqfn(struct sbi_trap_regs *regs)
++static int default_irqfn(void)
+ {
+ 	return SBI_ENODEV;
+ }
+ 
+-static int (*ext_irqfn)(struct sbi_trap_regs *regs) = default_irqfn;
++static int (*ext_irqfn)(void) = default_irqfn;
+ 
+-void sbi_irqchip_set_irqfn(int (*fn)(struct sbi_trap_regs *regs))
++void sbi_irqchip_set_irqfn(int (*fn)(void))
+ {
+ 	if (fn)
+ 		ext_irqfn = fn;
+ }
+ 
+-int sbi_irqchip_process(struct sbi_trap_regs *regs)
++int sbi_irqchip_process(void)
+ {
+-	return ext_irqfn(regs);
++	return ext_irqfn();
+ }
+ 
+ int sbi_irqchip_init(struct sbi_scratch *scratch, bool cold_boot)
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+index 4e691dfc5c31..72b1788153b2 100644
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -209,7 +209,7 @@ static int sbi_trap_nonaia_irq(struct sbi_trap_regs *regs, ulong mcause)
+ 		sbi_ipi_process();
+ 		break;
+ 	case IRQ_M_EXT:
+-		return sbi_irqchip_process(regs);
++		return sbi_irqchip_process();
+ 	default:
+ 		return SBI_ENOENT;
+ 	}
+@@ -232,7 +232,7 @@ static int sbi_trap_aia_irq(struct sbi_trap_regs *regs, ulong mcause)
+ 			sbi_ipi_process();
+ 			break;
+ 		case IRQ_M_EXT:
+-			rc = sbi_irqchip_process(regs);
++			rc = sbi_irqchip_process();
+ 			if (rc)
+ 				return rc;
+ 			break;
+diff --git a/lib/utils/irqchip/imsic.c b/lib/utils/irqchip/imsic.c
+index 36ef66cf1ebb..f2a35c6302b2 100644
+--- a/lib/utils/irqchip/imsic.c
++++ b/lib/utils/irqchip/imsic.c
+@@ -140,7 +140,7 @@ int imsic_get_target_file(u32 hartid)
+ 	return imsic_get_hart_file(scratch);
+ }
+ 
+-static int imsic_external_irqfn(struct sbi_trap_regs *regs)
++static int imsic_external_irqfn(void)
+ {
+ 	ulong mirq;
+ 
+-- 
+2.34.1
+

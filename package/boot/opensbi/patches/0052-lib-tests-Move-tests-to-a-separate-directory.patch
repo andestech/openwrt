@@ -1,0 +1,139 @@
+From 5c992a115a15ce2f2518f0ff7a655b42c3a8ebad Mon Sep 17 00:00:00 2001
+From: Ivan Orlov <ivan.orlov0322@gmail.com>
+Date: Wed, 13 Mar 2024 15:01:57 +0000
+Subject: [PATCH 052/172] lib: tests: Move tests to a separate directory
+
+Move all of the SBIUnit-related code into the lib/sbi/tests directory.
+Update 'Makefile' to index objects from the tests subdirectory.
+
+I don't think creating the full separate list of Makefile variables
+(libsbitests-objs-path-y, libsbitests-object-mks, etc. as it is done for
+libsbiutils) is necessary for the tests because:
+
+1) `lib/sbi/tests/objects.mk` is already indexed into
+'libsbi-objects-mks' since the find expression for the libsbi-object-mks
+variable looks for objects.mk files in the nested directories as well).
+
+2) Tests are tightly coupled with the `lib/sbi/` sources, therefore it
+may be reasonable to store the list of lib/sbi and lib/sbi/tests object
+files together in the libsbi-objs-path-y variable.
+
+Additionally, update relative paths in the tests where necessary.
+
+Signed-off-by: Ivan Orlov <ivan.orlov0322@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/objects.mk                        | 6 ------
+ lib/sbi/sbi_console.c                     | 6 +-----
+ lib/sbi/tests/objects.mk                  | 8 ++++++++
+ lib/sbi/{ => tests}/sbi_bitmap_test.c     | 0
+ lib/sbi/{ => tests}/sbi_console_test.c    | 8 +++++---
+ lib/sbi/{ => tests}/sbi_unit_test.c       | 0
+ lib/sbi/{ => tests}/sbi_unit_tests.carray | 0
+ 7 files changed, 14 insertions(+), 14 deletions(-)
+ create mode 100644 lib/sbi/tests/objects.mk
+ rename lib/sbi/{ => tests}/sbi_bitmap_test.c (100%)
+ rename lib/sbi/{ => tests}/sbi_console_test.c (94%)
+ rename lib/sbi/{ => tests}/sbi_unit_test.c (100%)
+ rename lib/sbi/{ => tests}/sbi_unit_tests.carray (100%)
+
+diff --git a/lib/sbi/objects.mk b/lib/sbi/objects.mk
+index 2bed7f38a63d..5d06d25d9cfb 100644
+--- a/lib/sbi/objects.mk
++++ b/lib/sbi/objects.mk
+@@ -11,12 +11,6 @@ libsbi-objs-y += riscv_asm.o
+ libsbi-objs-y += riscv_atomic.o
+ libsbi-objs-y += riscv_hardfp.o
+ libsbi-objs-y += riscv_locks.o
+-libsbi-objs-$(CONFIG_SBIUNIT) += sbi_unit_test.o
+-libsbi-objs-$(CONFIG_SBIUNIT) += sbi_unit_tests.o
+-
+-libsbi-objs-$(CONFIG_SBIUNIT) += sbi_bitmap_test.o
+-carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += bitmap_test_suite
+-carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += console_test_suite
+ 
+ libsbi-objs-y += sbi_ecall.o
+ libsbi-objs-y += sbi_ecall_exts.o
+diff --git a/lib/sbi/sbi_console.c b/lib/sbi/sbi_console.c
+index d1229d09712d..d3ec4616f03c 100644
+--- a/lib/sbi/sbi_console.c
++++ b/lib/sbi/sbi_console.c
+@@ -472,7 +472,7 @@ const struct sbi_console_device *sbi_console_get_device(void)
+ 
+ void sbi_console_set_device(const struct sbi_console_device *dev)
+ {
+-	if (!dev || console_dev)
++	if (!dev)
+ 		return;
+ 
+ 	console_dev = dev;
+@@ -488,7 +488,3 @@ int sbi_console_init(struct sbi_scratch *scratch)
+ 
+ 	return rc;
+ }
+-
+-#ifdef CONFIG_SBIUNIT
+-#include "sbi_console_test.c"
+-#endif
+diff --git a/lib/sbi/tests/objects.mk b/lib/sbi/tests/objects.mk
+new file mode 100644
+index 000000000000..5ce188ada021
+--- /dev/null
++++ b/lib/sbi/tests/objects.mk
+@@ -0,0 +1,8 @@
++libsbi-objs-$(CONFIG_SBIUNIT) += tests/sbi_unit_test.o
++libsbi-objs-$(CONFIG_SBIUNIT) += tests/sbi_unit_tests.o
++
++carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += bitmap_test_suite
++libsbi-objs-$(CONFIG_SBIUNIT) += tests/sbi_bitmap_test.o
++
++carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += console_test_suite
++libsbi-objs-$(CONFIG_SBIUNIT) += tests/sbi_console_test.o
+diff --git a/lib/sbi/sbi_bitmap_test.c b/lib/sbi/tests/sbi_bitmap_test.c
+similarity index 100%
+rename from lib/sbi/sbi_bitmap_test.c
+rename to lib/sbi/tests/sbi_bitmap_test.c
+diff --git a/lib/sbi/sbi_console_test.c b/lib/sbi/tests/sbi_console_test.c
+similarity index 94%
+rename from lib/sbi/sbi_console_test.c
+rename to lib/sbi/tests/sbi_console_test.c
+index 29f4ac15b202..72db25308860 100644
+--- a/lib/sbi/sbi_console_test.c
++++ b/lib/sbi/tests/sbi_console_test.c
+@@ -3,6 +3,8 @@
+  *
+  * Author: Ivan Orlov <ivan.orlov0322@gmail.com>
+  */
++#include <sbi/riscv_locks.h>
++#include <sbi/sbi_console.h>
+ #include <sbi/sbi_unit_test.h>
+ 
+ #define TEST_CONSOLE_BUF_LEN 1024
+@@ -32,13 +34,13 @@ static const struct sbi_console_device test_console_dev = {
+ /* Mock the console device */
+ static inline void test_console_begin(const struct sbi_console_device *device)
+ {
+-	old_dev = console_dev;
+-	console_dev = device;
++	old_dev = sbi_console_get_device();
++	sbi_console_set_device(device);
+ }
+ 
+ static inline void test_console_end(void)
+ {
+-	console_dev = old_dev;
++	sbi_console_set_device(old_dev);
+ }
+ 
+ static void putc_test(struct sbiunit_test_case *test)
+diff --git a/lib/sbi/sbi_unit_test.c b/lib/sbi/tests/sbi_unit_test.c
+similarity index 100%
+rename from lib/sbi/sbi_unit_test.c
+rename to lib/sbi/tests/sbi_unit_test.c
+diff --git a/lib/sbi/sbi_unit_tests.carray b/lib/sbi/tests/sbi_unit_tests.carray
+similarity index 100%
+rename from lib/sbi/sbi_unit_tests.carray
+rename to lib/sbi/tests/sbi_unit_tests.carray
+-- 
+2.34.1
+

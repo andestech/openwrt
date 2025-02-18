@@ -1,0 +1,214 @@
+From f67f96cadf26b90a3630d68bea9118b7959a7d43 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Thu, 12 Sep 2024 13:37:15 +0800
+Subject: [PATCH 084/168] tools: add libtrace* and pkg-config support for Perf
+ in Linux 6.6 (#182)
+
+Backport six patches from upstream. These patches are mainly for cross-compiling
+Perf with libtrace* support, but they should be reverted once upgrading krenel
+version.
+
+- Commit acd85169f1 (perf build: Use pkg-config for feature check for libtrace{event,fs})
+- Commit 6c485f7a55 (perf build: Ensure libtraceevent and libtracefs versions have 3 components)
+- Commit f113b3242d (perf build: Conditionally add feature check flags for libtrace{event,fs})
+- Commit 7f97dc14db (perf build: Warn if libtracefs is not found)
+- Commit 75ee641040 (tools: Make pkg-config dependency checks usable by other tools)
+- Commit 9744923976 (perf: build: Setup PKG_CONFIG_LIBDIR for cross compilation)
+
+Co-authored-by: Guilherme Amadio <amadio@gentoo.org>
+Co-authored-by: Leo Yan <leo.yan@arm.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/182
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-committed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ tools/build/Makefile.feature          | 18 +++++++++++++++++
+ tools/build/feature/Makefile          | 25 +++++++++++++++++++++++-
+ tools/build/feature/test-libtracefs.c |  2 +-
+ tools/perf/Makefile.config            | 28 +++++++++++++++++----------
+ tools/perf/Makefile.perf              | 27 +++++++++++++++++++++++++-
+ 5 files changed, 87 insertions(+), 13 deletions(-)
+
+diff --git a/tools/build/Makefile.feature b/tools/build/Makefile.feature
+index 934e2777a2db..491015a7dbb5 100644
+--- a/tools/build/Makefile.feature
++++ b/tools/build/Makefile.feature
+@@ -146,6 +146,24 @@ FEATURE_DISPLAY ?=              \
+ #
+ FEATURE_GROUP_MEMBERS-libbfd = libbfd-liberty libbfd-liberty-z
+ 
++#
++# Declare list of feature dependency packages that provide pkg-config files.
++#
++FEATURE_PKG_CONFIG ?=           \
++         libtraceevent          \
++         libtracefs
++
++feature_pkg_config = $(eval $(feature_pkg_config_code))
++define feature_pkg_config_code
++  FEATURE_CHECK_CFLAGS-$(1) := $(shell $(PKG_CONFIG) --cflags $(1) 2>/dev/null)
++  FEATURE_CHECK_LDFLAGS-$(1) := $(shell $(PKG_CONFIG) --libs $(1) 2>/dev/null)
++endef
++
++# Set FEATURE_CHECK_(C|LD)FLAGS-$(package) for packages using pkg-config.
++ifneq ($(PKG_CONFIG),)
++  $(foreach package,$(FEATURE_PKG_CONFIG),$(call feature_pkg_config,$(package)))
++endif
++
+ # Set FEATURE_CHECK_(C|LD)FLAGS-all for all FEATURE_TESTS features.
+ # If in the future we need per-feature checks/flags for features not
+ # mentioned in this list we need to refactor this ;-).
+diff --git a/tools/build/feature/Makefile b/tools/build/feature/Makefile
+index dad79ede4e0a..4f869fff28fe 100644
+--- a/tools/build/feature/Makefile
++++ b/tools/build/feature/Makefile
+@@ -80,7 +80,30 @@ FILES=                                          \
+ 
+ FILES := $(addprefix $(OUTPUT),$(FILES))
+ 
+-PKG_CONFIG ?= $(CROSS_COMPILE)pkg-config
++# Some distros provide the command $(CROSS_COMPILE)pkg-config for
++# searching packges installed with Multiarch. Use it for cross
++# compilation if it is existed.
++ifneq (, $(shell which $(CROSS_COMPILE)pkg-config))
++  PKG_CONFIG ?= $(CROSS_COMPILE)pkg-config
++else
++  PKG_CONFIG ?= pkg-config
++
++  # PKG_CONFIG_PATH or PKG_CONFIG_LIBDIR, alongside PKG_CONFIG_SYSROOT_DIR
++  # for modified system root, are required for the cross compilation.
++  # If these PKG_CONFIG environment variables are not set, Multiarch library
++  # paths are used instead.
++  ifdef CROSS_COMPILE
++    ifeq ($(PKG_CONFIG_LIBDIR)$(PKG_CONFIG_PATH)$(PKG_CONFIG_SYSROOT_DIR),)
++      CROSS_ARCH = $(shell $(CC) -dumpmachine)
++      PKG_CONFIG_LIBDIR := /usr/local/$(CROSS_ARCH)/lib/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/local/lib/$(CROSS_ARCH)/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/lib/$(CROSS_ARCH)/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/local/share/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/share/pkgconfig/
++      export PKG_CONFIG_LIBDIR
++    endif
++  endif
++endif
+ 
+ all: $(FILES)
+ 
+diff --git a/tools/build/feature/test-libtracefs.c b/tools/build/feature/test-libtracefs.c
+index 8eff16c0c10b..29a757a7d848 100644
+--- a/tools/build/feature/test-libtracefs.c
++++ b/tools/build/feature/test-libtracefs.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0
+-#include <tracefs/tracefs.h>
++#include <tracefs.h>
+ 
+ int main(void)
+ {
+diff --git a/tools/perf/Makefile.config b/tools/perf/Makefile.config
+index d66b52407e19..1cbf3442c629 100644
+--- a/tools/perf/Makefile.config
++++ b/tools/perf/Makefile.config
+@@ -198,6 +198,15 @@ endif
+ FEATURE_CHECK_CFLAGS-libzstd := $(LIBZSTD_CFLAGS)
+ FEATURE_CHECK_LDFLAGS-libzstd := $(LIBZSTD_LDFLAGS)
+ 
++# for linking with debug library, run like:
++# make DEBUG=1 PKG_CONFIG_PATH=/opt/libtraceevent/(lib|lib64)/pkgconfig
++
++ifneq ($(NO_LIBTRACEEVENT),1)
++  ifeq ($(call get-executable,$(PKG_CONFIG)),)
++    $(error Error: $(PKG_CONFIG) needed by libtraceevent is missing on this system, please install it)
++  endif
++endif
++
+ FEATURE_CHECK_CFLAGS-bpf = -I. -I$(srctree)/tools/include -I$(srctree)/tools/arch/$(SRCARCH)/include/uapi -I$(srctree)/tools/include/uapi
+ # include ARCH specific config
+ -include $(src-perf)/arch/$(SRCARCH)/Makefile
+@@ -216,12 +225,6 @@ ifeq ($(call get-executable,$(BISON)),)
+   dummy := $(error Error: $(BISON) is missing on this system, please install it)
+ endif
+ 
+-ifeq ($(BUILD_BPF_SKEL),1)
+-  ifeq ($(call get-executable,$(CLANG)),)
+-    dummy := $(error $(CLANG) is missing on this system, please install it to be able to build with BUILD_BPF_SKEL=1)
+-  endif
+-endif
+-
+ ifneq ($(OUTPUT),)
+   ifeq ($(shell expr $(shell $(BISON) --version | grep bison | sed -e 's/.\+ \([0-9]\+\).\([0-9]\+\).\([0-9]\+\)/\1\2\3/g') \>\= 371), 1)
+     BISON_FILE_PREFIX_MAP := --file-prefix-map=$(OUTPUT)=
+@@ -1132,8 +1135,9 @@ ifneq ($(NO_LIBTRACEEVENT),1)
+   $(call feature_check,libtraceevent)
+   ifeq ($(feature-libtraceevent), 1)
+     CFLAGS += -DHAVE_LIBTRACEEVENT
+-    EXTLIBS += -ltraceevent
+-    LIBTRACEEVENT_VERSION := $(shell $(PKG_CONFIG) --modversion libtraceevent)
++    LDFLAGS += $(shell $(PKG_CONFIG) --libs-only-L libtraceevent)
++    EXTLIBS += $(shell $(PKG_CONFIG) --libs-only-l libtraceevent)
++    LIBTRACEEVENT_VERSION := $(shell $(PKG_CONFIG) --modversion libtraceevent).0.0
+     LIBTRACEEVENT_VERSION_1 := $(word 1, $(subst ., ,$(LIBTRACEEVENT_VERSION)))
+     LIBTRACEEVENT_VERSION_2 := $(word 2, $(subst ., ,$(LIBTRACEEVENT_VERSION)))
+     LIBTRACEEVENT_VERSION_3 := $(word 3, $(subst ., ,$(LIBTRACEEVENT_VERSION)))
+@@ -1146,13 +1150,17 @@ ifneq ($(NO_LIBTRACEEVENT),1)
+ 
+   $(call feature_check,libtracefs)
+   ifeq ($(feature-libtracefs), 1)
+-    EXTLIBS += -ltracefs
+-    LIBTRACEFS_VERSION := $(shell $(PKG_CONFIG) --modversion libtracefs)
++    CFLAGS +=  $(shell $(PKG_CONFIG) --cflags libtracefs)
++    LDFLAGS += $(shell $(PKG_CONFIG) --libs-only-L libtracefs)
++    EXTLIBS += $(shell $(PKG_CONFIG) --libs-only-l libtracefs)
++    LIBTRACEFS_VERSION := $(shell $(PKG_CONFIG) --modversion libtracefs).0.0
+     LIBTRACEFS_VERSION_1 := $(word 1, $(subst ., ,$(LIBTRACEFS_VERSION)))
+     LIBTRACEFS_VERSION_2 := $(word 2, $(subst ., ,$(LIBTRACEFS_VERSION)))
+     LIBTRACEFS_VERSION_3 := $(word 3, $(subst ., ,$(LIBTRACEFS_VERSION)))
+     LIBTRACEFS_VERSION_CPP := $(shell expr $(LIBTRACEFS_VERSION_1) \* 255 \* 255 + $(LIBTRACEFS_VERSION_2) \* 255 + $(LIBTRACEFS_VERSION_3))
+     CFLAGS += -DLIBTRACEFS_VERSION=$(LIBTRACEFS_VERSION_CPP)
++  else
++    $(warning libtracefs is missing. Please install libtracefs-dev/libtracefs-devel)
+   endif
+ endif
+ 
+diff --git a/tools/perf/Makefile.perf b/tools/perf/Makefile.perf
+index b97224a8a65b..ff72a0d9dea0 100644
+--- a/tools/perf/Makefile.perf
++++ b/tools/perf/Makefile.perf
+@@ -188,7 +188,32 @@ HOSTLD  ?= ld
+ HOSTAR  ?= ar
+ CLANG   ?= clang
+ 
+-PKG_CONFIG = $(CROSS_COMPILE)pkg-config
++# Some distros provide the command $(CROSS_COMPILE)pkg-config for
++# searching packges installed with Multiarch. Use it for cross
++# compilation if it is existed.
++ifneq (, $(shell which $(CROSS_COMPILE)pkg-config))
++  PKG_CONFIG ?= $(CROSS_COMPILE)pkg-config
++else
++  PKG_CONFIG ?= pkg-config
++
++  # PKG_CONFIG_PATH or PKG_CONFIG_LIBDIR, alongside PKG_CONFIG_SYSROOT_DIR
++  # for modified system root, is required for the cross compilation.
++  # If these PKG_CONFIG environment variables are not set, Multiarch library
++  # paths are used instead.
++  ifdef CROSS_COMPILE
++    ifeq ($(PKG_CONFIG_LIBDIR)$(PKG_CONFIG_PATH)$(PKG_CONFIG_SYSROOT_DIR),)
++      CROSS_ARCH = $(shell $(CC) -dumpmachine)
++      PKG_CONFIG_LIBDIR := /usr/local/$(CROSS_ARCH)/lib/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/local/lib/$(CROSS_ARCH)/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/lib/$(CROSS_ARCH)/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/local/share/pkgconfig/
++      PKG_CONFIG_LIBDIR := $(PKG_CONFIG_LIBDIR):/usr/share/pkgconfig/
++      export PKG_CONFIG_LIBDIR
++      $(warning Missing PKG_CONFIG_LIBDIR, PKG_CONFIG_PATH and PKG_CONFIG_SYSROOT_DIR for cross compilation,)
++      $(warning set PKG_CONFIG_LIBDIR for using Multiarch libs.)
++    endif
++  endif
++endif
+ 
+ RM      = rm -f
+ LN      = ln -f
+-- 
+2.34.1
+

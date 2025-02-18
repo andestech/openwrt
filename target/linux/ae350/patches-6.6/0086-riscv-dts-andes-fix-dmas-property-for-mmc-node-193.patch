@@ -1,0 +1,50 @@
+From 6d9119fa02ffa5d24ded4f6d10f43c95611c4a7a Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 19 Sep 2024 15:48:43 +0800
+Subject: [PATCH 086/168] riscv: dts: andes: fix dmas property for mmc node
+ (#193)
+
+The phandle of a[x]27l2 dts is 0x5,
+fix the dmas property from 0x3 to 0x5.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/193
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-committed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 2 +-
+ arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 3cfe2d444fa8..934b667ddc9f 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -205,7 +205,7 @@ mmc@f0e00000 {
+ 			max-frequency = <0x5f5e100>;
+ 			fifo-depth = <0x10>;
+ 			dma-names = "rxtx";
+-			dmas = <0x03 0x09>;
++			dmas = <0x05 0x09>;
+ 			dma-noncoherent;
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index a9245c4a8381..ee50d3a1ac35 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -205,7 +205,7 @@ mmc@f0e00000 {
+ 			max-frequency = <0x5f5e100>;
+ 			fifo-depth = <0x10>;
+ 			dma-names = "rxtx";
+-			dmas = <0x03 0x09>;
++			dmas = <0x05 0x09>;
+ 			dma-noncoherent;
+ 		};
+ 
+-- 
+2.34.1
+

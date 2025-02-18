@@ -1,0 +1,43 @@
+From e065c3cd5d31314e50f4dca21f181b6a93fe0d45 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Fri, 3 May 2024 21:53:36 +0800
+Subject: [PATCH 101/172] lib: sbi: Fixed memory permission check in
+ sbi_dbtr_setup_shmem
+
+The previous code detected shmem_phys_hi and shmem_phys_lo as two
+addresses. fix this bug
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+---
+ lib/sbi/sbi_dbtr.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 94fd049004af..a95f087f1013 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -293,17 +293,11 @@ int sbi_dbtr_setup_shmem(const struct sbi_domain *dom, unsigned long smode,
+ 	if (shmem_phys_lo & SBI_DBTR_SHMEM_ALIGN_MASK)
+ 		return SBI_ERR_INVALID_PARAM;
+ 
+-	if (dom && !sbi_domain_check_addr(dom, shmem_phys_lo, smode,
+-					  SBI_DOMAIN_READ | SBI_DOMAIN_WRITE))
++	if (dom && !sbi_domain_check_addr(dom,
++		  DBTR_SHMEM_MAKE_PHYS(shmem_phys_hi, shmem_phys_lo), smode,
++		  SBI_DOMAIN_READ | SBI_DOMAIN_WRITE))
+ 		return SBI_ERR_INVALID_ADDRESS;
+ 
+-	if (shmem_phys_hi != SBI_DBTR_SHMEM_INVALID_ADDR) {
+-		if (dom &&
+-		    !sbi_domain_check_addr(dom, shmem_phys_hi, smode,
+-					   SBI_DOMAIN_READ | SBI_DOMAIN_WRITE))
+-			return SBI_ERR_INVALID_ADDRESS;
+-	}
+-
+ 	hart_state = dbtr_thishart_state_ptr();
+ 	if (!hart_state)
+ 		return SBI_ERR_FAILED;
+-- 
+2.34.1
+

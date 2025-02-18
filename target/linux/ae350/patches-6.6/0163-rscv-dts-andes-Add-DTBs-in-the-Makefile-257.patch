@@ -1,0 +1,39 @@
+From a1f2c9b11b55204f3cce71a4a384fc53bdbefd94 Mon Sep 17 00:00:00 2001
+From: Cynthia Huang <cynthia@andestech.com>
+Date: Fri, 21 Feb 2025 15:58:46 +0800
+Subject: [PATCH 163/168] rscv: dts: andes: Add DTBs in the Makefile (#257)
+
+Add ax46mpv and ax66 DTBs in the Makefile.
+
+Signed-off-by: Cynthia Huang <cynthia@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/257
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Co-authored-by: Cynthia Huang <cynthia@andestech.com>
+Co-committed-by: Cynthia Huang <cynthia@andestech.com>
+---
+ arch/riscv/boot/dts/andes/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/boot/dts/andes/Makefile b/arch/riscv/boot/dts/andes/Makefile
+index b28d8471c37c..860f8b4d3928 100644
+--- a/arch/riscv/boot/dts/andes/Makefile
++++ b/arch/riscv/boot/dts/andes/Makefile
+@@ -17,8 +17,11 @@ dtb-$(CONFIG_ARCH_ANDES) += ax45mpv_c4_d_dsp_ae350.dtb
+ dtb-$(CONFIG_ARCH_ANDES) += ax45mp_c8_ae350.dtb
+ dtb-$(CONFIG_ARCH_ANDES) += ax45mpv_c1_d_hvm_ae350.dtb
+ dtb-$(CONFIG_ARCH_ANDES) += ax45mpv_c2_d_dsp_hvm_ae350.dtb
++dtb-$(CONFIG_ARCH_ANDES) += ax46mpv_c1_d_hvm_ae350.dtb
+ 
+ # FPGA : VU19P
+-dtb-$(CONFIG_ARCH_ANDES) += ax65mp_c2_d_ae350.dtb
++dtb-$(CONFIG_ARCH_ANDES) += ax65_c2_d_ae350.dtb
++dtb-$(CONFIG_ARCH_ANDES) += ax66_c1_d_ae350.dtb
++dtb-$(CONFIG_ARCH_ANDES) += ax66_c2_d_ae350.dtb
+ 
+ obj-$(CONFIG_BUILTIN_DTB) += $(addsuffix .o, $(dtb-y))
+-- 
+2.34.1
+

@@ -1,0 +1,42 @@
+From be1055ba9d77b0e41bae47544a444be5b43ba129 Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Thu, 21 Nov 2024 15:00:16 +0800
+Subject: [PATCH 134/168] dmaengine: andes: atcdmac300: Remove transfer width
+ restrictions for DMA memcpy
+
+The transfer width restriction is no longer necessary, as the ATCDMAC300
+DMA engine supports transfer widths of 1, 2, 4, 8, and 16 bytes when
+accessing the HVM.
+
+Signed-off-by: CL Wang <cl634@andestech.com>
+---
+ drivers/dma/atcdmac300.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/dma/atcdmac300.c b/drivers/dma/atcdmac300.c
+index ebbb22427e7c..d49f684a123d 100644
+--- a/drivers/dma/atcdmac300.c
++++ b/drivers/dma/atcdmac300.c
+@@ -488,19 +488,11 @@ static inline unsigned int xfer_width(struct v5_dma *v5dma,
+ {
+ 	unsigned int width;
+ 
+-	/*
+-	 * To prevent HVM DMA transfer from getting stuck,
+-	 * limit the transfer width to word transfer.
+-	 */
+-# if 0
+ 	if (!((src | dst | len) & 15))
+ 		width = 4;
+ 	else if (!((src | dst | len) & 7))
+ 		width = 3;
+ 	else if (!((src | dst | len) & 3))
+-#else
+-	if (!((src | dst | len) & 3))
+-#endif
+ 		width = 2;
+ 	else if (!((src | dst | len) & 1))
+ 		width = 1;
+-- 
+2.34.1
+

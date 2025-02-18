@@ -1,0 +1,171 @@
+From d21d2e8f109e0afb6c603ae64371c36e28f9d96f Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 12 Sep 2024 18:21:02 +0800
+Subject: [PATCH 116/168] smu: andes: pm: Add SMU light/deep sleep support
+ (#164)
+
+SMU per hart register is used to store sleep type information.
+
+Wake event needs to be set in Kernel because we don't have
+wake event information in OpenSBI (m-mode firmware).
+
+Sleep type encoding references SBI doc, platform specific
+sleep types are encoded in the range 0x8000_0000 - 0xffff_ffff.
+(link: https://github.com/riscv-non-isa/riscv-sbi-doc/blob/master/src/ext-sys-suspend.adoc)
+
+Wake event information is ready before andes_pm_enter and after andes_pm_begin.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ drivers/soc/andes/Makefile    |  2 +-
+ drivers/soc/andes/atcsmu.c    | 25 ++++++++++++++
+ drivers/soc/andes/pm.c        | 65 +++++++++++++++++++++++++++++++++++
+ include/linux/soc/andes/smu.h |  9 +++++
+ 4 files changed, 100 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/soc/andes/pm.c
+
+diff --git a/drivers/soc/andes/Makefile b/drivers/soc/andes/Makefile
+index 527e9007f285..4c8392b6e1fa 100644
+--- a/drivers/soc/andes/Makefile
++++ b/drivers/soc/andes/Makefile
+@@ -6,4 +6,4 @@ obj-y	+= inject_init.o
+ obj-y	+= dcause.o
+ obj-y	+= trigger_module.o
+ obj-$(CONFIG_ANDES_PPMA)	+= ppma.o
+-obj-$(CONFIG_ANDES_ATCSMU)	+= atcsmu.o
++obj-$(CONFIG_ANDES_ATCSMU)	+= atcsmu.o pm.o
+diff --git a/drivers/soc/andes/atcsmu.c b/drivers/soc/andes/atcsmu.c
+index 8b525a3e0b8d..799f30af7d87 100644
+--- a/drivers/soc/andes/atcsmu.c
++++ b/drivers/soc/andes/atcsmu.c
+@@ -20,6 +20,31 @@ void __iomem *atcsmu_get_address(void)
+ }
+ EXPORT_SYMBOL(atcsmu_get_address);
+ 
++/* SMU per hart scratch reg could be used to store sleep type */
++void atcsmu_set_sleep_type(unsigned long sleep_type)
++{
++	struct atcsmu *smu = &atcsmu;
++	unsigned int cpu, hart;
++
++	for_each_online_cpu(cpu) {
++		hart = cpuid_to_hartid_map(cpu);
++
++		writel(sleep_type, (void *)(smu->base + PCSm_SCRATCH_OFF(hart)));
++	}
++}
++
++void atcsmu_set_wake(unsigned long wake_event)
++{
++	struct atcsmu *smu = &atcsmu;
++	unsigned int cpu, hart;
++
++	for_each_online_cpu(cpu) {
++		hart = cpuid_to_hartid_map(cpu);
++
++		writel(wake_event, (void *)(smu->base + PCSm_WE_OFF(hart)));
++	}
++}
++
+ static int atcsmu_probe(struct platform_device *pdev)
+ {
+ 	struct atcsmu *smu = &atcsmu;
+diff --git a/drivers/soc/andes/pm.c b/drivers/soc/andes/pm.c
+new file mode 100644
+index 000000000000..328f1f528e4d
+--- /dev/null
++++ b/drivers/soc/andes/pm.c
+@@ -0,0 +1,65 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2024 Andes Technology Corporation.
++ */
++#include <asm/sbi.h>
++#include <asm/suspend.h>
++#include <linux/init.h>
++#include <linux/suspend.h>
++#include <linux/device.h>
++#include <linux/printk.h>
++#include <linux/soc/andes/smu.h>
++
++extern int sbi_system_suspend(unsigned long, unsigned long, unsigned long);
++
++static int andes_pm_enter(suspend_state_t state)
++{
++	atcsmu_set_wake(*andes_wake_event);
++
++	if (state == PM_SUSPEND_STANDBY)
++		return cpu_suspend(SBI_SUSP_AE350_LIGHT_SLEEP, sbi_system_suspend);
++	else if (state == PM_SUSPEND_MEM)
++		return cpu_suspend(SBI_SUSP_AE350_DEEP_SLEEP, sbi_system_suspend);
++	else
++		return -EINVAL;
++}
++
++static int andes_pm_valid(suspend_state_t state)
++{
++	return ((state == PM_SUSPEND_MEM) || (state == PM_SUSPEND_STANDBY));
++}
++
++static int andes_pm_begin(suspend_state_t state)
++{
++	if (state == PM_SUSPEND_STANDBY)
++		atcsmu_set_sleep_type(SBI_SUSP_AE350_LIGHT_SLEEP);
++	else if (state == PM_SUSPEND_MEM)
++		atcsmu_set_sleep_type(SBI_SUSP_AE350_DEEP_SLEEP);
++	else
++		return -EINVAL;
++
++	return 0;
++}
++
++static void andes_pm_end(void)
++{
++	atcsmu_set_wake(0);
++	atcsmu_set_sleep_type(0);
++}
++
++static const struct platform_suspend_ops andes_pm_ops = {
++	.valid	= andes_pm_valid,
++	.enter	= andes_pm_enter,
++	.begin	= andes_pm_begin,
++	.end	= andes_pm_end,
++};
++
++static int __init andes_pm_init(void)
++{
++	if (IS_ENABLED(CONFIG_SUSPEND)){
++		pr_info("AE350: Andes Power Management\n");
++		suspend_set_ops(&andes_pm_ops);
++	}
++	return 0;
++}
++late_initcall(andes_pm_init);
+diff --git a/include/linux/soc/andes/smu.h b/include/linux/soc/andes/smu.h
+index d5c23f9e9a4e..077d087d099c 100644
+--- a/include/linux/soc/andes/smu.h
++++ b/include/linux/soc/andes/smu.h
+@@ -28,6 +28,11 @@
+ #define PCSm_STATUS_OFF(n)	((n + 3) * 0x20 + PCS0_STATUS_OFF)
+ #define PCSm_CTL_OFF(n)		((n + 3) * 0x20 + PCS0_CTL_OFF)
+ 
++enum sbi_ext_susp_ae350_sleep_type {
++	SBI_SUSP_AE350_LIGHT_SLEEP = 0x80000001,
++	SBI_SUSP_AE350_DEEP_SLEEP,
++};
++
+ struct atcsmu {
+ 	void __iomem *base;
+ };
+@@ -35,4 +40,8 @@ struct atcsmu {
+ extern unsigned long *andes_wake_event;
+ extern void __iomem *atcsmu_get_address(void);
+ 
++/* SMU per hart scratch reg could be used to store sleep type */
++void atcsmu_set_sleep_type(unsigned long sleep_type);
++void atcsmu_set_wake(unsigned long wake_event);
++
+ #endif
+-- 
+2.34.1
+

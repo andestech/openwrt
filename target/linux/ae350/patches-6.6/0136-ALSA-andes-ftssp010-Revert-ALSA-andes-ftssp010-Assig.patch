@@ -1,0 +1,57 @@
+From 09e5beeed34e702b640a265cc5df52c40649184c Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Tue, 10 Dec 2024 09:49:19 +0800
+Subject: [PATCH 136/168] ALSA: andes: ftssp010: Revert "ALSA: andes: ftssp010:
+ Assign FTSSP to use DMA channel 7 (#218)" (#228)
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/228
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-authored-by: CL Wang <cl634@andestech.com>
+Co-committed-by: CL Wang <cl634@andestech.com>
+---
+ sound/v5/ftssp010_dma.c | 14 +++-----------
+ 1 file changed, 3 insertions(+), 11 deletions(-)
+
+diff --git a/sound/v5/ftssp010_dma.c b/sound/v5/ftssp010_dma.c
+index 0a89f737b2fc..8d7b0fc258d4 100644
+--- a/sound/v5/ftssp010_dma.c
++++ b/sound/v5/ftssp010_dma.c
+@@ -25,9 +25,8 @@
+ #include <linux/of_platform.h>
+ #include "ftssp010_dma.h"
+ 
+-#define FTSSP_DMA_CH		"dma0chan7"
+-#define DMAD_DRB_POOL_SIZE	32
+-#define DMAD_AHB_MAX_CHANNELS	DMAC_MAX_CHANNELS
++#define DMAD_DRB_POOL_SIZE    32
++#define DMAD_AHB_MAX_CHANNELS DMAC_MAX_CHANNELS
+ 
+ enum DMAD_DRQ_FLAGS {
+ 	DMAD_DRQ_STATE_READY = 0x00000001,	/* channel allocation status */
+@@ -2236,13 +2235,6 @@ int dmad_drain_requests(dmad_chreq *ch_req, u8 shutdown)
+ 	return dmad_channel_drain(ch_req->controller, ch_req->drq, shutdown);
+ }
+ 
+-static bool dmad_chan_filter(struct dma_chan *chan, void *param)
+-{
+-	char *chan_name = (char *)param;
+-
+-	return strcmp(dma_chan_name(chan), chan_name) == 0;
+-}
+-
+ int dmad_init(void)
+ {
+ 	struct device_node *dmac = NULL;
+@@ -2253,7 +2245,7 @@ int dmad_init(void)
+ 	dma_cap_zero(mask);
+ 	dma_cap_set(DMA_CYCLIC, mask);
+ 	dma_cap_set(DMA_SLAVE, mask);
+-	chan = dma_request_channel(mask, dmad_chan_filter, FTSSP_DMA_CH);
++	chan = dma_request_channel(mask, NULL, NULL);
+ 	if (chan == NULL) {
+ 		pr_err("Failed to allocate a DMA channel for SSP.\n");
+ 		return -EINVAL;
+-- 
+2.34.1
+

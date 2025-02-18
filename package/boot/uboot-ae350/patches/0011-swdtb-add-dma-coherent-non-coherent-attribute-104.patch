@@ -1,0 +1,344 @@
+From 964a31863335c0b5bc026e88c00295eff707c43c Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:50:05 +0800
+Subject: [PATCH 11/53] swdtb: add dma coherent/non-coherent attribute (#104)
+
+1. swdtb: dma: add dma-coherent/dma-noncoherent into dma node
+2. swdtb: mac: add dma-coherent/dma-noncoherent into mac node
+3. swdtb: mmc: add dma-coherent/dma-noncoherent into mmc node
+4. swdtb: snd: add dma-coherent/dma-noncoherent into snd node
+5. swdtb: lcd: add dma-coherent/dma-noncoherent into lcd node
+
+*Add dma-coherent/dma-noncoherent into dma node:
+Example: in coherent bit map
+    dma@f0c00000 {
+        dma-coherent;
+    };
+
+Example: in noncoherent bit map
+    dma@f0c00000 {
+        dma-noncoherent;
+    };
+
+*Add dma-coherent/dma-noncoherent into mac node:
+Example: in coherent bit map
+    mac@e0100000  {
+        dma-coherent;
+    };
+
+Example: in noncoherent bit map
+    mac@e0100000  {
+        dma-noncoherent;
+    };
+
+*Add dma-coherent/dma-noncoherent into mmc node:
+Example: in coherent bit map
+    mmc@f0e00000  {
+        dma-coherent;
+    };
+
+Example: in noncoherent bit map
+    mmc@f0e00000  {
+        dma-noncoherent;
+    };
+
+*Add dma-coherent/dma-noncoherent into snd node:
+Example: in coherent bit map
+    snd@f0d00000 {
+        dma-coherent;
+    };
+
+Example: in noncoherent bit map
+    snd@f0d00000 {
+        dma-noncoherent;
+    };
+
+*Add dma-coherent/dma-noncoherent into lcd node
+Example: in coherent bit map
+    lcd@e0200000 {
+        dma-coherent;
+    };
+
+Example: in noncoherent bit map
+    lcd@e0200000 {
+        dma-noncoherent;
+    };
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/104
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        | 16 ++++
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 76 +++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |  7 ++
+ .../common/swdtb_merger/swdtb_tool.c          | 83 +++++++++++++++++++
+ .../common/swdtb_merger/swdtb_tool.h          | 11 +++
+ 5 files changed, 193 insertions(+)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 002e8b2f6e7c..db3149dbf780 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -39,6 +39,16 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "l2c interrupt pin",		l2c_interrupt_fixup},
+ 	{SWDTB_ENABLE,	1,
+ 	 "spi quad mode",		spi_quad_read_fixup},
++	{SWDTB_ENABLE,	1,
++	 "dma type to dma",		dma_type_to_dma_fixup},
++	{SWDTB_ENABLE,	1,
++	 "dma type to mac",		dma_type_to_mac_fixup},
++	{SWDTB_ENABLE,	1,
++	 "dma type to mmc",		dma_type_to_mmc_fixup},
++	{SWDTB_ENABLE,	1,
++	 "dma type to snd",		dma_type_to_snd_fixup},
++	{SWDTB_ENABLE,	1,
++	 "dma type to lcd",		dma_type_to_lcd_fixup},
+ };
+ 
+ static void process_string_data(void *blob, int node, char *name, char *value)
+@@ -181,6 +191,12 @@ void swdtb_merger(void *fdt_blob)
+ 	/* Increase fdt space */
+ 	fdt_increase_size(fdt_blob, 2048);
+ 
++	/*
++	 * The SWDTB merger entry is before spl_clear_bss.
++	 * All global variables must be initialized before use.
++	 */
++	swdtb_global_initial();
++
+ 	swdtb_find_node(fdt_blob);
+ }
+ 
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 02cf81cfeb80..a3ae89ad934f 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -530,3 +530,79 @@ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 	return !(RETURN_DONE);
+ }
++
++/**
++ * The dma_type_to_xxx_fixup functions use a global variable to
++ * record whether the DMA is dma-coherent or dma-noncoherent.
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int dma_type_to_dma_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "dma";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
++
++int dma_type_to_mac_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "mac";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
++
++int dma_type_to_mmc_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "mmc";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
++
++int dma_type_to_snd_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "snd";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
++
++int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "lcd";
++	const char *full_name;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 258bd5aa5c0e..36e852c038c4 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -41,4 +41,11 @@ int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value);
+ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value);
++
++int dma_type_to_dma_fixup(void *fdt, int node, char *name, char *value);
++int dma_type_to_mac_fixup(void *fdt, int node, char *name, char *value);
++int dma_type_to_mmc_fixup(void *fdt, int node, char *name, char *value);
++int dma_type_to_snd_fixup(void *fdt, int node, char *name, char *value);
++int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value);
++
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 376bd2c7d55b..06305b6196f2 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -8,6 +8,21 @@
+ 
+ #include "swdtb_tool.h"
+ 
++/*
++ * The SWDTB merger entry precedes spl_clear_bss.
++ * All global variables must be initialized before use.
++ */
++enum dma_type global_dma_type;
++
++void swdtb_global_initial(void)
++{
++	/*
++	 * All global variables will be reset in spl_clear_bss.
++	 * Please note the life of these variables.
++	 */
++	global_dma_type = DMA_TYPE_INIT;
++}
++
+ bool fdt_data_is_one_string(const char *data, int len)
+ {
+ 	return ((len > 0) && (strnlen(data, len) == len - 1));
+@@ -48,6 +63,74 @@ void show_rawdtb(const char *prop_name, const char *node_name)
+ 	dtb_info("No %s in %s\n", prop_name, node_name);
+ }
+ 
++/*
++ * This fixup will search dma-coherent and dma-noncoherent in the dtb
++ * and set the coherent/noncoherent to global variable
++ * finally, set the global variable to the target node.
++ */
++int dma_type_to_node(void *fdt, int node, char *name, const char *target_node)
++{
++	const char *target_1 = "dma-coherent";
++	const char *target_2 = "dma-noncoherent";
++	const char *target;
++	const u32 *value;
++	int ret;
++
++	value = fdt_getprop(fdt, node, target_1, NULL);
++	if (value) {
++		/* Find the result */
++		dtb_debug("Find %s in %s\n", target_1, target_node);
++		return RETURN_DONE;
++	}
++
++	value = fdt_getprop(fdt, node, target_2, NULL);
++	if (value) {
++		/* Find the result */
++		dtb_debug("Find %s in %s\n", target_2, target_node);
++		return RETURN_DONE;
++	}
++
++	show_rawdtb(target_1, target_node);
++	show_rawdtb(target_2, target_node);
++
++	/* find global dma type coherent / noncoherent type */
++	if (global_dma_type == DMA_TYPE_INIT) {
++		const u32 *target_1_idx;
++
++		target_1_idx = fdt_getprop(fdt, 0, target_1, NULL);
++		if (target_1_idx) {
++			global_dma_type = DMA_TYPE_COHERENT;
++			printf("Bitmap's DMA type is %s\n", target_1);
++		} else {
++			global_dma_type = DMA_TYPE_NONCOHERENT;
++			printf("Bitmap's DMA type is %s\n", target_2);
++		}
++	}
++
++	if (global_dma_type == DMA_TYPE_COHERENT)
++		target = target_1;
++	else if (global_dma_type == DMA_TYPE_NONCOHERENT)
++		target = target_2;
++
++	ret = fdt_setprop_empty(fdt, node, target);
++	if (ret) {
++		printf("error on fdt_setprop_empty: %s\n",
++		       fdt_strerror(ret));
++		return ret;
++	}
++
++#ifdef ANDES_SWDTB_MERGER_CHECK
++	value = fdt_getprop(fdt, node, target, NULL);
++	if (value) {
++		/* Find the result */
++		printf("Result: %s%s%s in %s%s%s\n",
++		       KYEL, target, KNRM, KYEL, target_node, KNRM);
++	}
++#endif
++
++	return ret;
++}
++
+ void show_result(const void *fdt, int node, const char *prop_name, int type)
+ {
+ #ifdef ANDES_SWDTB_MERGER_CHECK
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index db99ed3fc809..73fda6218e5a 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -39,10 +39,21 @@ typedef u32 cell_t;
+ #define IRQ_TYPE_LEVEL_HIGH	4
+ #define IRQ_TYPE_LEVEL_LOW	8
+ 
++enum dma_type {
++	DMA_TYPE_INIT = 0,
++	DMA_TYPE_COHERENT = 1,
++	DMA_TYPE_NONCOHERENT = 2,
++};
++
++void swdtb_global_initial(void);
++
+ bool fdt_data_is_one_string(const char *data, int len);
+ 
+ int compatible_change(void *fdt, int node, char *name, char *value,
+ 		      char *old_str, char *new_str);
++
++int dma_type_to_node(void *fdt, int node, char *name, const char *target_node);
++
+ void show_rawdtb(const char *prop_name, const char *node_name);
+ 
+ #define RETURN_DONE	0
+-- 
+2.34.1
+

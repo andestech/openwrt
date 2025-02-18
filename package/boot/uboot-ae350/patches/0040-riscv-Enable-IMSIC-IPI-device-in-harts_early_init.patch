@@ -1,0 +1,47 @@
+From 01196ab685a46ad4391cbb6936fc9fca94ada716 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Thu, 18 Jul 2024 10:34:00 +0800
+Subject: [PATCH 40/53] riscv: Enable IMSIC IPI device in harts_early_init()
+
+IMSIC is controlled in per-hart manner. Each secondary hart must enable
+their IMSIC respectively. Thus we call riscv_init_ipi() in
+harts_early_init() if IMSIC is enabled as IPI device.
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+---
+ arch/riscv/cpu/generic/cpu.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/arch/riscv/cpu/generic/cpu.c b/arch/riscv/cpu/generic/cpu.c
+index f13c18942f3d..be52582d41af 100644
+--- a/arch/riscv/cpu/generic/cpu.c
++++ b/arch/riscv/cpu/generic/cpu.c
+@@ -5,6 +5,9 @@
+ 
+ #include <irq_func.h>
+ #include <asm/cache.h>
++#include <asm/smp.h>
++#include <log.h>
++#include <hang.h>
+ 
+ /*
+  * cleanup_before_linux() is called just before we call linux
+@@ -20,3 +23,15 @@ int cleanup_before_linux(void)
+ 
+ 	return 0;
+ }
++
++void harts_early_init(void)
++{
++	/* Enable IPI in per-hart IMSIC */
++	if (CONFIG_IS_ENABLED(RISCV_IMSIC)) {
++		int ret = riscv_init_ipi();
++		if (ret) {
++			printf("Enable IMSIC IPI fail (error %d)\n", ret);
++			hang();
++		}
++	}
++}
+-- 
+2.34.1
+

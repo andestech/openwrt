@@ -1,0 +1,48 @@
+From 3b2f89e3d64571ad7af17f036b5ed98a0aee105e Mon Sep 17 00:00:00 2001
+From: Ivan Orlov <ivan.orlov0322@gmail.com>
+Date: Tue, 19 Mar 2024 16:02:39 +0000
+Subject: [PATCH 064/172] docs: writing_tests: Make docs correspond the latest
+ changes
+
+We should store test object files list in the `libsbi-objs-y` Makefile
+variable, not in `libsbitests-objs-y`. Update the documentation
+correspondingly.
+
+Since we don't use the `console_dev` static variable directly in the
+`sbi_console_test` unit test anymore, remove the paragraph which says
+that we do.
+
+Fixes: 86224ec36aed ("docs/writing_tests: Update tests paths")
+Signed-off-by: Ivan Orlov <ivan.orlov0322@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ docs/writing_tests.md | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/docs/writing_tests.md b/docs/writing_tests.md
+index 816adbae500d..0fd15d67616f 100644
+--- a/docs/writing_tests.md
++++ b/docs/writing_tests.md
+@@ -53,8 +53,8 @@ SBIUNIT_TEST_SUITE(string_test_suite, string_test_cases);
+ Then, add the corresponding Makefile entries to `lib/sbi/tests/objects.mk`:
+ ```lang-makefile
+ ...
+-libsbitests-objs-$(CONFIG_SBIUNIT) += sbi_string_test.o
+ carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += string_test_suite
++libsbi-objs-$(CONFIG_SBIUNIT) += tests/sbi_string_test.o
+ ```
+ 
+ If you compiled OpenSBI with CONFIG_SBIUNIT enabled before, you may need to
+@@ -113,9 +113,6 @@ carray-sbi_unit_tests-$(CONFIG_SBIUNIT) += string_test_suite
+ You don't have to compile the `sbi_string_test.o` separately, because the
+ test code will be included into the `sbi_string` object file.
+ 
+-See example in `lib/sbi/tests/sbi_console_test.c`, where statically declared
+-`console_dev` variable is used to mock the `sbi_console_device` structure.
+-
+ "Mocking" the structures
+ ------------------------
+ See the example of structure "mocking" in `lib/sbi/tests/sbi_console_test.c`,
+-- 
+2.34.1
+

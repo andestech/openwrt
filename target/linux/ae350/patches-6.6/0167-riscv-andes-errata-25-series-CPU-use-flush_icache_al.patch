@@ -1,0 +1,85 @@
+From 62f0764ee0753220b21eb7da6c5aac0778c61e61 Mon Sep 17 00:00:00 2001
+From: Cynthia Lan-Ya Huang <cynthia@andestech.com>
+Date: Thu, 20 Mar 2025 15:45:11 +0800
+Subject: [PATCH 167/168] riscv: andes: errata: 25 series CPU use
+ flush_icache_all (#265)
+
+Fix: bugzilla #33944 (http://e-andes.andestech.com/bugzilla5/show_bug.cgi?id=33944)
+
+The LTP test suite will fail without this patch.
+
+Signed-off-by: Charles Wu <dminus@andestech.com>
+Co-authored-by: Charles Wu <dminus@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/265
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Cynthia Lan-Ya Huang <cynthia@andestech.com>
+Co-committed-by: Cynthia Lan-Ya Huang <cynthia@andestech.com>
+---
+ arch/riscv/errata/andes/errata.c | 4 ++++
+ arch/riscv/mm/cacheflush.c       | 6 +++++-
+ include/linux/soc/andes/andes.h  | 2 ++
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/errata/andes/errata.c b/arch/riscv/errata/andes/errata.c
+index 932757c9b112..55c9bc136cc3 100644
+--- a/arch/riscv/errata/andes/errata.c
++++ b/arch/riscv/errata/andes/errata.c
+@@ -23,6 +23,8 @@
+ #define ANDES_AX45MP_MARCHID		0x8000000000008a45UL
+ #define ANDES_AX45MP_MIMPID		0x500UL
+ 
++DEFINE_STATIC_KEY_FALSE(andes_legacy_mmu_key);
++
+ phys_addr_t andes_pfn_msb;
+ EXPORT_SYMBOL(andes_pfn_msb);
+ 
+@@ -82,6 +84,8 @@ static bool errata_legacy_mmu_check_func(unsigned int stage,
+ {
+ 	/* legacy MMU only exists in 2X-series CPU.*/
+ 	andes_legacy_mmu = (((arch_id & 0xF0) >> 4) == 0x2) ? true : false;
++	if (andes_legacy_mmu && ((arch_id & 0xF) == 0x5))
++		static_branch_enable(&andes_legacy_mmu_key);
+ 	return andes_legacy_mmu;
+ }
+ 
+diff --git a/arch/riscv/mm/cacheflush.c b/arch/riscv/mm/cacheflush.c
+index e1d44c8bc1ed..4b19f54758e1 100644
+--- a/arch/riscv/mm/cacheflush.c
++++ b/arch/riscv/mm/cacheflush.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/of.h>
++#include <linux/soc/andes/andes.h>
+ #include <asm/cacheflush.h>
+ 
+ #ifdef CONFIG_SMP
+@@ -85,7 +86,10 @@ void flush_icache_pte(struct mm_struct *mm, pte_t pte)
+ 	struct folio *folio = page_folio(pte_page(pte));
+ 
+ 	if (!test_bit(PG_dcache_clean, &folio->flags)) {
+-		flush_icache_mm(mm, false);
++		if (static_branch_unlikely(&andes_legacy_mmu_key))
++			flush_icache_all();
++		else
++			flush_icache_mm(mm, false);
+ 		set_bit(PG_dcache_clean, &folio->flags);
+ 	}
+ }
+diff --git a/include/linux/soc/andes/andes.h b/include/linux/soc/andes/andes.h
+index 6c927fc391b3..123492d17497 100644
+--- a/include/linux/soc/andes/andes.h
++++ b/include/linux/soc/andes/andes.h
+@@ -6,6 +6,8 @@
+ #ifndef __ANDES_ANDES_H
+ #define __ANDES_ANDES_H
+ 
++DECLARE_STATIC_KEY_FALSE(andes_legacy_mmu_key);
++
+ extern bool andes_legacy_mmu;
+ extern phys_addr_t andes_pfn_msb;
+ 
+-- 
+2.34.1
+

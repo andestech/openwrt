@@ -1,0 +1,189 @@
+From b688e718f504cefbc066693143e2949c187b13f1 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 14 Aug 2024 13:54:32 +0800
+Subject: [PATCH 159/172] platform: generic: andes: Convert assembly to C code
+ (#116)
+
+C code is more readable and easier to maintain than assembly in general.
+Convert assembly to C code to improve maintainability and readability.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ platform/generic/andes/ae350.c         | 34 +++++++++++--
+ platform/generic/andes/objects.mk      |  2 +-
+ platform/generic/andes/sleep.S         | 70 --------------------------
+ platform/generic/include/andes/andes.h | 12 ++---
+ 4 files changed, 37 insertions(+), 81 deletions(-)
+ delete mode 100644 platform/generic/andes/sleep.S
+
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index f3479f3a25bf..5d8cb54c29e6 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -25,8 +25,34 @@
+ #include <andes/trigger.h>
+ 
+ static struct smu_data smu = { 0 };
+-extern void __ae350_enable_coherency_warmboot(void);
+-extern void __ae350_disable_coherency(void);
++extern void _start_warm(void);
++
++static inline void ae350_disable_coherency(void)
++{
++	csr_write(CSR_MCCTLCOMMAND, MCCTL_L1D_WBINVAL_ALL);
++
++	csr_clear(CSR_MCACHE_CTL, MCACHE_CTL_IC_EN | MCACHE_CTL_DC_EN);
++
++	csr_clear(CSR_MCACHE_CTL, MCACHE_CTL_DC_COHEN_EN);
++
++	while (csr_read(CSR_MCACHE_CTL) & MCACHE_CTL_DC_COHSTA_EN);
++}
++
++static inline void ae350_enable_coherency(void)
++{
++	csr_set(CSR_MCACHE_CTL, MCACHE_CTL_DC_COHEN_EN);
++
++	if (csr_read(CSR_MCACHE_CTL) & MCACHE_CTL_DC_COHEN_EN)
++		while (!(csr_read(CSR_MCACHE_CTL) & MCACHE_CTL_DC_COHSTA_EN));
++
++	csr_set(CSR_MCACHE_CTL, MCACHE_CTL_IC_EN | MCACHE_CTL_DC_EN);
++}
++
++static inline void ae350_enable_coherency_warmboot(void)
++{
++	ae350_enable_coherency();
++	_start_warm();
++}
+ 
+ static int ae350_hart_start(u32 hartid, ulong saddr)
+ {
+@@ -70,12 +96,12 @@ static int ae350_hart_stop(void)
+ 	smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
+ 
+ 	rc = smu_set_reset_vector(&smu,
+-				  (ulong)__ae350_enable_coherency_warmboot,
++				  (ulong)ae350_enable_coherency_warmboot,
+ 				  hartid);
+ 	if (rc)
+ 		goto fail;
+ 
+-	__ae350_disable_coherency();
++	ae350_disable_coherency();
+ 
+ 	wfi();
+ 
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index 0c0959fc1359..6ea27b7c1fdf 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -12,7 +12,7 @@ FW_PAYLOAD=n
+ 
+ # Objects to build
+ carray-platform_override_modules-$(CONFIG_PLATFORM_ANDES_AE350) += andes_ae350
+-platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o andes/dcause.o
++platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/dcause.o
+ 
+ platform-objs-$(CONFIG_ANDES_PMA) += andes/andes_pma.o
+ platform-objs-$(CONFIG_ANDES_SBI) += andes/andes_sbi.o
+diff --git a/platform/generic/andes/sleep.S b/platform/generic/andes/sleep.S
+deleted file mode 100644
+index 361aff3a6024..000000000000
+--- a/platform/generic/andes/sleep.S
++++ /dev/null
+@@ -1,70 +0,0 @@
+-/*
+- * SPDX-License-Identifier: BSD-2-Clause
+- *
+- * Copyright (c) 2023 Andes Technology Corporation
+- *
+- * Authors:
+- *   Yu Chien Peter Lin <peterlin@andestech.com>
+- */
+-
+-#include <sbi/riscv_encoding.h>
+-#include <sbi/riscv_asm.h>
+-#include <andes/andes.h>
+-
+-	.section .text, "ax", %progbits
+-	.align 3
+-	.global __ae350_disable_coherency
+-__ae350_disable_coherency:
+-	/* flush d-cache */
+-	csrw	CSR_MCCTLCOMMAND, 0x6
+-	/* disable i/d-cache */
+-	csrc	CSR_MCACHE_CTL, 0x3
+-	/* disable d-cache coherency */
+-	lui	t1, 0x80
+-	csrc	CSR_MCACHE_CTL, t1
+-	/*
+-	 * wait for mcache_ctl.DC_COHSTA to be cleared,
+-	 * the bit is hard-wired 0 on platforms w/o CM
+-	 * (Coherence Manager)
+-	 */
+-check_cm_disabled:
+-	csrr	t1, CSR_MCACHE_CTL
+-	srli	t1, t1, 20
+-	andi	t1, t1, 0x1
+-	bnez	t1, check_cm_disabled
+-
+-	ret
+-
+-	.section .text, "ax", %progbits
+-	.align 3
+-	.global __ae350_enable_coherency
+-__ae350_enable_coherency:
+-	/* enable d-cache coherency */
+-	lui		t1, 0x80
+-	csrs	CSR_MCACHE_CTL, t1
+-	/*
+-	 * mcache_ctl.DC_COHEN is hard-wired 0 on platforms
+-	 * w/o CM support
+-	 */
+-	csrr	t1, CSR_MCACHE_CTL
+-	srli	t1, t1, 19
+-	andi	t1, t1, 0x1
+-	beqz	t1, enable_L1_cache
+-	/* wait for mcache_ctl.DC_COHSTA to be set */
+-check_cm_enabled:
+-	csrr	t1, CSR_MCACHE_CTL
+-	srli	t1, t1, 20
+-	andi	t1, t1, 0x1
+-	beqz	t1, check_cm_enabled
+-enable_L1_cache:
+-	/* enable i/d-cache */
+-	csrs	CSR_MCACHE_CTL, 0x3
+-
+-	ret
+-
+-	.section .text, "ax", %progbits
+-	.align 3
+-	.global __ae350_enable_coherency_warmboot
+-__ae350_enable_coherency_warmboot:
+-	call ra, __ae350_enable_coherency
+-	j _start_warm
+diff --git a/platform/generic/include/andes/andes.h b/platform/generic/include/andes/andes.h
+index fe7ce5d43622..bce70aaefe0f 100644
+--- a/platform/generic/include/andes/andes.h
++++ b/platform/generic/include/andes/andes.h
+@@ -217,12 +217,12 @@
+ #define MCACHE_CTL_DC_COHSTA_OFFSET	20
+ 
+ /* Andes cctl command */
+-#define UCCTL_L1D_VA_INVAL		0
+-#define UCCTL_L1D_VA_WB			1
+-#define UCCTL_L1D_VA_WBINVAL		2
+-#define UCCTL_L1D_WBINVAL_ALL		6
+-#define UCCTL_L1D_WB_ALL		7
+-#define UCCTL_L1D_INVAL_ALL		23
++#define MCCTL_L1D_VA_INVAL		0
++#define MCCTL_L1D_VA_WB			1
++#define MCCTL_L1D_VA_WBINVAL		2
++#define MCCTL_L1D_WBINVAL_ALL		6
++#define MCCTL_L1D_WB_ALL		7
++#define MCCTL_L1D_INVAL_ALL		23
+ 
+ #define MCACHE_CTL_IC_EN		(1UL << MCACHE_CTL_IC_EN_OFFSET)
+ #define MCACHE_CTL_DC_EN		(1UL << MCACHE_CTL_DC_EN_OFFSET)
+-- 
+2.34.1
+

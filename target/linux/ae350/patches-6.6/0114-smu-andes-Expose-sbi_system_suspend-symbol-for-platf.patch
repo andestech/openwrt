@@ -1,0 +1,34 @@
+From 400c901f4f6a88c4c6e8ef0d1ff7548401d3a567 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 12 Sep 2024 17:39:48 +0800
+Subject: [PATCH 114/168] smu: andes: Expose sbi_system_suspend symbol for
+ platform suspend (#164)
+
+Andes pm will need sbi_system_suspend function to call SUSP SBI call,
+so remove the static key word to expose this symbol.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/kernel/suspend.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/riscv/kernel/suspend.c b/arch/riscv/kernel/suspend.c
+index 239509367e42..3f7fdcdfdc75 100644
+--- a/arch/riscv/kernel/suspend.c
++++ b/arch/riscv/kernel/suspend.c
+@@ -91,9 +91,9 @@ int cpu_suspend(unsigned long arg,
+ }
+ 
+ #ifdef CONFIG_RISCV_SBI
+-static int sbi_system_suspend(unsigned long sleep_type,
+-			      unsigned long resume_addr,
+-			      unsigned long opaque)
++int sbi_system_suspend(unsigned long sleep_type,
++		       unsigned long resume_addr,
++		       unsigned long opaque)
+ {
+ 	struct sbiret ret;
+ 
+-- 
+2.34.1
+

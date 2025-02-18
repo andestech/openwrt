@@ -1,0 +1,62 @@
+From dfe8e07d447634ebe97b5223c7387a54e9ae02d1 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Thu, 25 Jul 2024 17:01:16 +0800
+Subject: [PATCH 032/168] cache: andes: add alignment and preemption protection
+ as needed
+
+Cache operations in a multi-core environment must prevent preemption.
+Additionally, cache operations need to ensure proper cache line alignment.
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ drivers/cache/andes_cache.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/cache/andes_cache.c b/drivers/cache/andes_cache.c
+index 2d77079c9b56..037020c13c68 100644
+--- a/drivers/cache/andes_cache.c
++++ b/drivers/cache/andes_cache.c
+@@ -147,7 +147,7 @@ static void andes_cpu_cache_operation(unsigned long start, unsigned long end,
+ {
+ 	unsigned long line_size = andes_priv.andes_cache_line_size;
+ 	void __iomem *base = andes_priv.l2c_base;
+-	int mhartid = smp_processor_id();
++	int mhartid = get_cpu();
+ 	unsigned long pa;
+ 
+ 	if (likely(base)) {
+@@ -168,6 +168,7 @@ static void andes_cpu_cache_operation(unsigned long start, unsigned long end,
+ 			start += line_size;
+ 		}
+ 	}
++	put_cpu();
+ }
+ 
+ /* Write-back L1 and L2 cache entry */
+@@ -195,14 +196,11 @@ static void andes_dma_cache_inv(phys_addr_t paddr, size_t size)
+ 		return;
+ 
+ 	line_size = andes_priv.andes_cache_line_size;
+-
+ 	start = start & (~(line_size - 1));
+ 	end = ((end + line_size - 1) & (~(line_size - 1)));
+ 
+ 	local_irq_save(flags);
+-
+ 	andes_cpu_dcache_inval_range(start, end);
+-
+ 	local_irq_restore(flags);
+ }
+ 
+@@ -215,6 +213,8 @@ static void andes_dma_cache_wback(phys_addr_t paddr, size_t size)
+ 
+ 	line_size = andes_priv.andes_cache_line_size;
+ 	start = start & (~(line_size - 1));
++	end = ((end + line_size - 1) & (~(line_size - 1)));
++
+ 	local_irq_save(flags);
+ 	andes_cpu_dcache_wb_range(start, end);
+ 	local_irq_restore(flags);
+-- 
+2.34.1
+

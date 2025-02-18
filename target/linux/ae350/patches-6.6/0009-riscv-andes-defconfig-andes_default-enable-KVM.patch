@@ -1,0 +1,27 @@
+From c7a65c65ee1589b71c6cd77c89e2f2e80c232786 Mon Sep 17 00:00:00 2001
+From: Hui Min Mina Chou <minachou@andestech.com>
+Date: Wed, 5 Jun 2024 14:22:20 +0800
+Subject: [PATCH 009/168] riscv: andes: defconfig: andes_default enable KVM
+
+KVM RISC-V support on kernel 5.16-rc2
+
+Link: https://lwn.net/Articles/797797/
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ arch/riscv/configs/andes_defconfig | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/riscv/configs/andes_defconfig b/arch/riscv/configs/andes_defconfig
+index ad1b9ed8dbd7..90fdb1627311 100644
+--- a/arch/riscv/configs/andes_defconfig
++++ b/arch/riscv/configs/andes_defconfig
+@@ -199,3 +199,6 @@ CONFIG_ZSMALLOC=y
+ CONFIG_ZRAM=y
+ CONFIG_CRYPTO_LZO=y
+ CONFIG_SWAP=y
++
++CONFIG_VIRTUALIZATION=y
++CONFIG_KVM=y
+-- 
+2.34.1
+

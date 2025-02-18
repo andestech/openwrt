@@ -1,0 +1,77 @@
+From f414cf931eaf41c28d2750928108321d5006b178 Mon Sep 17 00:00:00 2001
+From: Anup Patel <apatel@ventanamicro.com>
+Date: Mon, 11 Mar 2024 15:54:56 +0530
+Subject: [PATCH 059/172] lib: sbi: Simplify parameters of
+ sbi_illegal_insn_handler()
+
+The struct sbi_trap_context already has the information needed by
+sbi_illegal_insn_handler() so directly pass struct sbi_trap_context
+pointer to this function.
+
+Signed-off-by: Anup Patel <apatel@ventanamicro.com>
+Reviewed-by: Samuel Holland <samuel.holland@sifive.com>
+Tested-by: Samuel Holland <samuel.holland@sifive.com>
+---
+ include/sbi/sbi_illegal_insn.h | 4 ++--
+ lib/sbi/sbi_illegal_insn.c     | 7 ++++---
+ lib/sbi/sbi_trap.c             | 2 +-
+ 3 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/include/sbi/sbi_illegal_insn.h b/include/sbi/sbi_illegal_insn.h
+index 0397935e20e5..7be72ac0843f 100644
+--- a/include/sbi/sbi_illegal_insn.h
++++ b/include/sbi/sbi_illegal_insn.h
+@@ -12,8 +12,8 @@
+ 
+ #include <sbi/sbi_types.h>
+ 
+-struct sbi_trap_regs;
++struct sbi_trap_context;
+ 
+-int sbi_illegal_insn_handler(ulong insn, struct sbi_trap_regs *regs);
++int sbi_illegal_insn_handler(struct sbi_trap_context *tcntx);
+ 
+ #endif
+diff --git a/lib/sbi/sbi_illegal_insn.c b/lib/sbi/sbi_illegal_insn.c
+index dd0b3c126ce3..ed6f111362c6 100644
+--- a/lib/sbi/sbi_illegal_insn.c
++++ b/lib/sbi/sbi_illegal_insn.c
+@@ -136,8 +136,10 @@ static const illegal_insn_func illegal_insn_table[32] = {
+ 	truly_illegal_insn  /* 31 */
+ };
+ 
+-int sbi_illegal_insn_handler(ulong insn, struct sbi_trap_regs *regs)
++int sbi_illegal_insn_handler(struct sbi_trap_context *tcntx)
+ {
++	struct sbi_trap_regs *regs = &tcntx->regs;
++	ulong insn = tcntx->trap.tval;
+ 	struct sbi_trap_info uptrap;
+ 
+ 	/*
+@@ -154,9 +156,8 @@ int sbi_illegal_insn_handler(ulong insn, struct sbi_trap_regs *regs)
+ 	sbi_pmu_ctr_incr_fw(SBI_PMU_FW_ILLEGAL_INSN);
+ 	if (unlikely((insn & 3) != 3)) {
+ 		insn = sbi_get_insn(regs->mepc, &uptrap);
+-		if (uptrap.cause) {
++		if (uptrap.cause)
+ 			return sbi_trap_redirect(regs, &uptrap);
+-		}
+ 		if ((insn & 3) != 3)
+ 			return truly_illegal_insn(insn, regs);
+ 	}
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+index a2afb0ac6112..4e691dfc5c31 100644
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -285,7 +285,7 @@ struct sbi_trap_context *sbi_trap_handler(struct sbi_trap_context *tcntx)
+ 
+ 	switch (mcause) {
+ 	case CAUSE_ILLEGAL_INSTRUCTION:
+-		rc  = sbi_illegal_insn_handler(tcntx->trap.tval, regs);
++		rc  = sbi_illegal_insn_handler(tcntx);
+ 		msg = "illegal instruction handler failed";
+ 		break;
+ 	case CAUSE_MISALIGNED_LOAD:
+-- 
+2.34.1
+

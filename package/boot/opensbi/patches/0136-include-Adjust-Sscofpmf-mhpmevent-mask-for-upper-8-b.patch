@@ -1,0 +1,41 @@
+From 778949eeb8f36e01c37cb3ae6d82b0660a1bf6f7 Mon Sep 17 00:00:00 2001
+From: Eric Lin <eric.lin@sifive.com>
+Date: Tue, 30 Jul 2024 17:30:22 +0800
+Subject: [PATCH 136/172] include: Adjust Sscofpmf mhpmevent mask for upper 8
+ bits
+
+Currently, OpenSBI reserves the upper 16 bits in mhpmevent for
+the Sscofpmf extension.
+
+However, according to the Sscofpmf extension specification[1],
+it only defines the upper 8 bits in mhpmevent for privilege mode
+inhibit and counter overflow disable. Other bits are defined by
+the platform for event selection.
+
+Since vendors might define raw event encoding exceeding 48 bits in
+mhpmevent, we should adjust the MHPMEVENT_SSCOF_MASK to support it.
+
+Link: https://github.com/riscvarchive/riscv-count-overflow [1]
+Signed-off-by: Eric Lin <eric.lin@sifive.com>
+Reviewed-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/riscv_encoding.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/sbi/riscv_encoding.h b/include/sbi/riscv_encoding.h
+index 477fa3a1ad86..2ed05f242def 100644
+--- a/include/sbi/riscv_encoding.h
++++ b/include/sbi/riscv_encoding.h
+@@ -207,7 +207,7 @@
+ 
+ #endif
+ 
+-#define MHPMEVENT_SSCOF_MASK		_ULL(0xFFFF000000000000)
++#define MHPMEVENT_SSCOF_MASK		_ULL(0xFF00000000000000)
+ 
+ #define ENVCFG_STCE			(_ULL(1) << 63)
+ #define ENVCFG_PBMTE			(_ULL(1) << 62)
+-- 
+2.34.1
+

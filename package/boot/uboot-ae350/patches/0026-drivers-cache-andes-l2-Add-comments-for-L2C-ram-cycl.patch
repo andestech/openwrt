@@ -1,0 +1,58 @@
+From 7e9b13ec303686da8b4984ed914fbe1cae3ec81b Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 19 Sep 2024 11:47:21 +0800
+Subject: [PATCH 26/53] drivers: cache-andes-l2: Add comments for L2C ram cycle
+ settings (#127)
+
+L2C ram cycle settings differ from platform to platform,
+so add comment to explain how these parameter should be set.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ drivers/cache/cache-andes-l2.c | 29 ++++++++++++++++++-----------
+ 1 file changed, 18 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/cache/cache-andes-l2.c b/drivers/cache/cache-andes-l2.c
+index 71e98efe1b1e..8e3ad60baa7f 100644
+--- a/drivers/cache/cache-andes-l2.c
++++ b/drivers/cache/cache-andes-l2.c
+@@ -182,18 +182,25 @@ static int andes_l2_probe(struct udevice *dev)
+ 		ctl_val |= (plat->dprefetch << DPREPETCH_OFF);
+ 	}
+ 
+-	if (plat->tram_ctl[0] != -EINVAL) {
+-		ctl_val &= ~(TRAMOCTL_MSK | TRAMICTL_MSK);
+-		ctl_val |= plat->tram_ctl[0] << TRAMOCTL_OFF;
+-		ctl_val |= plat->tram_ctl[1] << TRAMICTL_OFF;
++	/* ram cycle settings */
++	/*
++	 * **Do NOT** change RAM cycle settings for Andes' EVB,
++	 * but once you have done the integration, please uncomment
++	 * the following and do the proper setting for your platform.
++	 */
++	{
++	//	if (plat->tram_ctl[0] != -EINVAL) {
++	//		ctl_val &= ~(TRAMOCTL_MSK | TRAMICTL_MSK);
++	//		ctl_val |= plat->tram_ctl[0] << TRAMOCTL_OFF;
++	//		ctl_val |= plat->tram_ctl[1] << TRAMICTL_OFF;
++	//	}
++	//
++	//	if (plat->dram_ctl[0] != -EINVAL) {
++	//		ctl_val &= ~(DRAMOCTL_MSK | DRAMICTL_MSK);
++	//		ctl_val |= plat->dram_ctl[0] << DRAMOCTL_OFF;
++	//		ctl_val |= plat->dram_ctl[1] << DRAMICTL_OFF;
++	//	}
+ 	}
+-
+-	if (plat->dram_ctl[0] != -EINVAL) {
+-		ctl_val &= ~(DRAMOCTL_MSK | DRAMICTL_MSK);
+-		ctl_val |= plat->dram_ctl[0] << DRAMOCTL_OFF;
+-		ctl_val |= plat->dram_ctl[1] << DRAMICTL_OFF;
+-	}
+-
+ 	writel(ctl_val, &regs->control);
+ 
+ 	return 0;
+-- 
+2.34.1
+

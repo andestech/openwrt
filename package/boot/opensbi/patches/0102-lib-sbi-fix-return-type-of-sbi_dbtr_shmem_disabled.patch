@@ -1,0 +1,43 @@
+From 7b37da3cb03e7f75e5834947016aab592498fc9a Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Fri, 3 May 2024 21:53:37 +0800
+Subject: [PATCH 102/172] lib: sbi: fix return type of sbi_dbtr_shmem_disabled
+
+Modify the return value of the sbi_dbtr_shmem_disabled function to
+bool to make the semantics clearer.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_dbtr.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index a95f087f1013..6950378bd340 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -55,18 +55,18 @@ static unsigned long hart_state_ptr_offset;
+ #error "Undefined XLEN"
+ #endif
+ 
+-static inline int sbi_dbtr_shmem_disabled(void)
++static inline bool sbi_dbtr_shmem_disabled(void)
+ {
+ 	struct sbi_dbtr_hart_triggers_state *hs = NULL;
+ 
+ 	hs = dbtr_get_hart_state_ptr(sbi_scratch_thishart_ptr());
+ 
+ 	if (!hs)
+-		return 1;
++		return true;
+ 
+ 	return (hs->shmem.phys_lo == SBI_DBTR_SHMEM_INVALID_ADDR &&
+ 		hs->shmem.phys_hi == SBI_DBTR_SHMEM_INVALID_ADDR
+-		? 1 : 0);
++		? true : false);
+ }
+ 
+ static inline void sbi_dbtr_disable_shmem(void)
+-- 
+2.34.1
+

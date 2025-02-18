@@ -1,0 +1,720 @@
+From f0823a753718bd183f151df23095aa7e792890ae Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 10 Jul 2024 16:36:24 +0800
+Subject: [PATCH 01/53] andes: cpu: Support network functionality on
+ noncoherent bitmaps (#99)
+
+There are several ways to support network on noncoherent bitmap in u-boot proper:
+1. Disable cache (For a25 noncoherent bitmap)
+2. Set MSB bit + flush/invalidate cache (For ax25 noncoherent bitmap)
+3. Set PPMA + flush/invalidate cache (For noncoherent bitmap with PPMA support)
+
+We ported SYS_HAS_NONCACHED_MEMORY to RISC-V archictecture
+and implement 2 & 3 via this u-boot config.
+
+First initialize an memory area with their attribute set to noncacheable (through PPMA or MSB bit).
+Allocate from this memory area when noncahced memory is needed through noncached_alloc API.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/99
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+---
+ arch/Kconfig                            |  2 +-
+ arch/riscv/cpu/andes/Makefile           |  1 +
+ arch/riscv/cpu/andes/cache.c            |  7 +++
+ arch/riscv/cpu/andes/cpu.c              |  6 ++
+ arch/riscv/cpu/andes/noncache.c         | 76 +++++++++++++++++++++++++
+ arch/riscv/include/asm/sbi.h            | 16 ++++++
+ arch/riscv/include/asm/system.h         | 11 ++++
+ arch/riscv/lib/sbi.c                    | 29 ++++++++++
+ board/andestech/ae350/ae350.c           |  8 ++-
+ configs/ae350_rv32_falcon_defconfig     |  2 +-
+ configs/ae350_rv32_falcon_xip_defconfig |  2 +-
+ configs/ae350_rv32_spl_defconfig        |  3 +-
+ configs/ae350_rv32_spl_xip_defconfig    |  3 +-
+ configs/ae350_rv64_falcon_defconfig     |  2 +-
+ configs/ae350_rv64_falcon_xip_defconfig |  2 +-
+ configs/ae350_rv64_spl_defconfig        |  3 +-
+ configs/ae350_rv64_spl_xip_defconfig    |  3 +-
+ drivers/cache/cache-andes-l2.c          | 41 ++++++++-----
+ drivers/cache/cache-uclass.c            | 10 ++++
+ drivers/net/ftmac100.c                  | 60 +++++++++++++++----
+ include/cache.h                         | 16 ++++++
+ 21 files changed, 269 insertions(+), 34 deletions(-)
+ create mode 100644 arch/riscv/cpu/andes/noncache.c
+
+diff --git a/arch/Kconfig b/arch/Kconfig
+index abd406d48841..e0556c17e09f 100644
+--- a/arch/Kconfig
++++ b/arch/Kconfig
+@@ -472,7 +472,7 @@ endmenu
+ 
+ config SYS_HAS_NONCACHED_MEMORY
+ 	bool "Enable reserving a non-cached memory area for drivers"
+-	depends on (ARM || MIPS) && (RTL8169 || MEDIATEK_ETH)
++	depends on (ARM || MIPS || RISCV) && (RTL8169 || MEDIATEK_ETH || FTMAC100)
+ 	help
+ 	  This is useful for drivers that would otherwise require a lot of
+ 	  explicit cache maintenance. For some drivers it's also impossible to
+diff --git a/arch/riscv/cpu/andes/Makefile b/arch/riscv/cpu/andes/Makefile
+index 35a1a2fb836c..5635f82e071f 100644
+--- a/arch/riscv/cpu/andes/Makefile
++++ b/arch/riscv/cpu/andes/Makefile
+@@ -6,3 +6,4 @@
+ obj-y	:= cpu.o
+ obj-y	+= cache.o
+ obj-y	+= spl.o
++obj-$(CONFIG_SYS_HAS_NONCACHED_MEMORY)	+= noncache.o
+diff --git a/arch/riscv/cpu/andes/cache.c b/arch/riscv/cpu/andes/cache.c
+index bb57498d75ad..782cd837a570 100644
+--- a/arch/riscv/cpu/andes/cache.c
++++ b/arch/riscv/cpu/andes/cache.c
+@@ -6,6 +6,7 @@
+ 
+ #include <asm/csr.h>
+ #include <asm/asm.h>
++#include <asm/sbi.h>
+ #include <cache.h>
+ #include <cpu_func.h>
+ #include <dm.h>
+@@ -44,6 +45,10 @@ static void cache_ops(int (*ops)(struct udevice *dev))
+ void flush_dcache_all(void)
+ {
+ 	csr_write(CSR_UCCTLCOMMAND, CCTL_L1D_WBINVAL_ALL);
++
++#ifdef CONFIG_ANDES_L2_CACHE
++	cache_ops(cache_wbinval);
++#endif
+ }
+ 
+ void flush_dcache_range(unsigned long start, unsigned long end)
+@@ -74,6 +79,8 @@ void dcache_enable(void)
+ {
+ #if CONFIG_IS_ENABLED(RISCV_MMODE)
+ 	asm volatile("csrsi %0, 0x2" :: "i"(CSR_MCACHE_CTL));
++#else
++	sbi_enable_dcache();
+ #endif
+ 
+ #ifdef CONFIG_ANDES_L2_CACHE
+diff --git a/arch/riscv/cpu/andes/cpu.c b/arch/riscv/cpu/andes/cpu.c
+index d25ecba0e88d..a6ccab0be743 100644
+--- a/arch/riscv/cpu/andes/cpu.c
++++ b/arch/riscv/cpu/andes/cpu.c
+@@ -23,6 +23,12 @@ int cleanup_before_linux(void)
+ 
+ 	cache_flush();
+ 
++	dcache_enable();
++
++#ifdef CONFIG_SYS_NONCACHED_MEMORY
++	noncached_free();
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/riscv/cpu/andes/noncache.c b/arch/riscv/cpu/andes/noncache.c
+new file mode 100644
+index 000000000000..c9855e9c8b5a
+--- /dev/null
++++ b/arch/riscv/cpu/andes/noncache.c
+@@ -0,0 +1,76 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * Copyright (C) 2024 Andes Technology Corporation
++ * Rick Chen, Andes Technology Corporation <rick@andestech.com>
++ * Leo Liang, Andes Technology Corporation <ycliang@andestech.com>
++ *
++ * An noncacheable memory region is created through noncached_init,
++ * managed by noncached_alloc, and freed by noncached_free
++ * for AE350 platform to support noncoherent bitmap.
++ */
++
++#include <asm/csr.h>
++#include <asm/encoding.h>
++#include <asm/sbi.h>
++#include <common.h>
++#include <cpu_func.h>
++#include <malloc.h>
++#include <linux/log2.h>
++
++#ifdef CONFIG_SYS_NONCACHED_MEMORY
++
++#ifdef CONFIG_32BIT
++#define SATP_PPN	_AC(0x003FFFFF, UL)
++#else
++#define SATP_PPN	_AC(0x00000FFFFFFFFFFF, UL)
++#endif
++
++static unsigned long noncached_start = 0;
++static unsigned long noncached_end = 0;
++static unsigned long noncached_next = 0;
++static unsigned long andes_pa_msb = 0;
++
++int noncached_init(void)
++{
++	phys_addr_t start, end;
++	size_t size;
++
++	end = ALIGN(mem_malloc_start, MMU_SECTION_SIZE) - MMU_SECTION_SIZE;
++	size = ALIGN(CONFIG_SYS_NONCACHED_MEMORY, MMU_SECTION_SIZE);
++	start = end - size;
++	debug("mapping memory %pa-%pa non-cached\n", &start, &end);
++
++	noncached_start = start;
++	noncached_end = end;
++	noncached_next = start;
++
++	if (sbi_pma_probe()){
++		sbi_pma_set(start, start, size);
++	} else {
++		csr_write(CSR_SATP, SATP_PPN);
++		andes_pa_msb = (csr_read(CSR_SATP) + 1) >> 1;
++	}
++
++	return 0;
++}
++
++phys_addr_t noncached_alloc(size_t size, size_t align)
++{
++	phys_addr_t next = ALIGN(noncached_next, align);
++	size = __roundup_pow_of_two(size);
++
++	if (next >= noncached_end || (noncached_end - next) < size)
++		return 0;
++
++	debug("allocated %zu bytes of uncached memory @%pa\n", size, &next);
++	noncached_next = next + size;
++
++	return (next | (andes_pa_msb << 12));
++}
++
++void noncached_free(void)
++{
++	sbi_pma_free(noncached_start);
++}
++
++#endif /* CONFIG_SYS_NONCACHED_MEMORY */
+diff --git a/arch/riscv/include/asm/sbi.h b/arch/riscv/include/asm/sbi.h
+index ad32dedb5896..80380a23f681 100644
+--- a/arch/riscv/include/asm/sbi.h
++++ b/arch/riscv/include/asm/sbi.h
+@@ -35,6 +35,7 @@ enum sbi_ext_id {
+ 	SBI_EXT_STA = 0x535441,
+ 	SBI_EXT_DBTR = 0x44425452,
+ 	SBI_EXT_SSE = 0x535345,
++	SBI_EXT_ANDES = 0x0900031E,
+ };
+ 
+ enum sbi_ext_base_fid {
+@@ -102,6 +103,13 @@ enum sbi_ext_dbcn_fid {
+ 	SBI_EXT_DBCN_CONSOLE_WRITE_BYTE,
+ };
+ 
++enum sbi_ext_andes_fid {
++	SBI_EXT_ANDES_PMA_SET,
++	SBI_EXT_ANDES_PMA_FREE,
++	SBI_EXT_ANDES_PMA_PROBE,
++	SBI_EXT_ANDES_DCACHE_EN,
++};
++
+ #ifdef CONFIG_SBI_V01
+ #define SBI_EXT_SET_TIMER		SBI_EXT_0_1_SET_TIMER
+ #define SBI_FID_SET_TIMER		0
+@@ -174,4 +182,12 @@ int sbi_get_mimpid(long *mimpid);
+ void sbi_srst_reset(unsigned long type, unsigned long reason);
+ int sbi_dbcn_write_byte(unsigned char ch);
+ 
++/* Andes PMA SBI call */
++long sbi_pma_probe(void);
++void sbi_pma_set(phys_addr_t pa, unsigned long va, size_t size);
++void sbi_pma_free(unsigned long va);
++
++/* Andes enable cache SBI call */
++void sbi_enable_dcache(void);
++
+ #endif
+diff --git a/arch/riscv/include/asm/system.h b/arch/riscv/include/asm/system.h
+index 87a804bfd5f7..8731e344fd76 100644
+--- a/arch/riscv/include/asm/system.h
++++ b/arch/riscv/include/asm/system.h
+@@ -28,4 +28,15 @@ struct event;
+ /* Hook to set up the CPU (called from SPL too) */
+ int riscv_cpu_setup(void);
+ 
++#ifdef CONFIG_SYS_NONCACHED_MEMORY
++
++/* Size of an MMU section (Copied from arch/arm/include/asm/system.h) */
++#define MMU_SECTION_SIZE	(1 << 21)
++
++int noncached_init(void);
++phys_addr_t noncached_alloc(size_t size, size_t align);
++void noncached_free(void);
++
++#endif  /* CONFIG_SYS_NONCACHED_MEMORY */
++
+ #endif	/* __ASM_RISCV_SYSTEM_H */
+diff --git a/arch/riscv/lib/sbi.c b/arch/riscv/lib/sbi.c
+index 35a7d3b12f51..4532804cc657 100644
+--- a/arch/riscv/lib/sbi.c
++++ b/arch/riscv/lib/sbi.c
+@@ -220,6 +220,35 @@ int sbi_dbcn_write_byte(unsigned char ch)
+ 	return ret.error;
+ }
+ 
++/* Andes PMA SBI call */
++long sbi_pma_probe(void)
++{
++	struct sbiret ret;
++
++	ret = sbi_ecall(SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_PROBE, 0, 0, 0, 0, 0, 0);
++
++	if (!ret.error)
++		return ret.value;
++
++	return -ENOTSUPP;
++}
++
++void sbi_pma_set(phys_addr_t pa, unsigned long va, size_t size)
++{
++	sbi_ecall(SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_SET, pa, va, size, 0, 0, 0);
++}
++
++void sbi_pma_free(unsigned long va)
++{
++	sbi_ecall(SBI_EXT_ANDES, SBI_EXT_ANDES_PMA_FREE, va, 0, 0, 0, 0, 0);
++}
++
++/* Andes enable cache SBI call */
++void sbi_enable_dcache(void)
++{
++	sbi_ecall(SBI_EXT_ANDES, SBI_EXT_ANDES_DCACHE_EN, 1, 0, 0, 0, 0, 0);
++}
++
+ #ifdef CONFIG_SBI_V01
+ 
+ /**
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index 5ae5baed6ba2..6d5414ba7e0f 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -129,11 +129,15 @@ int smc_init(void)
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_BOARD_EARLY_INIT_F
+-int board_early_init_f(void)
++#ifdef CONFIG_BOARD_EARLY_INIT_R
++int board_early_init_r(void)
+ {
+ 	smc_init();
+ 
++	/* enable andes-l2 cache */
++	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
++		enable_caches();
++
+ 	return 0;
+ }
+ #endif
+diff --git a/configs/ae350_rv32_falcon_defconfig b/configs/ae350_rv32_falcon_defconfig
+index a8f3c00066e4..51ca290b18a0 100644
+--- a/configs/ae350_rv32_falcon_defconfig
++++ b/configs/ae350_rv32_falcon_defconfig
+@@ -24,7 +24,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+ CONFIG_SPL_CACHE=y
+diff --git a/configs/ae350_rv32_falcon_xip_defconfig b/configs/ae350_rv32_falcon_xip_defconfig
+index 0f9a7b0f4c9b..a2bb8b63cf41 100644
+--- a/configs/ae350_rv32_falcon_xip_defconfig
++++ b/configs/ae350_rv32_falcon_xip_defconfig
+@@ -25,7 +25,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+ CONFIG_SPL_CACHE=y
+diff --git a/configs/ae350_rv32_spl_defconfig b/configs/ae350_rv32_spl_defconfig
+index 76711b96400b..5de7ea465c22 100644
+--- a/configs/ae350_rv32_spl_defconfig
++++ b/configs/ae350_rv32_spl_defconfig
+@@ -1,4 +1,5 @@
+ CONFIG_RISCV=y
++CONFIG_SYS_HAS_NONCACHED_MEMORY=y
+ CONFIG_TEXT_BASE=0x01800000
+ CONFIG_SYS_MALLOC_LEN=0x80000
+ CONFIG_NR_DRAM_BANKS=2
+@@ -23,7 +24,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_MISC_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+diff --git a/configs/ae350_rv32_spl_xip_defconfig b/configs/ae350_rv32_spl_xip_defconfig
+index 39db36c3f6c6..f257ec2d25ad 100644
+--- a/configs/ae350_rv32_spl_xip_defconfig
++++ b/configs/ae350_rv32_spl_xip_defconfig
+@@ -1,4 +1,5 @@
+ CONFIG_RISCV=y
++CONFIG_SYS_HAS_NONCACHED_MEMORY=y
+ CONFIG_TEXT_BASE=0x01800000
+ CONFIG_SYS_MALLOC_LEN=0x80000
+ CONFIG_NR_DRAM_BANKS=2
+@@ -24,7 +25,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_MISC_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+diff --git a/configs/ae350_rv64_falcon_defconfig b/configs/ae350_rv64_falcon_defconfig
+index 1cd978e4229b..a13c9b257e16 100644
+--- a/configs/ae350_rv64_falcon_defconfig
++++ b/configs/ae350_rv64_falcon_defconfig
+@@ -24,7 +24,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+ CONFIG_SPL_CACHE=y
+diff --git a/configs/ae350_rv64_falcon_xip_defconfig b/configs/ae350_rv64_falcon_xip_defconfig
+index 7a1f880e0591..7a84f9c1c107 100644
+--- a/configs/ae350_rv64_falcon_xip_defconfig
++++ b/configs/ae350_rv64_falcon_xip_defconfig
+@@ -25,7 +25,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+ CONFIG_SPL_CACHE=y
+diff --git a/configs/ae350_rv64_spl_defconfig b/configs/ae350_rv64_spl_defconfig
+index c70413c8ba77..a6d9fe65d394 100644
+--- a/configs/ae350_rv64_spl_defconfig
++++ b/configs/ae350_rv64_spl_defconfig
+@@ -1,4 +1,5 @@
+ CONFIG_RISCV=y
++CONFIG_SYS_HAS_NONCACHED_MEMORY=y
+ CONFIG_TEXT_BASE=0x01800000
+ CONFIG_SYS_MALLOC_LEN=0x80000
+ CONFIG_NR_DRAM_BANKS=2
+@@ -23,7 +24,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_MISC_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+diff --git a/configs/ae350_rv64_spl_xip_defconfig b/configs/ae350_rv64_spl_xip_defconfig
+index 279923cb8321..3db32664fb21 100644
+--- a/configs/ae350_rv64_spl_xip_defconfig
++++ b/configs/ae350_rv64_spl_xip_defconfig
+@@ -1,4 +1,5 @@
+ CONFIG_RISCV=y
++CONFIG_SYS_HAS_NONCACHED_MEMORY=y
+ CONFIG_TEXT_BASE=0x01800000
+ CONFIG_SYS_MALLOC_LEN=0x80000
+ CONFIG_NR_DRAM_BANKS=2
+@@ -24,7 +25,7 @@ CONFIG_BOOTDELAY=3
+ CONFIG_SYS_PBSIZE=1050
+ CONFIG_DISPLAY_CPUINFO=y
+ CONFIG_DISPLAY_BOARDINFO=y
+-CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_EARLY_INIT_R=y
+ CONFIG_MISC_INIT_R=y
+ CONFIG_SPL_MAX_SIZE=0x100000
+ CONFIG_SPL_BOARD_INIT=y
+diff --git a/drivers/cache/cache-andes-l2.c b/drivers/cache/cache-andes-l2.c
+index bc6f7ed7c1ea..71e98efe1b1e 100644
+--- a/drivers/cache/cache-andes-l2.c
++++ b/drivers/cache/cache-andes-l2.c
+@@ -81,18 +81,7 @@ struct andes_l2_plat {
+ 	u32		dram_ctl[2];
+ };
+ 
+-static int andes_l2_enable(struct udevice *dev)
+-{
+-	struct andes_l2_plat *plat = dev_get_plat(dev);
+-	volatile struct l2cache *regs = plat->regs;
+-
+-	if (regs)
+-		setbits_le32(&regs->control, L2_ENABLE);
+-
+-	return 0;
+-}
+-
+-static int andes_l2_disable(struct udevice *dev)
++static int andes_l2_wbinval(struct udevice *dev)
+ {
+ 	struct andes_l2_plat *plat = dev_get_plat(dev);
+ 	volatile struct l2cache *regs = plat->regs;
+@@ -110,12 +99,37 @@ static int andes_l2_disable(struct udevice *dev)
+ 				hang();
+ 			}
+ 		}
+-		clrbits_le32(&regs->control, L2_ENABLE);
+ 	}
+ 
+ 	return 0;
+ }
+ 
++static int andes_l2_enable(struct udevice *dev)
++{
++	struct andes_l2_plat *plat = dev_get_plat(dev);
++	volatile struct l2cache *regs = plat->regs;
++
++	if (regs)
++		setbits_le32(&regs->control, L2_ENABLE);
++
++	return 0;
++}
++
++static int andes_l2_disable(struct udevice *dev)
++{
++	struct andes_l2_plat *plat = dev_get_plat(dev);
++	volatile struct l2cache *regs = plat->regs;
++	int ret = -ENXIO;
++
++	ret = andes_l2_wbinval(dev);
++	if (ret)
++		return ret;
++
++	clrbits_le32(&regs->control, L2_ENABLE);
++
++	return 0;
++}
++
+ static int andes_l2_of_to_plat(struct udevice *dev)
+ {
+ 	struct andes_l2_plat *plat = dev_get_plat(dev);
+@@ -193,6 +207,7 @@ static const struct udevice_id andes_l2_cache_ids[] = {
+ static const struct cache_ops andes_l2_cache_ops = {
+ 	.enable		= andes_l2_enable,
+ 	.disable	= andes_l2_disable,
++	.wbinval	= andes_l2_wbinval,
+ };
+ 
+ U_BOOT_DRIVER(andes_l2_cache) = {
+diff --git a/drivers/cache/cache-uclass.c b/drivers/cache/cache-uclass.c
+index 0c13dbdb75c4..8336debf3812 100644
+--- a/drivers/cache/cache-uclass.c
++++ b/drivers/cache/cache-uclass.c
+@@ -39,6 +39,16 @@ int cache_disable(struct udevice *dev)
+ 	return ops->disable(dev);
+ }
+ 
++int cache_wbinval(struct udevice *dev)
++{
++	struct cache_ops *ops = cache_get_ops(dev);
++
++	if (!ops->wbinval)
++		return -ENOSYS;
++
++	return ops->wbinval(dev);
++}
++
+ UCLASS_DRIVER(cache) = {
+ 	.id		= UCLASS_CACHE,
+ 	.name		= "cache",
+diff --git a/drivers/net/ftmac100.c b/drivers/net/ftmac100.c
+index fae3adc3de34..7ba46b12a55a 100644
+--- a/drivers/net/ftmac100.c
++++ b/drivers/net/ftmac100.c
+@@ -30,15 +30,43 @@ DECLARE_GLOBAL_DATA_PTR;
+ /* Timeout for a mdio read/write operation */
+ #define FTMAC100_MDIO_TIMEOUT_USEC     10000
+ 
+-struct ftmac100_data {
++struct ftmac100_des {
+ 	struct ftmac100_txdes txdes[1];
+ 	struct ftmac100_rxdes rxdes[PKTBUFSRX];
++};
++
++struct ftmac100_data {
+ 	int rx_index;
+ 	const char *name;
+ 	struct ftmac100 *ftmac100;
+ 	struct mii_dev *bus;
++	struct ftmac100_des des;
++	struct ftmac100_des *pdes;
++	bool coherent;
+ };
+ 
++static bool dtbcoherent(struct udevice *dev)
++{
++       int node, len;
++
++       if (dev_read_bool(dev, "dma-coherent"))
++               return true;
++
++       if (gd->fdt_blob == NULL) {
++               printf("%s: don't have a valid gd->fdt_blob!\n", __func__);
++               return NULL;
++       }
++
++       node = fdt_path_offset(gd->fdt_blob, "/");
++       if (node < 0)
++               return NULL;
++
++       if (fdt_get_property(gd->fdt_blob, node, "dma-coherent", &len))
++               return true;
++
++       return false;
++}
++
+ /*
+  * Reset MAC
+  */
+@@ -91,8 +119,8 @@ static void _ftmac100_halt(struct ftmac100_data *priv)
+ static int _ftmac100_init(struct ftmac100_data *priv, unsigned char enetaddr[6])
+ {
+ 	struct ftmac100 *ftmac100 = priv->ftmac100;
+-	struct ftmac100_txdes *txdes = priv->txdes;
+-	struct ftmac100_rxdes *rxdes = priv->rxdes;
++	struct ftmac100_txdes *txdes = priv->pdes->txdes;
++	struct ftmac100_rxdes *rxdes = priv->pdes->rxdes;
+ 	unsigned int maccr;
+ 	int i;
+ 	debug ("%s()\n", __func__);
+@@ -155,7 +183,7 @@ static int _ftmac100_init(struct ftmac100_data *priv, unsigned char enetaddr[6])
+ static int _ftmac100_free_pkt(struct ftmac100_data *priv)
+ {
+ 	struct ftmac100_rxdes *curr_des;
+-	curr_des = &priv->rxdes[priv->rx_index];
++	curr_des = &priv->pdes->rxdes[priv->rx_index];
+ 	/* release buffer to DMA */
+ 	curr_des->rxdes0 |= FTMAC100_RXDES0_RXDMA_OWN;
+ 	priv->rx_index = (priv->rx_index + 1) % PKTBUFSRX;
+@@ -170,7 +198,7 @@ static int __ftmac100_recv(struct ftmac100_data *priv)
+ 	struct ftmac100_rxdes *curr_des;
+ 	unsigned short rxlen;
+ 
+-	curr_des = &priv->rxdes[priv->rx_index];
++	curr_des = &priv->pdes->rxdes[priv->rx_index];
+ 	if (curr_des->rxdes0 & FTMAC100_RXDES0_RXDMA_OWN)
+ 		return 0;
+ 
+@@ -183,7 +211,8 @@ static int __ftmac100_recv(struct ftmac100_data *priv)
+ 	}
+ 
+ 	rxlen = FTMAC100_RXDES0_RFL (curr_des->rxdes0);
+-	invalidate_dcache_range(curr_des->rxdes2,curr_des->rxdes2+rxlen);
++	if (!priv->coherent)
++		invalidate_dcache_range(curr_des->rxdes2, curr_des->rxdes2 + rxlen);
+ 	debug ("%s(): RX buffer %d, %x received\n",
+ 	       __func__, priv->rx_index, rxlen);
+ 
+@@ -196,7 +225,7 @@ static int __ftmac100_recv(struct ftmac100_data *priv)
+ static int _ftmac100_send(struct ftmac100_data *priv, void *packet, int length)
+ {
+ 	struct ftmac100 *ftmac100 = priv->ftmac100;
+-	struct ftmac100_txdes *curr_des = priv->txdes;
++	struct ftmac100_txdes *curr_des = priv->pdes->txdes;
+ 	ulong start;
+ 
+ 	if (curr_des->txdes0 & FTMAC100_TXDES0_TXDMA_OWN) {
+@@ -209,8 +238,8 @@ static int _ftmac100_send(struct ftmac100_data *priv, void *packet, int length)
+ 	length = (length < ETH_ZLEN) ? ETH_ZLEN : length;
+ 
+ 	/* initiate a transmit sequence */
+-
+-	flush_dcache_range((unsigned long)packet,(unsigned long)packet+length);
++	if (!priv->coherent)
++		flush_dcache_range((unsigned long)packet, (unsigned long)(packet + length));
+ 	curr_des->txdes2 = (unsigned int)(unsigned long)packet;	/* TXBUF_BADR */
+ 
+ 	curr_des->txdes1 &= FTMAC100_TXDES1_EDOTR;
+@@ -265,7 +294,7 @@ static int ftmac100_recv(struct udevice *dev, int flags, uchar **packetp)
+ {
+ 	struct ftmac100_data *priv = dev_get_priv(dev);
+ 	struct ftmac100_rxdes *curr_des;
+-	curr_des = &priv->rxdes[priv->rx_index];
++	curr_des = &priv->pdes->rxdes[priv->rx_index];
+ 	int len;
+ 	len = __ftmac100_recv(priv);
+ 	if (len)
+@@ -323,6 +352,7 @@ static int ftmac100_of_to_plat(struct udevice *dev)
+ 	const char *mac;
+ 	pdata->iobase = dev_read_addr(dev);
+ 	priv->ftmac100 = phys_to_virt(pdata->iobase);
++	priv->coherent = dtbcoherent(dev);
+ 	mac = dtbmacaddr(0);
+ 	if (mac)
+ 		memcpy(pdata->enetaddr , mac , 6);
+@@ -409,8 +439,18 @@ static int ftmac100_probe(struct udevice *dev)
+ {
+ 	struct ftmac100_data *priv = dev_get_priv(dev);
+ 	priv->name = dev->name;
++	priv->pdes = 0;
+ 	int ret = 0;
+ 
++#ifdef CONFIG_SYS_NONCACHED_MEMORY
++	if (!priv->coherent)
++		priv->pdes = (struct ftmac100_des *)(uintptr_t)noncached_alloc(sizeof(struct ftmac100_des), 4096);
++#endif
++
++	if (!priv->pdes)
++		priv->pdes = (struct ftmac100_des *)&priv->des;
++	memset(priv->pdes, 0, sizeof(struct ftmac100_des));
++
+ 	ret = ftmac100_mdio_init(dev);
+ 	if (ret) {
+ 		dev_err(dev, "Failed to initialize mdiobus: %d\n", ret);
+diff --git a/include/cache.h b/include/cache.h
+index 296ae3c8b48e..75a027788c5b 100644
+--- a/include/cache.h
++++ b/include/cache.h
+@@ -42,6 +42,14 @@ struct cache_ops {
+ 	 * @return 0 if OK, -ve on error
+ 	 */
+ 	int (*disable)(struct udevice *dev);
++
++	/**
++	 * wbinval() - Flush and invalidate cache
++	 *
++	 * @dev:	Device to check (UCLASS_CACHE)
++	 * @return 0 if OK, -ve on error
++	 */
++	int (*wbinval)(struct udevice *dev);
+ };
+ 
+ #define cache_get_ops(dev)	((struct cache_ops *)(dev)->driver->ops)
+@@ -70,4 +78,12 @@ int cache_enable(struct udevice *dev);
+  * Return: 0 if OK, -ve on error
+  */
+ int cache_disable(struct udevice *dev);
++
++/**
++ * cache_wbinval() - Flush and invalidate cache
++ *
++ * @dev:	Device to check (UCLASS_CACHE)
++ * Return: 0 if OK, -ve on error
++ */
++int cache_wbinval(struct udevice *dev);
+ #endif
+-- 
+2.34.1
+

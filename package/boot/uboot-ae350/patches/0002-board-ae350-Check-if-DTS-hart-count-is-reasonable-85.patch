@@ -1,0 +1,94 @@
+From e964bd3885d96c12fcf34fb4c11e85c35a57be96 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 14 Mar 2024 18:28:24 +0800
+Subject: [PATCH 02/53] board: ae350: Check if DTS hart count is reasonable
+ (#85)
+
+It is reasonable for DTS hart count to be less than or
+equal to bitmaps hart count. Return error and print debug
+message when DTS hart count is greater than bitmaps hart count.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/85
+Reviewed-by: Dylan Dai-Rong Jhong <dylan@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+---
+ board/andestech/ae350/ae350.c | 42 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/board/andestech/ae350/ae350.c b/board/andestech/ae350/ae350.c
+index 6d5414ba7e0f..fb8a59740c57 100644
+--- a/board/andestech/ae350/ae350.c
++++ b/board/andestech/ae350/ae350.c
+@@ -5,6 +5,8 @@
+  */
+ 
+ #include <config.h>
++#include <common.h>
++#include <cpu.h>
+ #include <cpu_func.h>
+ #include <flash.h>
+ #include <image.h>
+@@ -20,10 +22,13 @@
+ #include <faraday/ftsmc020.h>
+ #include <fdtdec.h>
+ #include <dm.h>
++#include <dm/uclass-internal.h>
+ #include <spl.h>
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
++#define IRQ_TARGET_NUM_REG(base)	((base) + 0x1100)
++
+ /*
+  * Miscellaneous platform dependent initializations
+  */
+@@ -96,8 +101,43 @@ void *board_fdt_blob_setup(int *err)
+ 	return NULL;
+ }
+ 
++int spl_board_init_f(void)
++{
++	u32 board_hart_count = 0, dts_hart_count = 0;
++	u32 num_irq_target = 0;
++	struct udevice *dev = 0;
++	int ret = 0;
++
++	// 31---------------16-15--------------------- 0
++	// |   target count   | interrupt source count |
++	//  -------------------------------------------
++
++	num_irq_target = readl(IRQ_TARGET_NUM_REG(gd->arch.plicsw));
++	board_hart_count = num_irq_target >> 16;
++
++	ret = uclass_find_first_device(UCLASS_CPU, &dev);
++	if (ret)
++		return ret;
++	if (!dev)
++		return -ENODEV;
++
++	ret = cpu_get_count(dev);
++	if (ret < 0)
++		return ret;
++
++	dts_hart_count = ret;
++
++	if (dts_hart_count > board_hart_count) {
++		printf("DTS hart count: %d > board hart count: %d\n",
++		       dts_hart_count, board_hart_count);
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
+ #ifdef CONFIG_SPL_BOARD_INIT
+-void spl_board_init()
++void spl_board_init(void)
+ {
+ 	/* enable andes-l2 cache */
+ 	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
+-- 
+2.34.1
+

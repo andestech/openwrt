@@ -1,0 +1,60 @@
+From a73ff043e99122be9f50215f04d0a8e93d69a978 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Tue, 11 Jun 2024 19:19:34 +0800
+Subject: [PATCH 119/172] lib: utils/reset: Fix fdt_reset to search for more dt
+ nodes
+
+If there are multiple dt nodes, the previous code only tries to match
+the first one, which may lose initialization.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/reset/fdt_reset.c | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/lib/utils/reset/fdt_reset.c b/lib/utils/reset/fdt_reset.c
+index 327fb991d4ed..c41b838708b0 100644
+--- a/lib/utils/reset/fdt_reset.c
++++ b/lib/utils/reset/fdt_reset.c
+@@ -22,22 +22,24 @@ int fdt_reset_driver_init(void *fdt, struct fdt_reset *drv)
+ 	int noff, rc = SBI_ENODEV;
+ 	const struct fdt_match *match;
+ 
+-	noff = fdt_find_match(fdt, -1, drv->match_table, &match);
+-	if (noff < 0)
+-		return SBI_ENODEV;
+-
+-	if (!fdt_node_is_enabled(fdt, noff))
+-		return SBI_ENODEV;
+-
+-	if (drv->init) {
+-		rc = drv->init(fdt, noff, match);
+-		if (rc && rc != SBI_ENODEV) {
+-			sbi_printf("%s: %s init failed, %d\n",
+-				   __func__, match->compatible, rc);
++	noff = -1;
++	while ((noff = fdt_find_match(fdt, noff,
++				drv->match_table, &match)) >= 0) {
++		if (!fdt_node_is_enabled(fdt, noff))
++			continue;
++
++		if (drv->init) {
++			rc = drv->init(fdt, noff, match);
++			if (rc && rc != SBI_ENODEV) {
++				sbi_printf("%s: %s init failed, %d\n",
++					__func__, match->compatible, rc);
++			}
+ 		}
++
++		return rc;
+ 	}
+ 
+-	return rc;
++	return SBI_ENODEV;
+ }
+ 
+ void fdt_reset_init(void)
+-- 
+2.34.1
+

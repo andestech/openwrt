@@ -1,0 +1,338 @@
+From 6c35d13b99baeacbcb6c23886affc7bb98a1e9b2 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 8 May 2023 16:25:48 +0800
+Subject: [PATCH 148/172] lib: utils: cache: Add generic cache configuration
+ library
+
+We add generic cache configuration library to provide
+cache_enable/disable/wbinval_all/get_addr functions.
+
+Reformed from the following patches on ast-v5_3_0-branch
+- (de729b20aa1e) andes: andes_sbi: Fix wbinval_all warning when L2C does not exist
+- (e653f16a9ff5) lib: utils/cache: Add "get_addr" method for cache framework
+
+Reported-by: Rick Chen <rick@andestech.com>
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+---
+ include/sbi_utils/cache/cache.h          | 62 ++++++++++++++++++++++
+ include/sbi_utils/cache/fdt_cache.h      | 42 +++++++++++++++
+ lib/utils/Kconfig                        |  2 +
+ lib/utils/cache/Kconfig                  | 15 ++++++
+ lib/utils/cache/cache.c                  | 66 ++++++++++++++++++++++++
+ lib/utils/cache/fdt_cache.c              | 46 +++++++++++++++++
+ lib/utils/cache/fdt_cache_drivers.carray |  3 ++
+ lib/utils/cache/objects.mk               | 13 +++++
+ 8 files changed, 249 insertions(+)
+ create mode 100644 include/sbi_utils/cache/cache.h
+ create mode 100644 include/sbi_utils/cache/fdt_cache.h
+ create mode 100644 lib/utils/cache/Kconfig
+ create mode 100644 lib/utils/cache/cache.c
+ create mode 100644 lib/utils/cache/fdt_cache.c
+ create mode 100644 lib/utils/cache/fdt_cache_drivers.carray
+ create mode 100644 lib/utils/cache/objects.mk
+
+diff --git a/include/sbi_utils/cache/cache.h b/include/sbi_utils/cache/cache.h
+new file mode 100644
+index 000000000000..e4d36150a99a
+--- /dev/null
++++ b/include/sbi_utils/cache/cache.h
+@@ -0,0 +1,62 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2023 Andes Technology Corporation
++ *
++ * Authors:
++ *   Yu Chien Peter Lin <peterlin@andestech.com>
++ */
++
++#ifndef __CACHE_H__
++#define __CACHE_H__
++
++#ifndef __ASSEMBLER__
++
++#include <sbi/sbi_types.h>
++
++/** Representation of a cache controller */
++struct cache {
++	/**
++	 * Enable cache
++	 *
++	 * @return 0 on success and negative error code on failure
++	 */
++	int (*enable)(void);
++	/**
++	 * Disable cache
++	 *
++	 * @return 0 on success and negative error code on failure
++	 */
++	int (*disable)(void);
++	/**
++	 * Write back invalidate all cache lines
++	 *
++	 * @return 0 on success and negative error code on failure
++	 */
++	int (*wbinval_all)(void);
++	/**
++	 * Get cache base address
++	 *
++	 * @return NULL if cache does not exist, else return cache base address
++	 */
++	int (*get_addr)(unsigned long *addr);
++};
++
++/** Register a cache controller */
++int cache_add(struct cache *c);
++
++/** Enable cache */
++int cache_enable(void);
++
++/** Enable cache */
++int cache_disable(void);
++
++/** Write back invalidate all cache lines */
++int cache_wbinval_all(void);
++
++/** Get the base address of cache */
++int cache_get_addr(unsigned long *addr);
++
++#endif /* __ASSEMBLER__ */
++
++#endif /* __CACHE_H__ */
+diff --git a/include/sbi_utils/cache/fdt_cache.h b/include/sbi_utils/cache/fdt_cache.h
+new file mode 100644
+index 000000000000..d2b4776c6c73
+--- /dev/null
++++ b/include/sbi_utils/cache/fdt_cache.h
+@@ -0,0 +1,42 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2023 Andes Technology Corporation
++ *
++ * Authors:
++ *   Yu Chien Peter Lin <peterlin@andestech.com>
++ */
++
++#ifndef __FDT_CACHE_H__
++#define __FDT_CACHE_H__
++
++struct fdt_cache {
++	const struct fdt_match *match_table;
++	int (*init)(void *fdt, int nodeoff, const struct fdt_match *match);
++};
++
++#ifdef CONFIG_FDT_CACHE
++
++/**
++ * fdt_cache_driver_init() - initialize cache driver based on the device-tree
++ */
++int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv);
++
++/**
++ * fdt_cache_init() - initialize cache drivers based on the device-tree
++ *
++ * This function shall be invoked in final init.
++ */
++void fdt_cache_init(void);
++
++#else
++
++static inline int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv)
++{
++	return 0;
++}
++static inline void fdt_cache_init(void) { }
++
++#endif /* CONFIG_FDT_CACHE */
++
++#endif /* __FDT_CACHE_H__ */
+diff --git a/lib/utils/Kconfig b/lib/utils/Kconfig
+index de8b4eb919f2..c8e4ef519072 100644
+--- a/lib/utils/Kconfig
++++ b/lib/utils/Kconfig
+@@ -2,6 +2,8 @@
+ 
+ menu "Utils and Drivers Support"
+ 
++source "$(OPENSBI_SRC_DIR)/lib/utils/cache/Kconfig"
++
+ source "$(OPENSBI_SRC_DIR)/lib/utils/fdt/Kconfig"
+ 
+ source "$(OPENSBI_SRC_DIR)/lib/utils/gpio/Kconfig"
+diff --git a/lib/utils/cache/Kconfig b/lib/utils/cache/Kconfig
+new file mode 100644
+index 000000000000..a5d0540cc4fe
+--- /dev/null
++++ b/lib/utils/cache/Kconfig
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: BSD-2-Clause
++
++menu "Cache Controller Support"
++
++config FDT_CACHE
++	bool "FDT based cache controllers"
++	depends on FDT
++	select CACHE
++	default n
++
++config CACHE
++	bool "Cache controller support"
++	default n
++
++endmenu
+diff --git a/lib/utils/cache/cache.c b/lib/utils/cache/cache.c
+new file mode 100644
+index 000000000000..70e8318222e9
+--- /dev/null
++++ b/lib/utils/cache/cache.c
+@@ -0,0 +1,66 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2023 Andes Technology Corporation
++ *
++ * Authors:
++ *   Yu Chien Peter Lin <peterlin@andestech.com>
++ *
++ * derivate: lib/utils/gpio/gpio.c
++ * Authors:
++ *   Anup Patel <anup.patel@wdc.com>
++ */
++
++#include <sbi/sbi_error.h>
++#include <sbi_utils/cache/cache.h>
++
++static const struct cache *cache = NULL;
++
++int cache_add(struct cache *c)
++{
++	if (!c)
++		return SBI_EINVAL;
++
++	cache = c;
++	return 0;
++}
++
++int cache_enable(void)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->enable)
++		return SBI_ENOSYS;
++
++	return cache->enable();
++}
++
++int cache_disable(void)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->disable)
++		return SBI_ENOSYS;
++
++	return cache->disable();
++}
++
++int cache_wbinval_all(void)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->wbinval_all)
++		return SBI_ENOSYS;
++
++	return cache->wbinval_all();
++}
++
++int cache_get_addr(unsigned long *addr)
++{
++	if (!cache)
++		return SBI_ENODEV;
++	if (!cache->get_addr)
++		return SBI_ENOSYS;
++
++	return cache->get_addr(addr);
++}
+diff --git a/lib/utils/cache/fdt_cache.c b/lib/utils/cache/fdt_cache.c
+new file mode 100644
+index 000000000000..2aee1bcdeee1
+--- /dev/null
++++ b/lib/utils/cache/fdt_cache.c
+@@ -0,0 +1,46 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2023 Andes Technology Corporation
++ *
++ * Authors:
++ *   Yu Chien Peter Lin <peterlin@andestech.com>
++ */
++
++#include <sbi/sbi_console.h>
++#include <sbi/sbi_error.h>
++#include <sbi_utils/fdt/fdt_helper.h>
++#include <sbi_utils/cache/fdt_cache.h>
++
++/* List of FDT cache drivers generated at compile time */
++extern struct fdt_cache *fdt_cache_drivers[];
++extern unsigned long fdt_cache_drivers_size;
++
++int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv)
++{
++	int noff, rc = SBI_ENODEV;
++	const struct fdt_match *match;
++
++	noff = fdt_find_match(fdt, -1, drv->match_table, &match);
++	if (noff < 0)
++		return SBI_ENODEV;
++
++	if (drv->init) {
++		rc = drv->init(fdt, noff, match);
++		if (rc && rc != SBI_ENODEV) {
++			sbi_printf("%s: %s init failed, %d\n",
++				   __func__, match->compatible, rc);
++		}
++	}
++
++	return rc;
++}
++
++void fdt_cache_init(void)
++{
++	int pos;
++	void *fdt = fdt_get_address();
++
++	for (pos = 0; pos < fdt_cache_drivers_size; pos++)
++		fdt_cache_driver_init(fdt, fdt_cache_drivers[pos]);
++}
+diff --git a/lib/utils/cache/fdt_cache_drivers.carray b/lib/utils/cache/fdt_cache_drivers.carray
+new file mode 100644
+index 000000000000..c94cd13f6d10
+--- /dev/null
++++ b/lib/utils/cache/fdt_cache_drivers.carray
+@@ -0,0 +1,3 @@
++HEADER: sbi_utils/cache/fdt_cache.h
++TYPE: struct fdt_cache
++NAME: fdt_cache_drivers
+diff --git a/lib/utils/cache/objects.mk b/lib/utils/cache/objects.mk
+new file mode 100644
+index 000000000000..258acaf632a8
+--- /dev/null
++++ b/lib/utils/cache/objects.mk
+@@ -0,0 +1,13 @@
++#
++# SPDX-License-Identifier: BSD-2-Clause
++#
++# Copyright (c) 2023 Andes Technology Corporation
++#
++# Authors:
++#   Yu Chien Peter Lin <peterlin@andestech.com>
++#
++
++libsbiutils-objs-$(CONFIG_CACHE) += cache/cache.o
++
++libsbiutils-objs-$(CONFIG_FDT_CACHE) += cache/fdt_cache.o
++libsbiutils-objs-$(CONFIG_FDT_CACHE) += cache/fdt_cache_drivers.o
+-- 
+2.34.1
+

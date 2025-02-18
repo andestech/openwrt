@@ -1,0 +1,31 @@
+From ba7d2e80f212d2672f06590bf66fc22027913f37 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Mon, 23 Sep 2024 14:48:06 +0800
+Subject: [PATCH 091/168] spi: andes: spi-atcspi200: Fix compile warning (#196)
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/196
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-authored-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-committed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ drivers/spi/spi-atcspi200.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/spi/spi-atcspi200.c b/drivers/spi/spi-atcspi200.c
+index 820d39970642..19c09b706f5c 100644
+--- a/drivers/spi/spi-atcspi200.c
++++ b/drivers/spi/spi-atcspi200.c
+@@ -273,7 +273,7 @@ static int atcspi200_spi_rx(struct atcspi200_spi *spi, u8 *din, unsigned int byt
+ 
+ static int transfer_data(struct atcspi200_spi *spi, u8 *rx_buf, u8 *tx_buf, int num_blks)
+ {
+-	unsigned int event, rx_bytes;
++	unsigned int event;
+ 	u8 *dout = tx_buf;
+ 	u8 *din = rx_buf;
+ 	int timeout = spi->timeout;
+-- 
+2.34.1
+

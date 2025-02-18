@@ -1,0 +1,32 @@
+From 23b6d67a5425c435e620c7404ce65ae505985e08 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 19 Sep 2024 11:35:32 +0800
+Subject: [PATCH 25/53] drivers: ftsdc010: Disable SD High-Speed capability
+ (#127)
+
+Not all of the Andes ae350 platform bitmaps supports high speed mode SD card,
+so we disable SD High-Speed capability by default.
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ drivers/mmc/ftsdc010_mci.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/drivers/mmc/ftsdc010_mci.c b/drivers/mmc/ftsdc010_mci.c
+index cabb747fbbdb..0e4e4220d9d5 100644
+--- a/drivers/mmc/ftsdc010_mci.c
++++ b/drivers/mmc/ftsdc010_mci.c
+@@ -438,10 +438,6 @@ static int ftsdc010_mmc_probe(struct udevice *dev)
+ 		return ret;
+ #endif
+ 
+-	if (dev_read_bool(dev, "cap-mmc-highspeed") || \
+-		  dev_read_bool(dev, "cap-sd-highspeed"))
+-		chip->caps |= MMC_MODE_HS | MMC_MODE_HS_52MHz;
+-
+ 	ftsdc_setup_cfg(&plat->cfg, dev->name, chip->buswidth, chip->caps,
+ 			priv->minmax[1] , priv->minmax[0]);
+ 	chip->mmc = &plat->mmc;
+-- 
+2.34.1
+

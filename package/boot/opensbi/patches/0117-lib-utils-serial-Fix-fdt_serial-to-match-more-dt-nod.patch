@@ -1,0 +1,57 @@
+From 86bbe6c52faf48a5bcca2e3073d47d501408bee0 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Tue, 11 Jun 2024 19:19:32 +0800
+Subject: [PATCH 117/172] lib: utils/serial: Fix fdt_serial to match more dt
+ nodes
+
+If there are multiple dt nodes, the previous code only tries to match
+the first one, which may lose initialization.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/serial/fdt_serial.c | 26 +++++++++++++-------------
+ 1 file changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/lib/utils/serial/fdt_serial.c b/lib/utils/serial/fdt_serial.c
+index 8b6e6b977428..798ac749e86d 100644
+--- a/lib/utils/serial/fdt_serial.c
++++ b/lib/utils/serial/fdt_serial.c
+@@ -68,21 +68,21 @@ int fdt_serial_init(void)
+ 	for (pos = 0; pos < fdt_serial_drivers_size; pos++) {
+ 		drv = fdt_serial_drivers[pos];
+ 
+-		noff = fdt_find_match(fdt, -1, drv->match_table, &match);
+-		if (noff < 0)
+-			continue;
+-
+-		if (!fdt_node_is_enabled(fdt, noff))
+-			continue;
++		noff = -1;
++		while ((noff = fdt_find_match(fdt, noff,
++					drv->match_table, &match)) >= 0) {
++			if (!fdt_node_is_enabled(fdt, noff))
++				continue;
+ 
+-		/* drv->init must not be NULL */
+-		if (drv->init == NULL)
+-			return SBI_EFAIL;
++			/* drv->init must not be NULL */
++			if (drv->init == NULL)
++				return SBI_EFAIL;
+ 
+-		rc = drv->init(fdt, noff, match);
+-		if (rc == SBI_ENODEV)
+-			continue;
+-		return rc;
++			rc = drv->init(fdt, noff, match);
++			if (rc == SBI_ENODEV)
++				continue;
++			return rc;
++		}
+ 	}
+ 
+ 	return SBI_ENODEV;
+-- 
+2.34.1
+

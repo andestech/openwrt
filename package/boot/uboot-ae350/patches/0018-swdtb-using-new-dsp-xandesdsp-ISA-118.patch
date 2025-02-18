@@ -1,0 +1,88 @@
+From bcc57faa40ea1df10cdb183a7471008948100db8 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Tue, 20 Aug 2024 13:23:58 +0800
+Subject: [PATCH 18/53] swdtb: using new dsp xandesdsp ISA (#118)
+
+Replace "xdsp" with "xandesdsp."
+Correct the logic for skipping the character "p" in the version number
+string.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/118
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 25 ++++++++++++++++---
+ 1 file changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 2466947c30a5..f7d1fd012fe7 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -107,11 +107,19 @@ int plmt_fixup(void *fdt, int node, char *name, char *value)
+  *
+  * example 1: in AX45MP 4C
+  * "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0" ==>
+- * "rv64imafdc_xandes_xdsp_xandespmu"
++ * "rv64imafdc_xandes_xandesdsp_xandespmu"
+  *
+  * example 2: in AX27L2
+  * "rv64i2p0m2p0a2p0f2p0d2p0c2p0xv5-1p1xdsp0p0" ==>
+- * "rv64imafdc_xandes_xdsp_xandespmu"
++ * "rv64imafdc_xandes_xandesdsp_xandespmu"
++ *
++ * example 3: in AX45MPV
++ * "rv64i2p0m2p0a2p0f2p0d2p0c2p0v0p7p2xv5-1p1xdsp0p0" ==>
++ * "rv64imafdcv_xandes_xandesdsp_xandespmu"
++ *
++ * example 4: in AX45MPV (fixed ISA string)
++ * "rv64imafdcv_xandes_xandesdsp_xandespmu" ==>
++ * "rv64imafdcv_xandes_xandesdsp_xandespmu"
+  *
+  * @return 0 if ok, or FDT_ERR... if not.
+  */
+@@ -124,7 +132,7 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ #endif
+ 	const char *xv5_str = "xv5-";
+ 	const char *old_dsp = "xdsp";
+-	const char *new_dsp = "_xdsp";
++	const char *new_dsp = "_xandesdsp";
+ 
+ 	const char *prop_name = "riscv,isa";
+ 	char *old_str = value;
+@@ -138,6 +146,7 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 	 */
+ 	int new_dsp_idx = 0;
+ 	int old_xv5_idx = 0;
++	int in_subver_str = 0;
+ 
+ 	if (strcmp(name, prop_name) == 0) {
+ 		/* Must using calloc */
+@@ -173,11 +182,19 @@ int riscv_isa_fixup(void *fdt, int node, char *name, char *value)
+ 			 * Remove subversion phase
+ 			 * The subversion format is 0p0 1p0 2p0 or 0p7p2...
+ 			 */
+-			if (isdigit(old_str[idx]) || (old_str[idx] == 'p')) {
++			if (isdigit(old_str[idx])) {
+ 				idx += 1;
++				in_subver_str = 1;
+ 				continue;
+ 			}
+ 
++			if (in_subver_str && (old_str[idx] == 'p')) {
++				idx += 1;
++				continue;
++			}
++
++			in_subver_str = 0;
++
+ 			/*
+ 			 * Remove xv5-1p1, comparison to "xv5-" only
+ 			 * the subversion of "xv5" will be processed in remove
+-- 
+2.34.1
+

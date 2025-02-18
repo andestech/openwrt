@@ -1,0 +1,196 @@
+From 17e829129d60d7d178d47ecbd8990e705690d352 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Tue, 16 Apr 2024 13:02:13 +0800
+Subject: [PATCH 093/172] sbi: sbi_domain_context: Add spinlock for updating
+ domain assigned_harts
+
+Add spinlock protection to avoid race condition on assigned_harts
+during domain context switching. Also, rename/add variables for
+accessing the corresponding domain of target/current context.
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+Reviewed-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/sbi_domain.h     |  3 +++
+ lib/sbi/sbi_domain.c         | 35 +++++++++++++++++++++++++++++------
+ lib/sbi/sbi_domain_context.c | 27 +++++++++++++++++----------
+ lib/sbi/sbi_system.c         |  8 ++++++--
+ 4 files changed, 55 insertions(+), 18 deletions(-)
+
+diff --git a/include/sbi/sbi_domain.h b/include/sbi/sbi_domain.h
+index 4706cfca7263..a6e99c63d819 100644
+--- a/include/sbi/sbi_domain.h
++++ b/include/sbi/sbi_domain.h
+@@ -10,6 +10,7 @@
+ #ifndef __SBI_DOMAIN_H__
+ #define __SBI_DOMAIN_H__
+ 
++#include <sbi/riscv_locks.h>
+ #include <sbi/sbi_types.h>
+ #include <sbi/sbi_hartmask.h>
+ #include <sbi/sbi_domain_context.h>
+@@ -173,6 +174,8 @@ struct sbi_domain {
+ 	 * in the coldboot path
+ 	 */
+ 	struct sbi_hartmask assigned_harts;
++	/** Spinlock for accessing assigned_harts */
++	spinlock_t assigned_harts_lock;
+ 	/** Name of this domain */
+ 	char name[64];
+ 	/** Possible HARTs in this domain */
+diff --git a/lib/sbi/sbi_domain.c b/lib/sbi/sbi_domain.c
+index 50749f15dc90..374ac36b2f3e 100644
+--- a/lib/sbi/sbi_domain.c
++++ b/lib/sbi/sbi_domain.c
+@@ -64,20 +64,34 @@ void sbi_update_hartindex_to_domain(u32 hartindex, struct sbi_domain *dom)
+ 
+ bool sbi_domain_is_assigned_hart(const struct sbi_domain *dom, u32 hartid)
+ {
+-	if (dom)
+-		return sbi_hartmask_test_hartid(hartid, &dom->assigned_harts);
++	bool ret;
++	struct sbi_domain *tdom = (struct sbi_domain *)dom;
+ 
+-	return false;
++	if (!dom)
++		return false;
++
++	spin_lock(&tdom->assigned_harts_lock);
++	ret = sbi_hartmask_test_hartid(hartid, &tdom->assigned_harts);
++	spin_unlock(&tdom->assigned_harts_lock);
++
++	return ret;
+ }
+ 
+ ulong sbi_domain_get_assigned_hartmask(const struct sbi_domain *dom,
+ 				       ulong hbase)
+ {
+ 	ulong ret = 0;
++	struct sbi_domain *tdom = (struct sbi_domain *)dom;
++
++	if (!dom)
++		return 0;
++
++	spin_lock(&tdom->assigned_harts_lock);
+ 	for (int i = 0; i < 8 * sizeof(ret); i++) {
+-		if (sbi_domain_is_assigned_hart(dom, hbase + i))
++		if (sbi_hartmask_test_hartid(hbase + i, &tdom->assigned_harts))
+ 			ret |= 1UL << i;
+ 	}
++	spin_unlock(&tdom->assigned_harts_lock);
+ 
+ 	return ret;
+ }
+@@ -555,6 +569,9 @@ int sbi_domain_register(struct sbi_domain *dom,
+ 	dom->index = domain_count++;
+ 	domidx_to_domain_table[dom->index] = dom;
+ 
++	/* Initialize spinlock for dom->assigned_harts */
++	SPIN_LOCK_INIT(dom->assigned_harts_lock);
++
+ 	/* Clear assigned HARTs of domain */
+ 	sbi_hartmask_clear_all(&dom->assigned_harts);
+ 
+@@ -701,8 +718,14 @@ int sbi_domain_finalize(struct sbi_scratch *scratch, u32 cold_hartid)
+ 			continue;
+ 
+ 		/* Ignore if boot HART assigned different domain */
+-		if (sbi_hartindex_to_domain(dhart) != dom ||
+-		    !sbi_hartmask_test_hartindex(dhart, &dom->assigned_harts))
++		if (sbi_hartindex_to_domain(dhart) != dom)
++			continue;
++
++		/* Ignore if boot HART is not part of the assigned HARTs */
++		spin_lock(&dom->assigned_harts_lock);
++		rc = sbi_hartmask_test_hartindex(dhart, &dom->assigned_harts);
++		spin_unlock(&dom->assigned_harts_lock);
++		if (!rc)
+ 			continue;
+ 
+ 		/* Startup boot HART of domain */
+diff --git a/lib/sbi/sbi_domain_context.c b/lib/sbi/sbi_domain_context.c
+index 8daf629cd588..7528591805dc 100755
+--- a/lib/sbi/sbi_domain_context.c
++++ b/lib/sbi/sbi_domain_context.c
+@@ -26,18 +26,23 @@
+ static void switch_to_next_domain_context(struct sbi_context *ctx,
+ 					  struct sbi_context *dom_ctx)
+ {
+-	u32 hartindex;
++	u32 hartindex = sbi_hartid_to_hartindex(current_hartid());
+ 	struct sbi_trap_regs *trap_regs;
+-	struct sbi_domain *dom = dom_ctx->dom;
++	struct sbi_domain *current_dom = ctx->dom;
++	struct sbi_domain *target_dom = dom_ctx->dom;
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+ 	unsigned int pmp_count = sbi_hart_pmp_count(scratch);
+ 
+ 	/* Assign current hart to target domain */
+-	hartindex = sbi_hartid_to_hartindex(current_hartid());
+-	sbi_hartmask_clear_hartindex(
+-		hartindex, &sbi_domain_thishart_ptr()->assigned_harts);
+-	sbi_update_hartindex_to_domain(hartindex, dom);
+-	sbi_hartmask_set_hartindex(hartindex, &dom->assigned_harts);
++	spin_lock(&current_dom->assigned_harts_lock);
++	sbi_hartmask_clear_hartindex(hartindex, &current_dom->assigned_harts);
++	spin_unlock(&current_dom->assigned_harts_lock);
++
++	sbi_update_hartindex_to_domain(hartindex, target_dom);
++
++	spin_lock(&target_dom->assigned_harts_lock);
++	sbi_hartmask_set_hartindex(hartindex, &target_dom->assigned_harts);
++	spin_unlock(&target_dom->assigned_harts_lock);
+ 
+ 	/* Reconfigure PMP settings for the new domain */
+ 	for (int i = 0; i < pmp_count; i++) {
+@@ -72,9 +77,11 @@ static void switch_to_next_domain_context(struct sbi_context *ctx,
+ 	/* If target domain context is not initialized or runnable */
+ 	if (!dom_ctx->initialized) {
+ 		/* Startup boot HART of target domain */
+-		if (current_hartid() == dom->boot_hartid)
+-			sbi_hart_switch_mode(dom->boot_hartid, dom->next_arg1,
+-					     dom->next_addr, dom->next_mode,
++		if (current_hartid() == target_dom->boot_hartid)
++			sbi_hart_switch_mode(target_dom->boot_hartid,
++					     target_dom->next_arg1,
++					     target_dom->next_addr,
++					     target_dom->next_mode,
+ 					     false);
+ 		else
+ 			sbi_hsm_hart_stop(scratch, true);
+diff --git a/lib/sbi/sbi_system.c b/lib/sbi/sbi_system.c
+index e930272152fe..c068b7251283 100644
+--- a/lib/sbi/sbi_system.c
++++ b/lib/sbi/sbi_system.c
+@@ -148,7 +148,7 @@ bool sbi_system_suspend_supported(u32 sleep_type)
+ 
+ int sbi_system_suspend(u32 sleep_type, ulong resume_addr, ulong opaque)
+ {
+-	const struct sbi_domain *dom = sbi_domain_thishart_ptr();
++	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
+ 	void (*jump_warmboot)(void) = (void (*)(void))scratch->warmboot_addr;
+ 	unsigned int hartid = current_hartid();
+@@ -171,13 +171,17 @@ int sbi_system_suspend(u32 sleep_type, ulong resume_addr, ulong opaque)
+ 	if (prev_mode != PRV_S && prev_mode != PRV_U)
+ 		return SBI_EFAIL;
+ 
++	spin_lock(&dom->assigned_harts_lock);
+ 	sbi_hartmask_for_each_hartindex(j, &dom->assigned_harts) {
+ 		i = sbi_hartindex_to_hartid(j);
+ 		if (i == hartid)
+ 			continue;
+-		if (__sbi_hsm_hart_get_state(i) != SBI_HSM_STATE_STOPPED)
++		if (__sbi_hsm_hart_get_state(i) != SBI_HSM_STATE_STOPPED) {
++			spin_unlock(&dom->assigned_harts_lock);
+ 			return SBI_ERR_DENIED;
++		}
+ 	}
++	spin_unlock(&dom->assigned_harts_lock);
+ 
+ 	if (!sbi_domain_check_addr(dom, resume_addr, prev_mode,
+ 				   SBI_DOMAIN_EXECUTE))
+-- 
+2.34.1
+

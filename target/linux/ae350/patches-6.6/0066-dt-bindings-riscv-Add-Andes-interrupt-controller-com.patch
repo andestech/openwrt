@@ -1,0 +1,45 @@
+From f1be0b066d21ab5fc31fef8f0463e2fa9798b35c Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 29 Jan 2024 17:25:47 +0800
+Subject: [PATCH 066/168] dt-bindings: riscv: Add Andes interrupt controller
+ compatible string
+
+Add "andestech,cpu-intc" compatible string to indicate that
+Andes specific local interrupt is supported on the core,
+e.g. AX45MP cores have 3 types of non-standard local interrupt
+which can be handled in supervisor mode:
+
+- Slave port ECC error interrupt
+- Bus write transaction error interrupt
+- Performance monitor overflow interrupt
+
+These interrupts are enabled/disabled via a custom register
+SLIE instead of the standard interrupt enable register SIE.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Reviewed-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+---
+ Documentation/devicetree/bindings/riscv/cpus.yaml | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/riscv/cpus.yaml b/Documentation/devicetree/bindings/riscv/cpus.yaml
+index 97e8441eda1c..9e8dbf9b43c5 100644
+--- a/Documentation/devicetree/bindings/riscv/cpus.yaml
++++ b/Documentation/devicetree/bindings/riscv/cpus.yaml
+@@ -99,7 +99,11 @@ properties:
+         const: 1
+ 
+       compatible:
+-        const: riscv,cpu-intc
++        oneOf:
++          - items:
++              - const: andestech,cpu-intc
++              - const: riscv,cpu-intc
++          - const: riscv,cpu-intc
+ 
+       interrupt-controller: true
+ 
+-- 
+2.34.1
+

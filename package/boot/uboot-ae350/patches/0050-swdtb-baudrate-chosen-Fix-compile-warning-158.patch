@@ -1,0 +1,58 @@
+From 26b13d0d1d8be587a153425bcb91a5209d078031 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Wed, 19 Feb 2025 17:27:15 +0800
+Subject: [PATCH 50/53] swdtb: baudrate: chosen: Fix compile warning (#158)
+
+We would get compile warning message as follows, so fix it.
+
+```
+board/andestech/common/swdtb_merger/swdtb_merger_fixup.c: In function 'bootargs_baudrate_fixup':
+board/andestech/common/swdtb_merger/swdtb_merger_fixup.c:1053:54: warning: passing argument 4 of 'replace_serial_string' discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+1053 |                                                      config_baudrate,
+     |                                                      ^~~~~~~~~~~~~~~
+In file included from board/andestech/common/swdtb_merger/swdtb_merger_fixup.h:14,
+                from board/andestech/common/swdtb_merger/swdtb_merger_fixup.c:17:
+board/andestech/common/swdtb_merger/swdtb_tool.h:105:55: note: expected 'char *' but argument is of type 'const char *'
+  105 |                             int replace_length, char *new_string,
+     |                                                 ~~~~~~^~~~~~~~~~
+```
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/158
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Alex Chun-Ju Lin <alex749@andestech.com>
+---
+ board/andestech/common/swdtb_merger/swdtb_tool.c | 2 +-
+ board/andestech/common/swdtb_merger/swdtb_tool.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index ae3b2f544b51..52ba1955f18b 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -384,7 +384,7 @@ int count_serial_length(const char *serial_string)
+ }
+ 
+ char *replace_serial_string(const char *origin_string, int replace_start,
+-			    int replace_length, char *new_string,
++			    int replace_length, const char *new_string,
+ 			    int new_length)
+ {
+ 	int new_size;
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index a610f611879d..b22e19b80d25 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -102,6 +102,6 @@ char *simple_itoa(ulong val);
+ 
+ int count_serial_length(const char *serial_string);
+ char *replace_serial_string(const char *origin_string, int replace_start,
+-			    int replace_length, char *new_string,
++			    int replace_length, const char *new_string,
+ 			    int new_length);
+ #endif
+-- 
+2.34.1
+

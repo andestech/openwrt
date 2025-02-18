@@ -1,0 +1,222 @@
+From 66e9c23fc71f73097675a1e310dc4e0c8bd477d4 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Thu, 20 Feb 2025 15:54:28 +0800
+Subject: [PATCH 52/53] swdtb: modify the node name matching method (#161)
+
+The DTB has a node, /reserved_memory/dma_global_pool0@3e800000, whose
+name contains the 'dma' prefix. When checking the node, the code may
+mistakenly consider it as a DMA node.
+
+To avoid mistaking it for a DMA node, we should add a check for '@' to
+indicate the full name is the part before it.
+
+Fix for the "node-name without an @unit-address" case.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/161
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: CL Chin-Long Wang <cl634@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 39 +++++--------------
+ .../common/swdtb_merger/swdtb_tool.c          | 26 ++++++++-----
+ .../common/swdtb_merger/swdtb_tool.h          |  2 +
+ 3 files changed, 28 insertions(+), 39 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 1d51e02bfa2a..7809a2d9a0d4 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -351,13 +351,10 @@ int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value)
+ 	int cpu_node;
+ 	const char *cpu_prop = "d-cache-line-size";
+ 	int fdt_refer_node;
+-	const char *full_name;
+ 	const u32 *target_value;
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, target_name, NULL);
+@@ -417,13 +414,10 @@ int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value)
+ 	int irq_cells;
+ 
+ 	const fdt32_t *irq_prop;
+-	const char *full_name;
+ 	u32 tmp[2];
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, target, NULL);
+@@ -507,15 +501,12 @@ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
+ 	const char *target_node = "flash";
+ 	const char *tx_name = "spi-tx-bus-width";
+ 	const char *rx_name = "spi-rx-bus-width";
+-	const char *full_name;
+ 	const u32 tx_value = 4;
+ 	const u32 rx_value = 4;
+ 	int tx_ret;
+ 	int rx_ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, tx_name, NULL);
+@@ -758,14 +749,12 @@ int andespmu_event_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "pmu";
+ 	const char *cpu_prop = "model";
+-	const char *full_name;
+ 	const char *cpu_mode;
+ 	const char *cpu_str;
+ 	unsigned long cpu;
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		cpu_mode = fdt_getprop(fdt, 0, cpu_prop, NULL);
+ 		if (!cpu_mode) {
+ 			dtb_error("Not found cpu model\n");
+@@ -802,11 +791,9 @@ int mmc_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+ 	const char *target_node = "mmc";
+ 	const char *dma_names = "dma-names";
+ 	const char *dma_rxtx = "rxtx";
+-	const char *full_name;
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, dma_names, NULL);
+@@ -839,14 +826,12 @@ int mmc_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+ int mmc_dma_dmas_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "mmc";
+-	const char *full_name;
+ 	struct dmas dmas_array[1];
+ 
+ 	/* The even indices of the array store the DMA's phandle. */
+ 	dmas_array[0].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_MMC);
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		return dma_set_dmas_array(fdt, node, dmas_array,
+ 					  ARRAY_SIZE(dmas_array));
+ 	}
+@@ -864,11 +849,9 @@ int dma_cells_fixup(void *fdt, int node, char *name, char *value)
+ 	const char *target_node = "dma";
+ 	const char *dma_cells = "#dma-cells";
+ 	const u32 cells_value = 1;
+-	const char *full_name;
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, dma_cells, NULL);
+@@ -1135,11 +1118,9 @@ int spi_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+ 	const char *dma_names = "dma-names";
+ 	const char *dma_spi_tx = "spi_tx";
+ 	const char *dma_spi_rx = "spi_rx";
+-	const char *full_name;
+ 	int ret;
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		const u32 *value;
+ 
+ 		value = fdt_getprop(fdt, node, dma_names, NULL);
+@@ -1182,15 +1163,13 @@ int spi_dma_rxtx_fixup(void *fdt, int node, char *name, char *value)
+ int spi_dma_dmas_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "spi";
+-	const char *full_name;
+ 	struct dmas dmas_array[2];
+ 
+ 	/* The even indices of the array store the DMA's phandle. */
+ 	dmas_array[0].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_SPI_TX);
+ 	dmas_array[1].handshake_id = cpu_to_fdt32(DMA_HANDSHAKE_ID_SPI_RX);
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++	if (fdt_node_name_cmp(fdt, node, target_node)) {
+ 		return dma_set_dmas_array(fdt, node, dmas_array,
+ 					  ARRAY_SIZE(dmas_array));
+ 	}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index 52ba1955f18b..374321a257bf 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -294,16 +294,9 @@ int show_reserved_memory_node(const void *fdt, int node,
+ int dma_type_fixup(void *fdt, int node, char *name,
+ 		   char *value, const char *target_node)
+ {
+-	const char *full_name;
+-	int length = strlen(target_node);
+-	int ret;
++	if (fdt_node_name_cmp(fdt, node, target_node))
++		return dma_type_to_node(fdt, node, name, target_node);
+ 
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, length) == 0 &&
+-	    full_name[length] == '@') {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+ 	return !(RETURN_DONE);
+ }
+ 
+@@ -403,3 +396,18 @@ char *replace_serial_string(const char *origin_string, int replace_start,
+ 
+ 	return comb_string;
+ }
++
++int fdt_node_name_cmp(const void *fdt, int node, const char *target_node)
++{
++	const char *full_name;
++	int length;
++
++	length = strlen(target_node);
++	full_name = fdt_get_name(fdt, node, NULL);
++
++	if (strncmp(full_name, target_node, length) == 0 &&
++	    (full_name[length] == '@' || full_name[length] == '\0'))
++		return 1;
++	else
++		return 0;
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index b22e19b80d25..aae107c2f7be 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -104,4 +104,6 @@ int count_serial_length(const char *serial_string);
+ char *replace_serial_string(const char *origin_string, int replace_start,
+ 			    int replace_length, const char *new_string,
+ 			    int new_length);
++
++int fdt_node_name_cmp(const void *fdt, int node, const char *target_node);
+ #endif
+-- 
+2.34.1
+

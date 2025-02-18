@@ -1,0 +1,219 @@
+From a99252794c8c6c1c5fa950e2f5b8f444b0e7469b Mon Sep 17 00:00:00 2001
+From: Charles Wu <dminus@andestech.com>
+Date: Thu, 19 Dec 2024 11:49:38 +0800
+Subject: [PATCH 147/168] soc: andes: trigger_module: add scontext control to
+ support hardware trace (#230)
+
+Andes TRACE can log user-space program instructions.
+
+To enable logging for a specific user-space program,
+write its PID to the /proc/PID/hw_trace_enable file.
+
+During a context switch, the kernel will write the PID
+to scontext via an SBI call, enabling Andes TRACE to log
+the program's instructions.
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/230
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Charles Wu <dminus@andestech.com>
+Co-committed-by: Charles Wu <dminus@andestech.com>
+---
+ arch/riscv/mm/context.c                  |  7 +++
+ drivers/soc/andes/Kconfig                |  6 ++
+ drivers/soc/andes/trigger_module.c       | 10 ++++
+ fs/proc/base.c                           | 72 ++++++++++++++++++++++++
+ include/linux/sched.h                    | 10 ++++
+ include/linux/soc/andes/trigger_module.h |  2 +
+ 6 files changed, 107 insertions(+)
+
+diff --git a/arch/riscv/mm/context.c b/arch/riscv/mm/context.c
+index 217fd4de6134..2ec80a62d05e 100644
+--- a/arch/riscv/mm/context.c
++++ b/arch/riscv/mm/context.c
+@@ -15,6 +15,7 @@
+ #include <asm/tlbflush.h>
+ #include <asm/cacheflush.h>
+ #include <asm/mmu_context.h>
++#include <linux/soc/andes/trigger_module.h>
+ 
+ #ifdef CONFIG_MMU
+ 
+@@ -332,5 +333,11 @@ void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+ 
+ 	set_mm(prev, next, cpu);
+ 
++#ifdef CONFIG_ANDES_HW_TRACE
++	/* reset scontext */
++	if (task && (andes_get_scontext() != task->andes_hw_trace))
++		andes_set_scontext(task->andes_hw_trace);
++#endif
++
+ 	flush_icache_deferred(next, cpu);
+ }
+diff --git a/drivers/soc/andes/Kconfig b/drivers/soc/andes/Kconfig
+index ea0542663b43..bf7cf9f16d3c 100644
+--- a/drivers/soc/andes/Kconfig
++++ b/drivers/soc/andes/Kconfig
+@@ -25,4 +25,10 @@ config ANDES_HVM
+ 	help
+ 	  Andes High-bandwidth Vector Memory (HVM) support.
+ 
++config ANDES_HW_TRACE
++	tristate "Andes Hardware Trace Support"
++	depends on RISCV && ARCH_ANDES
++	help
++	  Andes Hardware Trace support.
++
+ endmenu
+diff --git a/drivers/soc/andes/trigger_module.c b/drivers/soc/andes/trigger_module.c
+index 5343b95c358c..6634f8f5bdc3 100644
+--- a/drivers/soc/andes/trigger_module.c
++++ b/drivers/soc/andes/trigger_module.c
+@@ -26,3 +26,13 @@ void user_disable_single_step(struct task_struct *child)
+ 	    test_tsk_thread_flag(child, TIF_SINGLESTEP))
+ 		clear_tsk_thread_flag(child, TIF_SINGLESTEP);
+ }
++
++unsigned long andes_get_scontext(void)
++{
++	return csr_read(CSR_SCONTEXT);
++}
++
++void andes_set_scontext(unsigned long val)
++{
++	csr_write(CSR_SCONTEXT, val);
++}
+diff --git a/fs/proc/base.c b/fs/proc/base.c
+index 6e61d93ffa55..9b5d7126c5b3 100644
+--- a/fs/proc/base.c
++++ b/fs/proc/base.c
+@@ -100,6 +100,7 @@
+ #include <trace/events/oom.h>
+ #include "internal.h"
+ #include "fd.h"
++#include <linux/soc/andes/trigger_module.h>
+ 
+ #include "../../lib/kstrtox.h"
+ 
+@@ -3232,6 +3233,74 @@ static int proc_stack_depth(struct seq_file *m, struct pid_namespace *ns,
+ }
+ #endif /* CONFIG_STACKLEAK_METRICS */
+ 
++#ifdef CONFIG_ANDES_HW_TRACE
++static ssize_t proc_hw_trace_read(struct file *file, char __user *buf,
++				  size_t count, loff_t *ppos)
++{
++	struct task_struct *task = get_proc_task(file_inode(file));
++	char buffer[PROC_NUMBUF];
++	unsigned long hw_trace = 0;
++	size_t len;
++
++	if (!task)
++		return -ESRCH;
++
++	hw_trace = task->andes_hw_trace;
++
++	len = snprintf(buffer, sizeof(buffer), "hw_trace=%ld\n", hw_trace);
++	return simple_read_from_buffer(buf, count, ppos, buffer, len);
++}
++
++static ssize_t proc_hw_trace_write(struct file *file, const char __user *buf,
++				   size_t count, loff_t *ppos)
++{
++	char buffer[PROC_NUMBUF];
++	int hw_trace;
++	struct task_struct *task, *thread_task;
++	int err;
++
++	memset(buffer, 0, sizeof(buffer));
++	if (count > sizeof(buffer) - 1)
++		count = sizeof(buffer) - 1;
++	if (copy_from_user(buffer, buf, count)) {
++		err = -EFAULT;
++		goto out;
++	}
++
++	err = kstrtoint(strstrip(buffer), 0, &hw_trace);
++	if (err) {
++		err = -EFAULT;
++		goto out;
++	}
++
++	task = get_proc_task(file_inode(file));
++	if (!task) {
++		err = -ESRCH;
++		goto out;
++	}
++
++	/* Set $scontext to specific task */
++	task->andes_hw_trace = hw_trace;
++
++	/* Update $scontext value to all threads */
++	rcu_read_lock();
++	thread_task = task = task->group_leader;
++	while_each_thread(task, thread_task) {
++		thread_task->andes_hw_trace = hw_trace;
++	}
++	rcu_read_unlock();
++
++out:
++	return err < 0 ? err : count;
++}
++
++static const struct file_operations hw_trace_operations = {
++	.read	= proc_hw_trace_read,
++	.write	= proc_hw_trace_write,
++	.llseek	= generic_file_llseek,
++};
++#endif /* CONFIG_ANDES_HW_TRACE */
++
+ /*
+  * Thread groups
+  */
+@@ -3352,6 +3421,9 @@ static const struct pid_entry tgid_base_stuff[] = {
+ 	ONE("ksm_merging_pages",  S_IRUSR, proc_pid_ksm_merging_pages),
+ 	ONE("ksm_stat",  S_IRUSR, proc_pid_ksm_stat),
+ #endif
++#ifdef CONFIG_ANDES_HW_TRACE
++	REG("hw_trace_enable", S_IRUGO|S_IWUGO, hw_trace_operations),
++#endif
+ };
+ 
+ static int proc_tgid_base_readdir(struct file *file, struct dir_context *ctx)
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 77f01ac385f7..ef888074c0ca 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1542,6 +1542,16 @@ struct task_struct {
+ 	 */
+ 	randomized_struct_fields_end
+ 
++#ifdef CONFIG_ANDES_HW_TRACE
++	/*
++	 * Andes hardware trace supports logging user-space program instructions.
++	 * Users can modify this variable via /proc/<pid>/hw_trace_enable.
++	 * Through an SBI call, users can set the PID to scontext,
++	 * enabling Andes TRACE to log instructions for the program.
++	 */
++	unsigned long andes_hw_trace;
++#endif
++
+ 	/* CPU-specific state of this task: */
+ 	struct thread_struct		thread;
+ 
+diff --git a/include/linux/soc/andes/trigger_module.h b/include/linux/soc/andes/trigger_module.h
+index 8e681a8f6e96..7671fecf7251 100644
+--- a/include/linux/soc/andes/trigger_module.h
++++ b/include/linux/soc/andes/trigger_module.h
+@@ -15,5 +15,7 @@ DECLARE_STATIC_KEY_FALSE(trigger_module_single_step_key);
+ 
+ void user_enable_single_step(struct task_struct *);
+ void user_disable_single_step(struct task_struct *);
++unsigned long andes_get_scontext(void);
++void andes_set_scontext(unsigned long val);
+ 
+ #endif /* !__LINUX_SOC_ANDES_TRIGGER_MODULE_H */
+-- 
+2.34.1
+

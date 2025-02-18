@@ -1,0 +1,32 @@
+From 5e3ad7d577573e158bb2ca90ae647d64db3f4a32 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Tue, 11 Jun 2024 19:19:29 +0800
+Subject: [PATCH 114/172] lib: utils/timer: Skip initialize timer when dt is
+ not enabled
+
+When the dt node has a status property and the value is not ok or
+okay, skip initializing timer.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/timer/fdt_timer.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/utils/timer/fdt_timer.c b/lib/utils/timer/fdt_timer.c
+index 62426a70fb0a..f4687304d65c 100644
+--- a/lib/utils/timer/fdt_timer.c
++++ b/lib/utils/timer/fdt_timer.c
+@@ -44,6 +44,9 @@ static int fdt_timer_cold_init(void)
+ 		noff = -1;
+ 		while ((noff = fdt_find_match(fdt, noff,
+ 					drv->match_table, &match)) >= 0) {
++			if (!fdt_node_is_enabled(fdt, noff))
++				continue;
++
+ 			/* drv->cold_init must not be NULL */
+ 			if (drv->cold_init == NULL)
+ 				return SBI_EFAIL;
+-- 
+2.34.1
+

@@ -1,0 +1,46 @@
+From 29a646ac790d810ebf9a3cf4a8e3f4eb03112e02 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Thu, 18 Jul 2024 10:25:24 +0800
+Subject: [PATCH 38/53] riscv: Add SPL_RISCV_ISA_SMAIA and RISCV_ISA_SMAIA
+ configurations
+
+We are going to support SMP boot with AIA APLIC + IMSIC interrupt
+controllers. Add these two configurations for the usage.
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+---
+ arch/riscv/Kconfig | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index fa3b016c5272..2ae48672f7dd 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -225,6 +225,24 @@ config RISCV_ISA_ZBB
+ 	  of bit-specific operations (count bit population, sign extending,
+ 	  bitrotation, etc) and enables optimized string routines.
+ 
++config SPL_RISCV_ISA_SMAIA
++	bool "Smaia extension support advanced interrupt architecture"
++	depends on SPL_RISCV_MMODE
++	default y
++	help
++	  The Smaia extension encompasses all added CSRs and all modifications
++	  to interrupt response behavior that the AIA specifies for a hart, over
++	  all privilege levels.
++
++config RISCV_ISA_SMAIA
++	bool "Smaia extension support advanced interrupt architecture"
++	depends on RISCV_MMODE
++	default y
++	help
++	  The Smaia extension encompasses all added CSRs and all modifications
++	  to interrupt response behavior that the AIA specifies for a hart, over
++	  all privilege levels.
++
+ menu "Use assembly optimized implementation of string routines"
+ 
+ config USE_ARCH_STRLEN
+-- 
+2.34.1
+

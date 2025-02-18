@@ -1,0 +1,317 @@
+From fa2b8bf01e90bb6c6ef71706c69fd948fc0553a5 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Thu, 1 Feb 2024 10:01:18 +0800
+Subject: [PATCH 040/168] riscv: dts: andes: add inject region to reserved
+ memory and set reusable
+
+Before kernel initialization, users can load an injection script into
+a specific memory region using a QEMU argument.
+During kernel initialization, 'inject_init' in 'drivers/soc/andes'
+creates '/proc/inject' and copies the injection script content.
+Later, the kernel executes the injection script from '/proc/inject'.
+
+To prevent the kernel from using the script's memory region,
+a reserved memory area is created. The area is marked as 'reusable'
+because the script is used only during boot, allowing the kernel
+to repurpose the region afterwards."
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ .../dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts     |  6 ++++++
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts   | 12 ++++++++++++
+ .../dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts   |  6 ++++++
+ .../dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts     |  6 ++++++
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts   | 12 ++++++++++++
+ .../dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts    |  6 ++++++
+ .../boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts      |  5 +++++
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts  | 12 ++++++++++++
+ .../dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts  |  6 ++++++
+ .../dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts    |  6 ++++++
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts  | 12 ++++++++++++
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts        | 12 ++++++++++++
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts | 12 ++++++++++++
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts  | 12 ++++++++++++
+ 14 files changed, 125 insertions(+)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 9cfca5d21689..ab388216b9ac 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -63,6 +63,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 309374e1b602..7d94082023ef 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -142,6 +142,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 49167181e839..70fde4e3eb30 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -75,6 +75,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index d1efaf99247e..898921fde7f3 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -63,6 +63,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 3a49389fddb0..e25746c27a35 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -142,6 +142,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index b6cebb3faebf..64dfd4bd244f 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -63,6 +63,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index b3d096a26acf..d20084ad5b82 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -145,6 +145,11 @@ reserved_mem2:reserved_mem2@3fffa000 {
+ 			alignment = <0x100>;
+ 		};
+ 
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	slave_port_ilm:slave_port_ilm@a0000000 {
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 3a27c6739cdb..85aadd06e6aa 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -142,6 +142,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index 4080f76fe7a3..73e3255a5107 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -75,6 +75,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 298a414a7f6d..9bb77d5f164b 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -63,6 +63,12 @@ dma_global_pool0@3e800000 {
+ 			no-map;
+ 			linux,dma-default;
+ 		};
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
+ 	};
+ 
+ 	soc {
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index e0173b0d7ea5..c574a537f222 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -142,6 +142,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index f643757df984..be846140e287 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -246,6 +246,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index d5088159f985..1753aa88c34e 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -142,6 +142,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+index dd6aab13d398..11de68656b14 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_dsp_ae350.dts
+@@ -93,6 +93,18 @@ memory@0 {
+ 		device_type = "memory";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		andes_inject@100000 {
++			compatible = "inject";
++			reg = <0x00 0x100000 0x00 0x100000>;
++			reusable;
++		};
++	};
++
+ 	soc {
+ 		#address-cells = <0x02>;
+ 		#size-cells = <0x02>;
+-- 
+2.34.1
+

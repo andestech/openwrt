@@ -1,0 +1,65 @@
+From 7aa80ea4954ea369dba8f5864a1386342c44d806 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Tue, 9 Apr 2024 12:02:03 +0200
+Subject: [PATCH 086/172] lib: sbi: sse: rename sse_hart_unlock() to
+ sse_enabled_event_unlock()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There was a naming incoherency between enabled events list lock/unlock.
+Rename sse_hart_unlock() to sse_enabled_event_unlock() to be coherent
+and reword comments above lock()/unlock() functions.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_sse.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index a5fed3489cf6..0f8b34767b8e 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -208,7 +208,7 @@ static struct sse_global_event *sse_get_global_event(struct sbi_sse_event *e)
+ }
+ 
+ /**
+- * If event is global, must be called under global event lock
++ * If event is global, must be called under enabled event lock
+  */
+ static void sse_enabled_event_lock(struct sbi_sse_event *e)
+ {
+@@ -219,9 +219,9 @@ static void sse_enabled_event_lock(struct sbi_sse_event *e)
+ }
+ 
+ /**
+- * If event is global, must be called under global event lock
++ * If event is global, must be called under enabled event lock
+  */
+-static void sse_hart_unlock(struct sbi_sse_event *e)
++static void sse_enabled_event_unlock(struct sbi_sse_event *e)
+ {
+ 	struct sse_hart_state *shs;
+ 
+@@ -753,7 +753,7 @@ int sbi_sse_enable(uint32_t event_id)
+ 
+ 	sse_enabled_event_lock(e);
+ 	ret = sse_event_enable(e);
+-	sse_hart_unlock(e);
++	sse_enabled_event_unlock(e);
+ 	sse_event_put(e);
+ 
+ 	return ret;
+@@ -770,7 +770,7 @@ int sbi_sse_disable(uint32_t event_id)
+ 
+ 	sse_enabled_event_lock(e);
+ 	ret = sse_event_disable(e);
+-	sse_hart_unlock(e);
++	sse_enabled_event_unlock(e);
+ 
+ 	sse_event_put(e);
+ 
+-- 
+2.34.1
+

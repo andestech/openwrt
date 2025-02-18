@@ -1,0 +1,548 @@
+From 2b93ce0954d594a1c4919f02187bbf7177ed412d Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Fri, 19 Apr 2024 11:58:24 +0800
+Subject: [PATCH 095/172] platform: andes: Change all occurrences of andes45 to
+ andes
+
+To make the framework suit all Andes CPUs, change all occurrences of
+andes45 to andes.
+
+In addition, we fix some coding style problems and remove an unused
+macro in andes.h.
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/Kconfig                   |  2 +-
+ platform/generic/andes/Kconfig             |  2 +-
+ platform/generic/andes/ae350.c             |  7 +-
+ platform/generic/andes/andes_pma.c         | 80 ++++++++++------------
+ platform/generic/andes/andes_pmu.c         |  2 +-
+ platform/generic/andes/andes_sbi.c         | 12 ++--
+ platform/generic/andes/objects.mk          |  2 +-
+ platform/generic/andes/sleep.S             |  2 +-
+ platform/generic/include/andes/andes.h     | 29 +++++---
+ platform/generic/include/andes/andes_pma.h | 20 +++---
+ platform/generic/renesas/rzfive/rzfive.c   | 12 ++--
+ 11 files changed, 86 insertions(+), 84 deletions(-)
+
+diff --git a/platform/generic/Kconfig b/platform/generic/Kconfig
+index c9b601171a46..6642a6eeaa1c 100644
+--- a/platform/generic/Kconfig
++++ b/platform/generic/Kconfig
+@@ -37,7 +37,7 @@ config PLATFORM_ANDES_AE350
+ 
+ config PLATFORM_RENESAS_RZFIVE
+ 	bool "Renesas RZ/Five support"
+-	select ANDES45_PMA
++	select ANDES_PMA
+ 	select ANDES_SBI
+ 	select ANDES_PMU
+ 	default n
+diff --git a/platform/generic/andes/Kconfig b/platform/generic/andes/Kconfig
+index 3665b337343f..138710be598f 100644
+--- a/platform/generic/andes/Kconfig
++++ b/platform/generic/andes/Kconfig
+@@ -1,6 +1,6 @@
+ # SPDX-License-Identifier: BSD-2-Clause
+ 
+-config ANDES45_PMA
++config ANDES_PMA
+ 	bool "Andes PMA support"
+ 	default n
+ 
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index 088ec077b58e..63c10bc465c7 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -18,7 +18,7 @@
+ #include <sbi/sbi_hsm.h>
+ #include <sbi/sbi_ipi.h>
+ #include <sbi/sbi_init.h>
+-#include <andes/andes45.h>
++#include <andes/andes.h>
+ 
+ static struct smu_data smu = { 0 };
+ extern void __ae350_enable_coherency_warmboot(void);
+@@ -65,8 +65,9 @@ static int ae350_hart_stop(void)
+ 	smu_set_wakeup_events(&smu, 0x0, hartid);
+ 	smu_set_command(&smu, DEEP_SLEEP_CMD, hartid);
+ 
+-	rc = smu_set_reset_vector(&smu, (ulong)__ae350_enable_coherency_warmboot,
+-			       hartid);
++	rc = smu_set_reset_vector(&smu,
++				  (ulong)__ae350_enable_coherency_warmboot,
++				  hartid);
+ 	if (rc)
+ 		goto fail;
+ 
+diff --git a/platform/generic/andes/andes_pma.c b/platform/generic/andes/andes_pma.c
+index 2745bc3a9980..d5ea594a6e28 100644
+--- a/platform/generic/andes/andes_pma.c
++++ b/platform/generic/andes/andes_pma.c
+@@ -10,7 +10,8 @@
+  *      Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+  */
+ 
+-#include <andes/andes45_pma.h>
++#include <andes/andes.h>
++#include <andes/andes_pma.h>
+ #include <libfdt.h>
+ #include <sbi/riscv_asm.h>
+ #include <sbi/riscv_io.h>
+@@ -18,15 +19,7 @@
+ #include <sbi/sbi_error.h>
+ #include <sbi_utils/fdt/fdt_helper.h>
+ 
+-/* Configuration Registers */
+-#define ANDES45_CSR_MMSC_CFG		0xFC2
+-#define ANDES45_CSR_MMSC_PPMA_OFFSET	(1 << 30)
+-
+-#define ANDES45_PMAADDR_0		0xBD0
+-
+-#define ANDES45_PMACFG_0		0xBC0
+-
+-static inline unsigned long andes45_pma_read_cfg(unsigned int pma_cfg_off)
++static inline unsigned long andes_pma_read_cfg(unsigned int pma_cfg_off)
+ {
+ #define switchcase_pma_cfg_read(__pma_cfg_off, __val)		\
+ 	case __pma_cfg_off:					\
+@@ -39,7 +32,7 @@ static inline unsigned long andes45_pma_read_cfg(unsigned int pma_cfg_off)
+ 	unsigned long ret = 0;
+ 
+ 	switch (pma_cfg_off) {
+-	switchcase_pma_cfg_read_2(ANDES45_PMACFG_0, ret)
++	switchcase_pma_cfg_read_2(CSR_PMACFG0, ret)
+ 
+ 	default:
+ 		sbi_panic("%s: Unknown PMA CFG offset %#x", __func__, pma_cfg_off);
+@@ -52,7 +45,7 @@ static inline unsigned long andes45_pma_read_cfg(unsigned int pma_cfg_off)
+ #undef switchcase_pma_cfg_read
+ }
+ 
+-static inline void andes45_pma_write_cfg(unsigned int pma_cfg_off, unsigned long val)
++static inline void andes_pma_write_cfg(unsigned int pma_cfg_off, unsigned long val)
+ {
+ #define switchcase_pma_cfg_write(__pma_cfg_off, __val)		\
+ 	case __pma_cfg_off:					\
+@@ -63,7 +56,7 @@ static inline void andes45_pma_write_cfg(unsigned int pma_cfg_off, unsigned long
+ 	switchcase_pma_cfg_write(__pma_cfg_off + 2, __val)
+ 
+ 	switch (pma_cfg_off) {
+-	switchcase_pma_cfg_write_2(ANDES45_PMACFG_0, val)
++	switchcase_pma_cfg_write_2(CSR_PMACFG0, val)
+ 
+ 	default:
+ 		sbi_panic("%s: Unknown PMA CFG offset %#x", __func__, pma_cfg_off);
+@@ -74,7 +67,7 @@ static inline void andes45_pma_write_cfg(unsigned int pma_cfg_off, unsigned long
+ #undef switchcase_pma_cfg_write
+ }
+ 
+-static inline void andes45_pma_write_addr(unsigned int pma_addr_off, unsigned long val)
++static inline void andes_pma_write_addr(unsigned int pma_addr_off, unsigned long val)
+ {
+ #define switchcase_pma_write(__pma_addr_off, __val)		\
+ 	case __pma_addr_off:					\
+@@ -94,7 +87,7 @@ static inline void andes45_pma_write_addr(unsigned int pma_addr_off, unsigned lo
+ 	switchcase_pma_write_8(__pma_addr_off + 8, __val)
+ 
+ 	switch (pma_addr_off) {
+-	switchcase_pma_write_16(ANDES45_PMAADDR_0, val)
++	switchcase_pma_write_16(CSR_PMAADDR0, val)
+ 
+ 	default:
+ 		sbi_panic("%s: Unknown PMA ADDR offset %#x", __func__, pma_addr_off);
+@@ -108,7 +101,7 @@ static inline void andes45_pma_write_addr(unsigned int pma_addr_off, unsigned lo
+ #undef switchcase_pma_write
+ }
+ 
+-static inline unsigned long andes45_pma_read_addr(unsigned int pma_addr_off)
++static inline unsigned long andes_pma_read_addr(unsigned int pma_addr_off)
+ {
+ #define switchcase_pma_read(__pma_addr_off, __val)		\
+ 	case __pma_addr_off:					\
+@@ -130,7 +123,7 @@ static inline unsigned long andes45_pma_read_addr(unsigned int pma_addr_off)
+ 	unsigned long ret = 0;
+ 
+ 	switch (pma_addr_off) {
+-	switchcase_pma_read_16(ANDES45_PMAADDR_0, ret)
++	switchcase_pma_read_16(CSR_PMAADDR0, ret)
+ 
+ 	default:
+ 		sbi_panic("%s: Unknown PMA ADDR offset %#x", __func__, pma_addr_off);
+@@ -146,9 +139,8 @@ static inline unsigned long andes45_pma_read_addr(unsigned int pma_addr_off)
+ #undef switchcase_pma_read
+ }
+ 
+-static unsigned long
+-andes45_pma_setup(const struct andes45_pma_region *pma_region,
+-		  unsigned int entry_id)
++static unsigned long andes_pma_setup(const struct andes_pma_region *pma_region,
++				     unsigned int entry_id)
+ {
+ 	unsigned long size = pma_region->size;
+ 	unsigned long addr = pma_region->pa;
+@@ -168,30 +160,30 @@ andes45_pma_setup(const struct andes45_pma_region *pma_region,
+ 	if (entry_id > 15)
+ 		return SBI_EINVAL;
+ 
+-	if (!(pma_region->flags & ANDES45_PMACFG_ETYP_NAPOT))
++	if (!(pma_region->flags & ANDES_PMACFG_ETYP_NAPOT))
+ 		return SBI_EINVAL;
+ 
+ 	if ((addr & (size - 1)) != 0)
+ 		return SBI_EINVAL;
+ 
+-	pma_cfg_addr = entry_id / 8 ? ANDES45_PMACFG_0 + 2 : ANDES45_PMACFG_0;
+-	pmacfg_val = andes45_pma_read_cfg(pma_cfg_addr);
++	pma_cfg_addr = entry_id / 8 ? CSR_PMACFG0 + 2 : CSR_PMACFG0;
++	pmacfg_val = andes_pma_read_cfg(pma_cfg_addr);
+ 	pmaxcfg = (char *)&pmacfg_val + (entry_id % 8);
+ 	*pmaxcfg = 0;
+ 	*pmaxcfg = pma_region->flags;
+ 
+-	andes45_pma_write_cfg(pma_cfg_addr, pmacfg_val);
++	andes_pma_write_cfg(pma_cfg_addr, pmacfg_val);
+ 
+ 	pmaaddr = (addr >> 2) + (size >> 3) - 1;
+ 
+-	andes45_pma_write_addr(ANDES45_PMAADDR_0 + entry_id, pmaaddr);
++	andes_pma_write_addr(CSR_PMAADDR0 + entry_id, pmaaddr);
+ 
+-	return andes45_pma_read_addr(ANDES45_PMAADDR_0 + entry_id) == pmaaddr ?
+-			pmaaddr : SBI_EINVAL;
++	return andes_pma_read_addr(CSR_PMAADDR0 + entry_id) == pmaaddr ?
++	       pmaaddr : SBI_EINVAL;
+ }
+ 
+-static int andes45_fdt_pma_resv(void *fdt, const struct andes45_pma_region *pma,
+-				unsigned int index, int parent)
++static int andes_fdt_pma_resv(void *fdt, const struct andes_pma_region *pma,
++			      unsigned int index, int parent)
+ {
+ 	int na = fdt_address_cells(fdt, 0);
+ 	int ns = fdt_size_cells(fdt, 0);
+@@ -208,15 +200,15 @@ static int andes45_fdt_pma_resv(void *fdt, const struct andes45_pma_region *pma,
+ 	size_high = (u64)pma->size >> 32;
+ 	size_low = pma->size;
+ 
+-	if (na > 1 && addr_high)
++	if (na > 1 && addr_high) {
+ 		sbi_snprintf(name, sizeof(name),
+ 			     "pma_resv%d@%x,%x", index,
+ 			     addr_high, addr_low);
+-	else
++	} else {
+ 		sbi_snprintf(name, sizeof(name),
+ 			     "pma_resv%d@%x", index,
+ 			     addr_low);
+-
++	}
+ 	subnode = fdt_add_subnode(fdt, parent, name);
+ 	if (subnode < 0)
+ 		return subnode;
+@@ -244,7 +236,7 @@ static int andes45_fdt_pma_resv(void *fdt, const struct andes45_pma_region *pma,
+ 		dma_default = true;
+ 	}
+ 
+-	/* encode the <reg> property value */
++	/* Encode the <reg> property value */
+ 	val = reg;
+ 	if (na > 1)
+ 		*val++ = cpu_to_fdt32(addr_high);
+@@ -261,9 +253,9 @@ static int andes45_fdt_pma_resv(void *fdt, const struct andes45_pma_region *pma,
+ 	return 0;
+ }
+ 
+-static int andes45_fdt_reserved_memory_fixup(void *fdt,
+-					     const struct andes45_pma_region *pma,
+-					     unsigned int entry)
++static int andes_fdt_reserved_memory_fixup(void *fdt,
++					   const struct andes_pma_region *pma,
++					   unsigned int entry)
+ {
+ 	int parent;
+ 
+@@ -292,13 +284,13 @@ static int andes45_fdt_reserved_memory_fixup(void *fdt,
+ 			return err;
+ 	}
+ 
+-	return andes45_fdt_pma_resv(fdt, pma, entry, parent);
++	return andes_fdt_pma_resv(fdt, pma, entry, parent);
+ }
+ 
+-int andes45_pma_setup_regions(const struct andes45_pma_region *pma_regions,
+-			      unsigned int pma_regions_count)
++int andes_pma_setup_regions(const struct andes_pma_region *pma_regions,
++			    unsigned int pma_regions_count)
+ {
+-	unsigned long mmsc = csr_read(ANDES45_CSR_MMSC_CFG);
++	unsigned long mmsc = csr_read(CSR_MMSC_CFG);
+ 	unsigned int dt_populate_cnt;
+ 	unsigned int i, j;
+ 	unsigned long pa;
+@@ -308,15 +300,15 @@ int andes45_pma_setup_regions(const struct andes45_pma_region *pma_regions,
+ 	if (!pma_regions || !pma_regions_count)
+ 		return 0;
+ 
+-	if (pma_regions_count > ANDES45_MAX_PMA_REGIONS)
++	if (pma_regions_count > ANDES_MAX_PMA_REGIONS)
+ 		return SBI_EINVAL;
+ 
+-	if ((mmsc & ANDES45_CSR_MMSC_PPMA_OFFSET) == 0)
++	if ((mmsc & MMSC_CFG_PPMA_MASK) == 0)
+ 		return SBI_ENOTSUPP;
+ 
+ 	/* Configure the PMA regions */
+ 	for (i = 0; i < pma_regions_count; i++) {
+-		pa = andes45_pma_setup(&pma_regions[i], i);
++		pa = andes_pma_setup(&pma_regions[i], i);
+ 		if (pa == SBI_EINVAL)
+ 			return SBI_EINVAL;
+ 	}
+@@ -341,7 +333,7 @@ int andes45_pma_setup_regions(const struct andes45_pma_region *pma_regions,
+ 		if (!pma_regions[i].dt_populate)
+ 			continue;
+ 
+-		ret = andes45_fdt_reserved_memory_fixup(fdt, &pma_regions[i], j++);
++		ret = andes_fdt_reserved_memory_fixup(fdt, &pma_regions[i], j++);
+ 		if (ret)
+ 			return ret;
+ 	}
+diff --git a/platform/generic/andes/andes_pmu.c b/platform/generic/andes/andes_pmu.c
+index 479fb9a6cd2b..a075e0e5b5d0 100644
+--- a/platform/generic/andes/andes_pmu.c
++++ b/platform/generic/andes/andes_pmu.c
+@@ -5,7 +5,7 @@
+  * Copyright (C) 2023 Andes Technology Corporation
+  */
+ 
+-#include <andes/andes45.h>
++#include <andes/andes.h>
+ #include <andes/andes_pmu.h>
+ #include <sbi/sbi_bitops.h>
+ #include <sbi/sbi_error.h>
+diff --git a/platform/generic/andes/andes_sbi.c b/platform/generic/andes/andes_sbi.c
+index 267c663899dd..43bafdc76acf 100644
+--- a/platform/generic/andes/andes_sbi.c
++++ b/platform/generic/andes/andes_sbi.c
+@@ -3,7 +3,7 @@
+  * Copyright (C) 2023 Renesas Electronics Corp.
+  *
+  */
+-#include <andes/andes45.h>
++#include <andes/andes.h>
+ #include <andes/andes_sbi.h>
+ #include <sbi/riscv_asm.h>
+ #include <sbi/sbi_error.h>
+@@ -13,7 +13,7 @@ enum sbi_ext_andes_fid {
+ 	SBI_EXT_ANDES_IOCP_SW_WORKAROUND,
+ };
+ 
+-static bool andes45_cache_controllable(void)
++static bool andes_cache_controllable(void)
+ {
+ 	return (((csr_read(CSR_MICM_CFG) & MICM_CFG_ISZ_MASK) ||
+ 		 (csr_read(CSR_MDCM_CFG) & MDCM_CFG_DSZ_MASK)) &&
+@@ -22,14 +22,14 @@ static bool andes45_cache_controllable(void)
+ 		misa_extension('U'));
+ }
+ 
+-static bool andes45_iocp_disabled(void)
++static bool andes_iocp_disabled(void)
+ {
+ 	return (csr_read(CSR_MMSC_CFG) & MMSC_IOCP_MASK) ? false : true;
+ }
+ 
+-static bool andes45_apply_iocp_sw_workaround(void)
++static bool andes_apply_iocp_sw_workaround(void)
+ {
+-	return andes45_cache_controllable() & andes45_iocp_disabled();
++	return andes_cache_controllable() & andes_iocp_disabled();
+ }
+ 
+ int andes_sbi_vendor_ext_provider(long funcid,
+@@ -39,7 +39,7 @@ int andes_sbi_vendor_ext_provider(long funcid,
+ {
+ 	switch (funcid) {
+ 	case SBI_EXT_ANDES_IOCP_SW_WORKAROUND:
+-		out->value = andes45_apply_iocp_sw_workaround();
++		out->value = andes_apply_iocp_sw_workaround();
+ 		break;
+ 
+ 	default:
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index 6a8c66c2422c..15e618529c44 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -5,6 +5,6 @@
+ carray-platform_override_modules-$(CONFIG_PLATFORM_ANDES_AE350) += andes_ae350
+ platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o
+ 
+-platform-objs-$(CONFIG_ANDES45_PMA) += andes/andes45-pma.o
++platform-objs-$(CONFIG_ANDES_PMA) += andes/andes_pma.o
+ platform-objs-$(CONFIG_ANDES_SBI) += andes/andes_sbi.o
+ platform-objs-$(CONFIG_ANDES_PMU) += andes/andes_pmu.o
+diff --git a/platform/generic/andes/sleep.S b/platform/generic/andes/sleep.S
+index 59a5597d6d8c..361aff3a6024 100644
+--- a/platform/generic/andes/sleep.S
++++ b/platform/generic/andes/sleep.S
+@@ -9,7 +9,7 @@
+ 
+ #include <sbi/riscv_encoding.h>
+ #include <sbi/riscv_asm.h>
+-#include <andes/andes45.h>
++#include <andes/andes.h>
+ 
+ 	.section .text, "ax", %progbits
+ 	.align 3
+diff --git a/platform/generic/include/andes/andes.h b/platform/generic/include/andes/andes.h
+index 01f63d444ea3..3403a58b8fc1 100644
+--- a/platform/generic/include/andes/andes.h
++++ b/platform/generic/include/andes/andes.h
+@@ -1,7 +1,10 @@
+-#ifndef _RISCV_ANDES45_H
+-#define _RISCV_ANDES45_H
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2024 Andes Technology Corporation
++ */
+ 
+-#define CSR_MARCHID_MICROID 0xfff
++#ifndef _RISCV_ANDES_H
++#define _RISCV_ANDES_H
+ 
+ /* Memory and Miscellaneous Registers */
+ #define CSR_MCACHE_CTL		0x7ca
+@@ -23,19 +26,25 @@
+ #define CSR_MCOUNTERMASK_U	0x7d3
+ #define CSR_MCOUNTEROVF		0x7d4
+ 
++/* PMA Related Registers */
++#define CSR_PMACFG0		0xbc0
++#define CSR_PMAADDR0		0xbd0
++
+ #define MICM_CFG_ISZ_OFFSET		6
+-#define MICM_CFG_ISZ_MASK		(0x7  << MICM_CFG_ISZ_OFFSET)
++#define MICM_CFG_ISZ_MASK		(7 << MICM_CFG_ISZ_OFFSET)
+ 
+ #define MDCM_CFG_DSZ_OFFSET		6
+-#define MDCM_CFG_DSZ_MASK		(0x7  << MDCM_CFG_DSZ_OFFSET)
++#define MDCM_CFG_DSZ_MASK		(7 << MDCM_CFG_DSZ_OFFSET)
+ 
+ #define MMSC_CFG_CCTLCSR_OFFSET		16
+-#define MMSC_CFG_CCTLCSR_MASK		(0x1 << MMSC_CFG_CCTLCSR_OFFSET)
+-#define MMSC_IOCP_OFFSET			47
+-#define MMSC_IOCP_MASK			(0x1ULL << MMSC_IOCP_OFFSET)
++#define MMSC_CFG_CCTLCSR_MASK		(1 << MMSC_CFG_CCTLCSR_OFFSET)
++#define MMSC_CFG_PPMA_OFFSET		30
++#define MMSC_CFG_PPMA_MASK		(1 << MMSC_CFG_PPMA_OFFSET)
++#define MMSC_IOCP_OFFSET		47
++#define MMSC_IOCP_MASK			(1ULL << MMSC_IOCP_OFFSET)
+ 
+ #define MCACHE_CTL_CCTL_SUEN_OFFSET	8
+-#define MCACHE_CTL_CCTL_SUEN_MASK	(0x1 << MCACHE_CTL_CCTL_SUEN_OFFSET)
++#define MCACHE_CTL_CCTL_SUEN_MASK	(1 << MCACHE_CTL_CCTL_SUEN_OFFSET)
+ 
+ /* Performance monitor */
+ #define MMSC_CFG_PMNDS_MASK		(1 << 15)
+@@ -58,4 +67,4 @@
+ 
+ #endif /* __ASSEMBLER__ */
+ 
+-#endif /* _RISCV_ANDES45_H */
++#endif /* _RISCV_ANDES_H */
+diff --git a/platform/generic/include/andes/andes_pma.h b/platform/generic/include/andes/andes_pma.h
+index 37ec77cf6705..bbc09cdd7741 100644
+--- a/platform/generic/include/andes/andes_pma.h
++++ b/platform/generic/include/andes/andes_pma.h
+@@ -3,21 +3,21 @@
+  * Copyright (C) 2023 Renesas Electronics Corp.
+  */
+ 
+-#ifndef _ANDES45_PMA_H_
+-#define _ANDES45_PMA_H_
++#ifndef _ANDES_PMA_H_
++#define _ANDES_PMA_H_
+ 
+ #include <sbi/sbi_types.h>
+ 
+-#define ANDES45_MAX_PMA_REGIONS			16
++#define ANDES_MAX_PMA_REGIONS			16
+ 
+ /* Naturally aligned power of 2 region */
+-#define ANDES45_PMACFG_ETYP_NAPOT		3
++#define ANDES_PMACFG_ETYP_NAPOT			3
+ 
+ /* Memory, Non-cacheable, Bufferable */
+-#define ANDES45_PMACFG_MTYP_MEM_NON_CACHE_BUF	(3 << 2)
++#define ANDES_PMACFG_MTYP_MEM_NON_CACHE_BUF	(3 << 2)
+ 
+ /**
+- * struct andes45_pma_region - Describes PMA regions
++ * struct andes_pma_region - Describes PMA regions
+  *
+  * @pa: Address to be configured in the PMA
+  * @size: Size of the region
+@@ -32,7 +32,7 @@
+  *              be set in the DT node. Note Linux expects single node
+  *              with this property set.
+  */
+-struct andes45_pma_region {
++struct andes_pma_region {
+ 	unsigned long pa;
+ 	unsigned long size;
+ 	u8 flags:7;
+@@ -42,7 +42,7 @@ struct andes45_pma_region {
+ 	bool dma_default;
+ };
+ 
+-int andes45_pma_setup_regions(const struct andes45_pma_region *pma_regions,
+-			      unsigned int pma_regions_count);
++int andes_pma_setup_regions(const struct andes_pma_region *pma_regions,
++			    unsigned int pma_regions_count);
+ 
+-#endif /* _ANDES45_PMA_H_ */
++#endif /* _ANDES_PMA_H_ */
+diff --git a/platform/generic/renesas/rzfive/rzfive.c b/platform/generic/renesas/rzfive/rzfive.c
+index b5b5e6516a94..515bcd764736 100644
+--- a/platform/generic/renesas/rzfive/rzfive.c
++++ b/platform/generic/renesas/rzfive/rzfive.c
+@@ -4,19 +4,19 @@
+  *
+  */
+ 
+-#include <andes/andes45_pma.h>
++#include <andes/andes_pma.h>
+ #include <andes/andes_pmu.h>
+ #include <andes/andes_sbi.h>
+ #include <platform_override.h>
+ #include <sbi/sbi_domain.h>
+ #include <sbi_utils/fdt/fdt_helper.h>
+ 
+-static const struct andes45_pma_region renesas_rzfive_pma_regions[] = {
++static const struct andes_pma_region renesas_rzfive_pma_regions[] = {
+ 	{
+ 		.pa = 0x58000000,
+ 		.size = 0x8000000,
+-		.flags = ANDES45_PMACFG_ETYP_NAPOT |
+-			 ANDES45_PMACFG_MTYP_MEM_NON_CACHE_BUF,
++		.flags = ANDES_PMACFG_ETYP_NAPOT |
++			 ANDES_PMACFG_MTYP_MEM_NON_CACHE_BUF,
+ 		.dt_populate = true,
+ 		.shared_dma = true,
+ 		.no_map = true,
+@@ -26,8 +26,8 @@ static const struct andes45_pma_region renesas_rzfive_pma_regions[] = {
+ 
+ static int renesas_rzfive_final_init(bool cold_boot, const struct fdt_match *match)
+ {
+-	return andes45_pma_setup_regions(renesas_rzfive_pma_regions,
+-					 array_size(renesas_rzfive_pma_regions));
++	return andes_pma_setup_regions(renesas_rzfive_pma_regions,
++				       array_size(renesas_rzfive_pma_regions));
+ }
+ 
+ static int renesas_rzfive_early_init(bool cold_boot, const struct fdt_match *match)
+-- 
+2.34.1
+

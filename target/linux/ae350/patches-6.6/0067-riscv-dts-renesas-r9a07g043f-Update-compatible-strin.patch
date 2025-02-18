@@ -1,0 +1,34 @@
+From 2de4d398cf7167991f5f48d1d7b49e66df18edd8 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Mon, 29 Jan 2024 17:25:48 +0800
+Subject: [PATCH 067/168] riscv: dts: renesas: r9a07g043f: Update compatible
+ string to use Andes INTC
+
+The Andes hart-level interrupt controller (Andes INTC) allows AX45MP
+cores to handle custom local interrupts, such as the performance
+counter overflow interrupt.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Reviewed-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Tested-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+---
+ arch/riscv/boot/dts/renesas/r9a07g043f.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/riscv/boot/dts/renesas/r9a07g043f.dtsi b/arch/riscv/boot/dts/renesas/r9a07g043f.dtsi
+index 6ec1c6f9a403..e7167061da63 100644
+--- a/arch/riscv/boot/dts/renesas/r9a07g043f.dtsi
++++ b/arch/riscv/boot/dts/renesas/r9a07g043f.dtsi
+@@ -34,7 +34,7 @@ cpu0: cpu@0 {
+ 
+ 			cpu0_intc: interrupt-controller {
+ 				#interrupt-cells = <1>;
+-				compatible = "riscv,cpu-intc";
++				compatible = "andestech,cpu-intc", "riscv,cpu-intc";
+ 				interrupt-controller;
+ 			};
+ 		};
+-- 
+2.34.1
+

@@ -1,0 +1,57 @@
+From e3a30a2c918aae79d4cc403d474c3d2872a9063c Mon Sep 17 00:00:00 2001
+From: Cheng Yang <yangcheng.work@foxmail.com>
+Date: Wed, 15 May 2024 14:15:14 +0800
+Subject: [PATCH 107/172] lib: utils/irqchip: Check before initializing imsic
+
+The current mlevel imsic check is only for the platform, which
+may cause hart without imsic in the platform to trigger an
+illegal instruction exception when initializing imsic. For
+example, the platform contains a management hart that only
+supports wired interrupts.
+
+This patch will check if each hart supports Smaia extension
+before doing imsic initialization to avoid triggering illegal
+instruction exceptions.
+
+Signed-off-by: Cheng Yang <yangcheng.work@foxmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/irqchip/imsic.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/lib/utils/irqchip/imsic.c b/lib/utils/irqchip/imsic.c
+index f2a35c6302b2..02e3a334912f 100644
+--- a/lib/utils/irqchip/imsic.c
++++ b/lib/utils/irqchip/imsic.c
+@@ -12,6 +12,7 @@
+ #include <sbi/riscv_io.h>
+ #include <sbi/riscv_encoding.h>
+ #include <sbi/sbi_console.h>
++#include <sbi/sbi_csr_detect.h>
+ #include <sbi/sbi_domain.h>
+ #include <sbi/sbi_ipi.h>
+ #include <sbi/sbi_irqchip.h>
+@@ -222,6 +223,8 @@ static void imsic_local_eix_update(unsigned long base_id,
+ 
+ void imsic_local_irqchip_init(void)
+ {
++	struct sbi_trap_info trap = { 0 };
++
+ 	/*
+ 	 * This function is expected to be called from:
+ 	 * 1) nascent_init() platform callback which is called
+@@ -231,6 +234,11 @@ void imsic_local_irqchip_init(void)
+ 	 *    in boot-up path.
+ 	 */
+ 
++	/* If Smaia not available then do nothing */
++	csr_read_allowed(CSR_MTOPI, (ulong)&trap);
++	if (trap.cause)
++		return;
++
+ 	/* Setup threshold to allow all enabled interrupts */
+ 	imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_ENABLE_EITHRESHOLD);
+ 
+-- 
+2.34.1
+

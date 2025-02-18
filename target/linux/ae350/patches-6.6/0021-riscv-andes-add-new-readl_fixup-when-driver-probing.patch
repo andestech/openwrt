@@ -1,0 +1,97 @@
+From 09dbc4455bb384c50232f55474b01071187b063a Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Tue, 2 Aug 2022 09:39:00 +0800
+Subject: [PATCH 021/168] riscv: andes: add new readl_fixup() when driver
+ probing
+
+This feature makes kernel can boot successfuly,
+even if the bitmap disable some drivers on AE350 platform.
+When driver probing, if there is no hardware support on bitmap
+it will trigger load access fault. By using readl_fixup(), it
+will register fixup funciton when it enter do_trap_error().
+
+Reformed from the following patches on RISCV-Linux-5.4:
+- (77573fb3af94) riscv: Add new readl_fixup() when driver probing
+- (21033a8b8069) riscv: Add shift_bits parameter on readl_fixup()
+- (86c6918870fe) riscv: Fix readl_fixup undefined problem
+
+Reformed from the following patches on RISCV-Linux-6.1:
+- (f558c5b6c2b7) riscv: andes: fix ex_table mismatch
+- (b8b84a3a4705) riscv: andes: add GPL to readl_fixup() EXPORT_SYMBOL
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Signed-off-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Signed-off-by: Rick Chen <rick@andestech.com>
+---
+ arch/riscv/include/asm/uaccess.h |  2 ++
+ arch/riscv/kernel/riscv_ksyms.c  |  1 +
+ arch/riscv/lib/Makefile          |  1 +
+ arch/riscv/lib/driver_access.S   | 22 ++++++++++++++++++++++
+ 4 files changed, 26 insertions(+)
+ create mode 100644 arch/riscv/lib/driver_access.S
+
+diff --git a/arch/riscv/include/asm/uaccess.h b/arch/riscv/include/asm/uaccess.h
+index 72ec1d9bd3f3..ecf6f4bc0cde 100644
+--- a/arch/riscv/include/asm/uaccess.h
++++ b/arch/riscv/include/asm/uaccess.h
+@@ -285,6 +285,8 @@ do {								\
+ })
+ 
+ 
++extern asmlinkage int readl_fixup(void __iomem *addr, unsigned int val,
++	unsigned int shift_bits);
+ unsigned long __must_check __asm_copy_to_user(void __user *to,
+ 	const void *from, unsigned long n);
+ unsigned long __must_check __asm_copy_from_user(void *to,
+diff --git a/arch/riscv/kernel/riscv_ksyms.c b/arch/riscv/kernel/riscv_ksyms.c
+index a72879b4249a..822e4ff8ea06 100644
+--- a/arch/riscv/kernel/riscv_ksyms.c
++++ b/arch/riscv/kernel/riscv_ksyms.c
+@@ -18,3 +18,4 @@ EXPORT_SYMBOL(strncmp);
+ EXPORT_SYMBOL(__memset);
+ EXPORT_SYMBOL(__memcpy);
+ EXPORT_SYMBOL(__memmove);
++EXPORT_SYMBOL_GPL(readl_fixup);
+diff --git a/arch/riscv/lib/Makefile b/arch/riscv/lib/Makefile
+index 26cb2502ecf8..08045edfa822 100644
+--- a/arch/riscv/lib/Makefile
++++ b/arch/riscv/lib/Makefile
+@@ -6,6 +6,7 @@ lib-y			+= memmove.o
+ lib-y			+= strcmp.o
+ lib-y			+= strlen.o
+ lib-y			+= strncmp.o
++lib-y			+= driver_access.o
+ lib-$(CONFIG_MMU)	+= uaccess.o
+ lib-$(CONFIG_64BIT)	+= tishift.o
+ lib-$(CONFIG_RISCV_ISA_ZICBOZ)	+= clear_page.o
+diff --git a/arch/riscv/lib/driver_access.S b/arch/riscv/lib/driver_access.S
+new file mode 100644
+index 000000000000..a56975abea25
+--- /dev/null
++++ b/arch/riscv/lib/driver_access.S
+@@ -0,0 +1,22 @@
++#include <linux/linkage.h>
++#include <asm/asm.h>
++#include <asm/csr.h>
++#include <asm/asm-extable.h>
++
++	.macro fixup op reg addr lbl
++100:
++	\op \reg, \addr
++	_asm_extable	100b, \lbl
++	.endm
++
++ENTRY(readl_fixup)
++	fixup	lw, t0, (a0), 2f
++	fence	i,r
++	srl	t0, t0, a2
++	bne	t0, a1, 2f
++	li	a0, 1
++	ret
++2:
++	li	a0, 0
++	ret
++ENDPROC(readl_fixup)
+-- 
+2.34.1
+

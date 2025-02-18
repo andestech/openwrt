@@ -1,0 +1,86 @@
+From 47152485894e8542f49e2e4fcda35da78536d126 Mon Sep 17 00:00:00 2001
+From: Hui Min Mina Chou <minachou@andestech.com>
+Date: Mon, 16 Sep 2024 10:59:58 +0800
+Subject: [PATCH 157/172] lib: utils: cache: Add a check for fdt_cache_init()
+ return value (#119)
+
+Terminate the boot process if cache initialization fails.
+
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/opensbi/pulls/119
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: Hui Min Mina Chou <minachou@andestech.com>
+Co-committed-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ include/sbi_utils/cache/fdt_cache.h |  4 ++--
+ lib/utils/cache/fdt_cache.c         | 13 +++++++++----
+ platform/generic/andes/ae350.c      |  2 +-
+ 3 files changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/include/sbi_utils/cache/fdt_cache.h b/include/sbi_utils/cache/fdt_cache.h
+index d2b4776c6c73..2bd0fb419c5b 100644
+--- a/include/sbi_utils/cache/fdt_cache.h
++++ b/include/sbi_utils/cache/fdt_cache.h
+@@ -27,7 +27,7 @@ int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv);
+  *
+  * This function shall be invoked in final init.
+  */
+-void fdt_cache_init(void);
++int fdt_cache_init(void);
+ 
+ #else
+ 
+@@ -35,7 +35,7 @@ static inline int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv)
+ {
+ 	return 0;
+ }
+-static inline void fdt_cache_init(void) { }
++static inline int fdt_cache_init(void) { }
+ 
+ #endif /* CONFIG_FDT_CACHE */
+ 
+diff --git a/lib/utils/cache/fdt_cache.c b/lib/utils/cache/fdt_cache.c
+index 2aee1bcdeee1..fea7707d2837 100644
+--- a/lib/utils/cache/fdt_cache.c
++++ b/lib/utils/cache/fdt_cache.c
+@@ -36,11 +36,16 @@ int fdt_cache_driver_init(void *fdt, struct fdt_cache *drv)
+ 	return rc;
+ }
+ 
+-void fdt_cache_init(void)
++int fdt_cache_init(void)
+ {
+-	int pos;
++	int pos, rc;
+ 	void *fdt = fdt_get_address();
+ 
+-	for (pos = 0; pos < fdt_cache_drivers_size; pos++)
+-		fdt_cache_driver_init(fdt, fdt_cache_drivers[pos]);
++	for (pos = 0; pos < fdt_cache_drivers_size; pos++) {
++		rc = fdt_cache_driver_init(fdt, fdt_cache_drivers[pos]);
++		if (rc && rc != SBI_ENODEV)
++			return rc;
++	}
++
++	return 0;
+ }
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index f41c8c03d1ca..f3479f3a25bf 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -121,7 +121,7 @@ static int ae350_final_init(bool cold_boot, const struct fdt_match *match)
+ static int ae350_early_init(bool cold_boot, const struct fdt_match *match)
+ {
+ 	if (cold_boot)
+-		fdt_cache_init();
++		return fdt_cache_init();
+ 
+ 	return 0;
+ }
+-- 
+2.34.1
+

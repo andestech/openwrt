@@ -1,0 +1,124 @@
+From eab0b75db0537e9119869a60fe2f9af091c2304a Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Thu, 4 Jul 2024 17:58:00 +0800
+Subject: [PATCH 041/168] riscv: rv32: andes: Fix __kernel_off_t to 64 Bits in
+ RV32
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Modify the __kernel_off_t type for RV32 to 64 bits to comply with
+the current glibc calling convention.
+
+In RISC-V, off_t is 64 bits in glibc, and __kernel_off_t must match
+this size. For RV32, the kernel uses the long type, which should be
+changed to long long to ensure consistency.
+
+To address the Y2038 problem, the glibc upstream for RISC-V has adopted
+64-bit time_t and off_t for both RV32 and RV64 [*1].
+However, no corresponding modification was made on the kernel side,
+leading to test case failures in LTP’s fnctl due to size inconsistencies.
+This discrepancy causes errors when glibc passes the struct flock
+parameter to the kernel through fnctl().
+
+The strcuture of flock are shown as below:
+
+struct flock in glibc:
+------------------------------------------------------
+struct flock
+  {
+    short int l_type;
+    short int l_whence;
+    __off_t l_start;
+    __off_t l_len;
+    __off64_t l_start;
+    __off64_t l_len;             <------  "__off64_t" in glibc is 64bit
+    __pid_t l_pid;
+  };
+------------------------------------------------------
+
+struct flock in kernel 6.1:
+------------------------------------------------------
+struct flock {
+    short   l_type;
+    short   l_whence;
+    __kernel_off_t  l_start;
+    __kernel_off_t  l_len;       <----- "__kernel_off_t" in kernel is 32bit
+    __kernel_pid_t  l_pid;
+    __ARCH_FLOCK_EXTRA_SYSID
+    __ARCH_FLOCK_PAD
+};
+------------------------------------------------------
+
+[*1]: 4e95f95966.1578824547.git.alistair.francis@wdc.com/#2360267
+
+Signed-off-by: Randolph <randolph@andestech.com>
+---
+ arch/riscv/include/uapi/asm/posix_types.h | 39 +++++++++++++++++++++++
+ include/uapi/asm-generic/posix_types.h    |  3 ++
+ 2 files changed, 42 insertions(+)
+ create mode 100644 arch/riscv/include/uapi/asm/posix_types.h
+
+diff --git a/arch/riscv/include/uapi/asm/posix_types.h b/arch/riscv/include/uapi/asm/posix_types.h
+new file mode 100644
+index 000000000000..ea0163c9b4c2
+--- /dev/null
++++ b/arch/riscv/include/uapi/asm/posix_types.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++#ifndef _ASM_RISCV_POSIX_TYPES_H
++#define _ASM_RISCV_POSIX_TYPES_H
++
++#include <asm/bitsperlong.h>
++
++/*
++ * In the generic flow, this file is automatically created if it does not
++ * already exist, as indicated by the line.
++ * "#include <asm-generic/posix_types.h>"
++ *
++ * If the file already exists, the automatic creation process will be skipped.
++ * Adding architecture-specific types to this file may alter the generic flow,
++ * potentially causing type conflicts during the build phase. To avoid this,
++ * define a variable to instruct the generic code to skip the re-typedef
++ * process.
++ */
++#if __BITS_PER_LONG == 32
++typedef long long		__kernel_off_t;
++#define _arch_kernel_off_t	_arch_kernel_off_t;
++#endif
++
++/*
++ * The "long" type is 4 bytes in RV32 and 8 bytes in RV64.
++ *
++ * Before adding an architecture specific type:
++ * In RV32: __kernel_off_t -> __kernel_long_t -> long (4 byte)
++ * In RV64: __kernel_off_t -> __kernel_long_t -> long (8 byte)
++ *
++ * After adding architecture specific type:
++ * In RV32: __kernel_off_t -> long long (8 byte)
++ * In RV64: __kernel_off_t -> __kernel_long_t -> long (8 byte)
++ *
++ * This architecture specific type is only for RV32.
++ */
++
++#include <asm-generic/posix_types.h>
++
++#endif /* _ASM_RISCV_POSIX_TYPES_H */
+diff --git a/include/uapi/asm-generic/posix_types.h b/include/uapi/asm-generic/posix_types.h
+index b5f7594eee7a..18bd5e11e793 100644
+--- a/include/uapi/asm-generic/posix_types.h
++++ b/include/uapi/asm-generic/posix_types.h
+@@ -84,7 +84,10 @@ typedef struct {
+ /*
+  * anything below here should be completely generic
+  */
++#ifndef _arch_kernel_off_t
+ typedef __kernel_long_t	__kernel_off_t;
++#endif
++
+ typedef long long	__kernel_loff_t;
+ typedef __kernel_long_t	__kernel_old_time_t;
+ #ifndef __KERNEL__
+-- 
+2.34.1
+

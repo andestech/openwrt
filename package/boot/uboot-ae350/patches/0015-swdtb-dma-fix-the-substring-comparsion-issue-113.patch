@@ -1,0 +1,146 @@
+From 35632efa07a991203a4cfe3e270c1b19c4dbef55 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Fri, 9 Aug 2024 15:32:53 +0800
+Subject: [PATCH 15/53] swdtb: dma: fix the substring comparsion issue (#113)
+
+When using strncmp, compare the entire length of the strings.
+If the strings contain the same substring but differ in length,
+the comparison may fail.
+
+To fix the substring comparison issue, add a condition to compare
+with the end character '@'. This ensures that the full name is
+correctly validated.
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/113
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 50 ++-----------------
+ .../common/swdtb_merger/swdtb_tool.c          | 16 ++++++
+ .../common/swdtb_merger/swdtb_tool.h          |  2 +
+ 3 files changed, 23 insertions(+), 45 deletions(-)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index b7a1f3e7cd36..2679e440f043 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -570,71 +570,31 @@ int spi_quad_read_fixup(void *fdt, int node, char *name, char *value)
+ int dma_type_to_dma_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "dma";
+-	const char *full_name;
+-	int ret;
+-
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+-	return !(RETURN_DONE);
++	return dma_type_fixup(fdt, node, name, value, target_node);
+ }
+ 
+ int dma_type_to_mac_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "mac";
+-	const char *full_name;
+-	int ret;
+-
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+-	return !(RETURN_DONE);
++	return dma_type_fixup(fdt, node, name, value, target_node);
+ }
+ 
+ int dma_type_to_mmc_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "mmc";
+-	const char *full_name;
+-	int ret;
+-
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+-	return !(RETURN_DONE);
++	return dma_type_fixup(fdt, node, name, value, target_node);
+ }
+ 
+ int dma_type_to_snd_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "snd";
+-	const char *full_name;
+-	int ret;
+-
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+-	return !(RETURN_DONE);
++	return dma_type_fixup(fdt, node, name, value, target_node);
+ }
+ 
+ int dma_type_to_lcd_fixup(void *fdt, int node, char *name, char *value)
+ {
+ 	const char *target_node = "lcd";
+-	const char *full_name;
+-	int ret;
+-
+-	full_name = fdt_get_name(fdt, node, NULL);
+-	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
+-		ret = dma_type_to_node(fdt, node, name, target_node);
+-		return ret;
+-	}
+-	return !(RETURN_DONE);
++	return dma_type_fixup(fdt, node, name, value, target_node);
+ }
+ 
+ /**
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.c b/board/andestech/common/swdtb_merger/swdtb_tool.c
+index f43137e93cf7..e549acac93b3 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.c
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.c
+@@ -194,3 +194,19 @@ int show_reserved_memory_node(const void *fdt, int node,
+ 	return RETURN_DONE;
+ #endif
+ }
++
++int dma_type_fixup(void *fdt, int node, char *name,
++		   char *value, const char *target_node)
++{
++	const char *full_name;
++	int length = strlen(target_node);
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++	if (strncmp(full_name, target_node, length) == 0 &&
++	    full_name[length] == '@') {
++		ret = dma_type_to_node(fdt, node, name, target_node);
++		return ret;
++	}
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 9a59c593808a..1db6ca0b8901 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -61,6 +61,8 @@ int compatible_change(void *fdt, int node, char *name, char *value,
+ 		      char *old_str, char *new_str);
+ 
+ int dma_type_to_node(void *fdt, int node, char *name, const char *target_node);
++int dma_type_fixup(void *fdt, int node, char *name,
++		   char *value, const char *target_node);
+ 
+ void show_rawdtb(const char *prop_name, const char *node_name);
+ 
+-- 
+2.34.1
+

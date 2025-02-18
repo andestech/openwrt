@@ -1,0 +1,115 @@
+From 09ad21445fe0a96452b4b3334f0ab0c412c62b3c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Thu, 21 Mar 2024 16:57:17 +0100
+Subject: [PATCH 068/172] lib: sbi: Implement SBI SSE extension
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The SBI SSE extension defines a set of function that can be called to
+register and handle supervisor sofwtare events. This patch implements
+all of the functionality defined in the specification.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/Kconfig         |  4 +++
+ lib/sbi/objects.mk      |  3 +++
+ lib/sbi/sbi_ecall_sse.c | 57 +++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 64 insertions(+)
+ create mode 100644 lib/sbi/sbi_ecall_sse.c
+
+diff --git a/lib/sbi/Kconfig b/lib/sbi/Kconfig
+index e3038ee3d28c..cc8e0318cb07 100644
+--- a/lib/sbi/Kconfig
++++ b/lib/sbi/Kconfig
+@@ -54,4 +54,8 @@ config SBIUNIT
+ 	bool "Enable SBIUNIT tests"
+ 	default n
+ 
++config SBI_ECALL_SSE
++	bool "SSE extension"
++	default y
++
+ endmenu
+diff --git a/lib/sbi/objects.mk b/lib/sbi/objects.mk
+index 2b9ac1fa7d92..b1c4a5033eef 100644
+--- a/lib/sbi/objects.mk
++++ b/lib/sbi/objects.mk
+@@ -55,6 +55,9 @@ libsbi-objs-$(CONFIG_SBI_ECALL_VENDOR) += sbi_ecall_vendor.o
+ carray-sbi_ecall_exts-$(CONFIG_SBI_ECALL_DBTR) += ecall_dbtr
+ libsbi-objs-$(CONFIG_SBI_ECALL_DBTR) += sbi_ecall_dbtr.o
+ 
++carray-sbi_ecall_exts-$(CONFIG_SBI_ECALL_SSE) += ecall_sse
++libsbi-objs-$(CONFIG_SBI_ECALL_SSE) += sbi_ecall_sse.o
++
+ libsbi-objs-y += sbi_bitmap.o
+ libsbi-objs-y += sbi_bitops.o
+ libsbi-objs-y += sbi_console.o
+diff --git a/lib/sbi/sbi_ecall_sse.c b/lib/sbi/sbi_ecall_sse.c
+new file mode 100644
+index 000000000000..a28a033e2e09
+--- /dev/null
++++ b/lib/sbi/sbi_ecall_sse.c
+@@ -0,0 +1,57 @@
++#include <sbi/sbi_error.h>
++#include <sbi/sbi_ecall.h>
++#include <sbi/sbi_trap.h>
++#include <sbi/sbi_sse.h>
++
++static int sbi_ecall_sse_handler(unsigned long extid, unsigned long funcid,
++				  struct sbi_trap_regs *regs,
++				  struct sbi_ecall_return *out)
++{
++	int ret;
++
++	switch (funcid) {
++	case SBI_EXT_SSE_READ_ATTR:
++		ret = sbi_sse_read_attrs(regs->a0, regs->a1, regs->a2,
++					 regs->a3, regs->a4);
++		break;
++	case SBI_EXT_SSE_WRITE_ATTR:
++		ret = sbi_sse_write_attrs(regs->a0, regs->a1, regs->a2,
++					 regs->a3, regs->a4);
++		break;
++	case SBI_EXT_SSE_REGISTER:
++		ret = sbi_sse_register(regs->a0, regs->a1, regs->a2);
++		break;
++	case SBI_EXT_SSE_UNREGISTER:
++		ret = sbi_sse_unregister(regs->a0);
++		break;
++	case SBI_EXT_SSE_ENABLE:
++		ret = sbi_sse_enable(regs->a0);
++		break;
++	case SBI_EXT_SSE_DISABLE:
++		ret = sbi_sse_disable(regs->a0);
++		break;
++	case SBI_EXT_SSE_COMPLETE:
++		ret = sbi_sse_complete(regs, out);
++		break;
++	case SBI_EXT_SSE_INJECT:
++		ret = sbi_sse_inject_from_ecall(regs->a0, regs->a1, out);
++		break;
++	default:
++		ret = SBI_ENOTSUPP;
++	}
++	return ret;
++}
++
++struct sbi_ecall_extension ecall_sse;
++
++static int sbi_ecall_sse_register_extensions(void)
++{
++	return sbi_ecall_register_extension(&ecall_sse);
++}
++
++struct sbi_ecall_extension ecall_sse = {
++	.extid_start		= SBI_EXT_SSE,
++	.extid_end		= SBI_EXT_SSE,
++	.register_extensions	= sbi_ecall_sse_register_extensions,
++	.handle			= sbi_ecall_sse_handler,
++};
+-- 
+2.34.1
+

@@ -1,0 +1,29 @@
+From 78b4cd976f387d83b45f39cb03a8369fe7bd57b7 Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Tue, 12 Mar 2024 13:58:50 +0800
+Subject: [PATCH 153/172] make: Add -ggdb3 includes extra info for debugging
+ OpenSBI
+
+Level 3 (-ggdb3) includes extra information, such as macro definitions.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 7df39b4e7931..cfb159de43d7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -348,7 +348,7 @@ GENFLAGS	+=	$(firmware-genflags-y)
+ 
+ CFLAGS		=	-g -Wall -Werror -ffreestanding -nostdlib -fno-stack-protector -fno-strict-aliasing
+ ifneq ($(DEBUG),)
+-CFLAGS		+=	-O0
++CFLAGS		+=	-O0 -ggdb3
+ else
+ CFLAGS		+=	-O2
+ endif
+-- 
+2.34.1
+

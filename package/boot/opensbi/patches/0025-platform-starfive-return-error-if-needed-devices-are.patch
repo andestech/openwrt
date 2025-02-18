@@ -1,0 +1,46 @@
+From 3edf0447df9cb5e63f5f584ab97357f3c5aa0fbf Mon Sep 17 00:00:00 2001
+From: Nam Cao <namcao@linutronix.de>
+Date: Thu, 22 Feb 2024 09:16:18 +0100
+Subject: [PATCH 025/172] platform: starfive: return error if needed devices
+ are not present
+
+Jh7110's reset driver needs power management device and clock controller
+device to work. Currently, the driver proceed anyway without these
+devices, and invalid addresses (jh7110_inst.pmu_reg_base and
+jh7110_inst.clk_reg_base) are used during reboot, which causes
+unpredictable broken behaviors.
+
+If these devices are not present, return -SBI_ENODEV.
+
+Signed-off-by: Nam Cao <namcao@linutronix.de>
+Tested-by: Minda Chen <minda.chen@starfivetech.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ platform/generic/starfive/jh7110.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/platform/generic/starfive/jh7110.c b/platform/generic/starfive/jh7110.c
+index 16b94eaea0fb..1ac0854c3724 100644
+--- a/platform/generic/starfive/jh7110.c
++++ b/platform/generic/starfive/jh7110.c
+@@ -239,6 +239,8 @@ static int starfive_jh7110_inst_init(void *fdt)
+ 		if (rc)
+ 			goto err;
+ 		jh7110_inst.pmu_reg_base = addr;
++	} else {
++		return -SBI_ENODEV;
+ 	}
+ 
+ 	noff = fdt_node_offset_by_compatible(fdt, -1, "starfive,jh7110-syscrg");
+@@ -247,6 +249,8 @@ static int starfive_jh7110_inst_init(void *fdt)
+ 		if (rc)
+ 			goto err;
+ 		jh7110_inst.clk_reg_base = addr;
++	} else {
++		return -SBI_ENODEV;
+ 	}
+ 
+ 	if (pmic_inst.adapter) {
+-- 
+2.34.1
+

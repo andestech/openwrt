@@ -1,0 +1,300 @@
+From a0a0ecb6abc5aea6251a5c4e3329f8ddda478e18 Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Tue, 24 Oct 2023 11:21:46 +0800
+Subject: [PATCH 151/172] platform: generic: andes: Add the
+ "print_detailed_cause" method
+
+When multiple events cause a trap to be taken with the same mcause value,
+we need to know the mdcause value that records the detailed cause.
+The "print_detailed_cause" method is utilised to print out the detailed
+cause when the unhandled trap occurs. In addition, we also pass the
+mdcause value to sdcause while redirecting the trap.
+
+Reformed from the following patches on ast-v5_3_0-branch
+- (4bae0611ad) platform: generic: andes: Fix an error for print_detailed_cause() on imprecise exception (#85)
+
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ lib/sbi/sbi_trap.c                      |  10 ++
+ platform/generic/andes/dcause.c         | 152 ++++++++++++++++++++++++
+ platform/generic/andes/objects.mk       |   2 +-
+ platform/generic/include/andes/andes.h  |  18 +++
+ platform/generic/include/andes/dcause.h |  16 +++
+ 5 files changed, 197 insertions(+), 1 deletion(-)
+ create mode 100644 platform/generic/andes/dcause.c
+ create mode 100644 platform/generic/include/andes/dcause.h
+
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+index b4f3a176d6b1..ffaa3d80532b 100644
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -23,6 +23,7 @@
+ #include <sbi/sbi_sse.h>
+ #include <sbi/sbi_timer.h>
+ #include <sbi/sbi_trap.h>
++#include <andes/andes.h>
+ 
+ static void sbi_trap_error_one(const struct sbi_trap_context *tcntx,
+ 			       const char *prefix, u32 hartid, u32 depth)
+@@ -71,6 +72,13 @@ static void sbi_trap_error_one(const struct sbi_trap_context *tcntx,
+ 		   hartid, depth, "t4", regs->t4, "t5", regs->t5);
+ 	sbi_printf("%s: hart%d: trap%d: %s=0x%" PRILX "\n", prefix,
+ 		   hartid, depth, "t6", regs->t6);
++
++	if (is_andes_cpu()) {
++		ulong mdcause = csr_read(CSR_MDCAUSE);
++		sbi_printf("%s: hart%d: trap%d: %s=0x%" PRILX "\n", prefix,
++			   hartid, depth, "mdcause", mdcause);
++		print_detailed_cause(trap->cause, mdcause);
++	}
+ }
+ 
+ static void __noreturn sbi_trap_error(const char *msg, int rc,
+@@ -189,6 +197,8 @@ int sbi_trap_redirect(struct sbi_trap_regs *regs,
+ 		csr_write(CSR_STVAL, trap->tval);
+ 		csr_write(CSR_SEPC, regs->mepc);
+ 		csr_write(CSR_SCAUSE, trap->cause);
++		if (is_andes_cpu())
++			csr_write(CSR_SDCAUSE, csr_read(CSR_MDCAUSE));
+ 
+ 		/* Set MEPC to S-mode exception vector base */
+ 		regs->mepc = csr_read(CSR_STVEC);
+diff --git a/platform/generic/andes/dcause.c b/platform/generic/andes/dcause.c
+new file mode 100644
+index 000000000000..78e234833c31
+--- /dev/null
++++ b/platform/generic/andes/dcause.c
+@@ -0,0 +1,152 @@
++#include <andes/andes.h>
++
++#include <sbi/riscv_encoding.h>
++#include <sbi/sbi_console.h>
++
++static const char *const mdcause_fetch_access[] = {
++	"Reserved",
++	"ECC/Parity error",
++	"PMP/Smepmp instruction access violation",
++	"Bus error",
++	"PMA empty hole access",
++	"PMA attribute inconsistency",
++	"PTW access device region",
++	"Instruction cache multiple-hit"
++};
++
++static const char *const mdcause_illegal_instruction[] = {
++	"Please parse mtval CSR",
++	"FP disabled exception",
++	"ACE disabled exception",
++	"RVV disabled exception",
++	"CCTL filllock/unlock not supported",
++	"Reserved CCTL command",
++	"CCTL TLB command not supported",
++	"CCTL command privilege violation",
++	"CCTL BTB command not supported",
++	"CCTL L1D_VA_WB* and L1*_VA_INVAL not supported",
++	"CCTL ALL type (L1D_*_ALL) not supported",
++	"CCTL L1D_IX_WB* and L1*_IX_INVAL not supported",
++	"Reserved XCSR"
++};
++
++static const char *const mdcause_load_access[] = {
++	"Reserved",
++	"ECC/Parity error",
++	"PMP/Smepmp load access violation",
++	"Bus error",
++	"Misaligned address",
++	"PMA empty hole access",
++	"PMA attribute inconsistency",
++	"PMA NAMO exception",
++	"PTW access device region",
++	"Data cache multiple-hit"
++};
++
++static const char *const mdcause_store_access[] = {
++	"Reserved",
++	"ECC/Parity error",
++	"PMP/Smepmp store access violation",
++	"Bus error",
++	"Misaligned address",
++	"PMA empty hole access",
++	"PMA attribute inconsistency",
++	"PMA NAMO exception",
++	"PTW access device region",
++	"Data cache multiple-hit",
++	"CBO.Zero hits device region"
++};
++
++static const char *const mdcause_fetch_page_fault[] = {
++	"Reserved",
++	"ITLB multiple-hit"
++};
++
++static const char *const mdcause_load_page_fault[] = {
++	"Reserved",
++	"DTLB multiple-hit"
++};
++
++static const char *const mdcause_store_page_fault[] = {
++	"Reserved",
++	"Smepmp violation",
++	"DTLB multiple-hit",
++	"ITLB multiple-hit"
++};
++
++static const char *const mdcause_imprecise_ECC[] = {
++	"Reserved",
++	"LM slave port ECC/Parity error",
++	"Imprecise store ECC/Parity error",
++	"Imprecise load ECC/Parity error"
++};
++
++static const char *const mdcause_bus_rw_transaction[] = {
++	"Reserved",
++	"Bus read error",
++	"Bus write error",
++	"Read PMP/Smepmp check error",
++	"Write PMP/Smepmp check error",
++	"Read PMA check error",
++	"Write PMA check error",
++};
++
++void print_detailed_cause(long mcause, ulong mdcause)
++{
++	if (mcause >= 0) {
++		switch (mcause) {
++		case CAUSE_FETCH_ACCESS:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_fetch_access[mdcause]);
++			break;
++		case CAUSE_ILLEGAL_INSTRUCTION:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_illegal_instruction[mdcause]);
++			break;
++		case CAUSE_LOAD_ACCESS:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_load_access[mdcause]);
++			break;
++		case CAUSE_STORE_ACCESS:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_store_access[mdcause]);
++			break;
++		case CAUSE_FETCH_PAGE_FAULT:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_fetch_page_fault[mdcause]);
++			break;
++		case CAUSE_LOAD_PAGE_FAULT:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_load_page_fault[mdcause]);
++			break;
++		case CAUSE_STORE_PAGE_FAULT:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_store_page_fault[mdcause]);
++			break;
++		default:
++			sbi_printf("The detailed trap cause: %s\n",
++				   "mdcause does not support this exception");
++		}
++	} else {
++		mcause &= ~(1UL << (__riscv_xlen - 1));
++		mdcause &= CSR_MDCAUSE_MASK;
++
++		switch (mcause) {
++		case CAUSE_IMPRECISE_ECC:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_imprecise_ECC[mdcause]);
++			break;
++		case CAUSE_BUS_RW_TRANSACTION:
++			sbi_printf("The detailed trap cause: %s\n",
++				   mdcause_bus_rw_transaction[mdcause]);
++			break;
++		case CAUSE_PMOVI:
++			sbi_printf("The detailed trap cause: %s\n",
++				   "Performance monitor overflow interrupt");
++			break;
++		default:
++			sbi_printf("The detailed trap cause: %s\n",
++				   "mdcause does not support this interrupt");
++		}
++	}
++}
+diff --git a/platform/generic/andes/objects.mk b/platform/generic/andes/objects.mk
+index bafbd9d53dba..0c0959fc1359 100644
+--- a/platform/generic/andes/objects.mk
++++ b/platform/generic/andes/objects.mk
+@@ -12,7 +12,7 @@ FW_PAYLOAD=n
+ 
+ # Objects to build
+ carray-platform_override_modules-$(CONFIG_PLATFORM_ANDES_AE350) += andes_ae350
+-platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o
++platform-objs-$(CONFIG_PLATFORM_ANDES_AE350) += andes/ae350.o andes/sleep.o andes/dcause.o
+ 
+ platform-objs-$(CONFIG_ANDES_PMA) += andes/andes_pma.o
+ platform-objs-$(CONFIG_ANDES_SBI) += andes/andes_sbi.o
+diff --git a/platform/generic/include/andes/andes.h b/platform/generic/include/andes/andes.h
+index 1b825c4d2cf1..fe7ce5d43622 100644
+--- a/platform/generic/include/andes/andes.h
++++ b/platform/generic/include/andes/andes.h
+@@ -6,6 +6,10 @@
+ #ifndef _RISCV_ANDES_H
+ #define _RISCV_ANDES_H
+ 
++#ifndef __ASSEMBLER__
++#include <andes/dcause.h>
++#endif
++
+ #define AE350_HART_COUNT_MAX	8
+ 
+ /*
+@@ -95,6 +99,17 @@
+ #define MMSC_CFG_PMNDS_MASK		(1 << 15)
+ #define MIP_PMOVI			(1 << 18)
+ 
++/* Trap/Imprecise exception causes */
++#define CAUSE_IMPRECISE_ECC		0x10
++#define CAUSE_BUS_RW_TRANSACTION	0x11
++#define CAUSE_PMOVI			0x12
++
++/* Andes mvendorid */
++#define CSR_MVENDORID_ANDES		0x31e
++
++/* Trap related CSR mask */
++#define CSR_MDCAUSE_MASK		0x1f
++
+ #ifndef __ASSEMBLER__
+ 
+ #define is_andes(series)				\
+@@ -116,6 +131,9 @@
+ 	  CSR_MMSC_CFG_PFT_MASK) ? true : false);	\
+ })
+ 
++#define is_andes_cpu()					\
++	((csr_read(CSR_MVENDORID) == CSR_MVENDORID_ANDES) ? true : false)
++
+ #endif /* __ASSEMBLER__ */
+ 
+ /*
+diff --git a/platform/generic/include/andes/dcause.h b/platform/generic/include/andes/dcause.h
+new file mode 100644
+index 000000000000..8d49e7dccc74
+--- /dev/null
++++ b/platform/generic/include/andes/dcause.h
+@@ -0,0 +1,16 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * Copyright (c) 2023 Andes Technology Corporation
++ */
++
++#ifndef _DCAUSE_H_
++#define _DCAUSE_H_
++
++#ifdef CONFIG_PLATFORM_ANDES_AE350
++void print_detailed_cause(long mcause, unsigned long mdcause);
++#else
++static void print_detailed_cause(long mcause, unsigned long mdcause) {}
++#endif /* CONFIG_PLATFORM_ANDES_AE350 */
++
++#endif /* _DCAUSE_H_ */
+-- 
+2.34.1
+

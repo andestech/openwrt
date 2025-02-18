@@ -1,0 +1,34 @@
+From 15835ee491622c8fac7bf83079254384a9a71c8e Mon Sep 17 00:00:00 2001
+From: Rick Chen <rick@andestech.com>
+Date: Tue, 18 Apr 2023 10:43:26 +0800
+Subject: [PATCH 143/172] lib: utils: fdt: Support serial node backward
+ compatibility
+
+Some platform's build-in DTB don't have current-speed attribute.
+It will cause uart print incorrectly. Set default baud rate value
+as 38400 to fix this problem.
+
+Signed-off-by: Rick Chen <rick@andestech.com>
+---
+ lib/utils/fdt/fdt_helper.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/utils/fdt/fdt_helper.c b/lib/utils/fdt/fdt_helper.c
+index 9a945af4213e..143e29f55c7e 100644
+--- a/lib/utils/fdt/fdt_helper.c
++++ b/lib/utils/fdt/fdt_helper.c
+@@ -19,7 +19,11 @@
+ #include <sbi_utils/irqchip/plic.h>
+ 
+ #define DEFAULT_UART_FREQ		0
++#ifdef CONFIG_PLATFORM_ANDES_AE350
++#define DEFAULT_UART_BAUD		38400
++#else
+ #define DEFAULT_UART_BAUD		115200
++#endif
+ #define DEFAULT_UART_REG_SHIFT		0
+ #define DEFAULT_UART_REG_IO_WIDTH	1
+ #define DEFAULT_UART_REG_OFFSET		0
+-- 
+2.34.1
+

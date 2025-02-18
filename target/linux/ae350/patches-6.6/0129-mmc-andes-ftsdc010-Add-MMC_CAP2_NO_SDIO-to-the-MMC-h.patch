@@ -1,0 +1,42 @@
+From 36413f5a3afd7cd9bc47130bd01e7b3d3428b4a5 Mon Sep 17 00:00:00 2001
+From: CL Wang <cl634@andestech.com>
+Date: Tue, 22 Oct 2024 15:55:57 +0800
+Subject: [PATCH 129/168] mmc: andes: ftsdc010: Add MMC_CAP2_NO_SDIO to the MMC
+ host to prevent the MMC core from sending SDIO commands (#215)
+
+The MMC driver generates numerous timeout messages like the following:
+
+op:52 arg:0x00000c00 flags:0x08195 retries:0 Status:error: response timeout
+op:52 arg:0x80000c08 flags:0x08195 retries:0 Status:error: response timeout
+op:5 arg:0x00000000 flags:0x082e1 retries:3 Status:error: response timeout
+...
+
+These timeout messages are caused by the MMC driver attempting to
+initialize SDIO. To prevent this, add the MMC_CAP2_NO_SDIO flag to
+the MMC host, ensuring the MMC core does not send SDIO-specific
+commands.
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/215
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-authored-by: CL Wang <cl634@andestech.com>
+Co-committed-by: CL Wang <cl634@andestech.com>
+---
+ drivers/mmc/host/ftsdc010.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/mmc/host/ftsdc010.c b/drivers/mmc/host/ftsdc010.c
+index 2dc274207978..5d7213ce978a 100644
+--- a/drivers/mmc/host/ftsdc010.c
++++ b/drivers/mmc/host/ftsdc010.c
+@@ -1451,6 +1451,7 @@ static int __init ftsdc_probe(struct platform_device *pdev)
+ 	mmc->ops = &ftsdc_ops;
+ 	mmc->ocr_avail	= MMC_VDD_32_33 | MMC_VDD_33_34;
+ 
++	mmc->caps2 |= MMC_CAP2_NO_SDIO;
+ 	if (con & SDC_WIDE_4_BUS_SUPPORT)
+ 		mmc->caps |= MMC_CAP_4_BIT_DATA;
+ 	else if (con & SDC_WIDE_8_BUS_SUPPORT)
+-- 
+2.34.1
+

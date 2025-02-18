@@ -1,0 +1,48 @@
+From b27b7c6d8829d7e59cc68583129a6dfda930ea2e Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Mon, 4 Mar 2024 20:15:49 +0800
+Subject: [PATCH 036/172] firmware: fw_base: Simplified setup trap handler
+
+The same detection was done twice when setting mtvec and trap_exit.
+Merging can reduce code size.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ firmware/fw_base.S | 16 ++++------------
+ 1 file changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/firmware/fw_base.S b/firmware/fw_base.S
+index c657bd9a664c..d87c0a5e1a14 100644
+--- a/firmware/fw_base.S
++++ b/firmware/fw_base.S
+@@ -456,22 +456,14 @@ _start_warm:
+ 	srli	a5, a5, ('H' - 'A')
+ 	andi	a5, a5, 0x1
+ 	beq	a5, zero, _skip_trap_handler_rv32_hyp
+-	lla	a4, _trap_handler_rv32_hyp
+-_skip_trap_handler_rv32_hyp:
+-#endif
+-	csrw	CSR_MTVEC, a4
+-
+-#if __riscv_xlen == 32
+ 	/* Override trap exit for H-extension */
+-	csrr	a5, CSR_MISA
+-	srli	a5, a5, ('H' - 'A')
+-	andi	a5, a5, 0x1
+-	beq	a5, zero, _skip_trap_exit_rv32_hyp
+-	lla	a4, _trap_exit_rv32_hyp
+ 	csrr	a5, CSR_MSCRATCH
++	lla	a4, _trap_exit_rv32_hyp
+ 	REG_S	a4, SBI_SCRATCH_TRAP_EXIT_OFFSET(a5)
+-_skip_trap_exit_rv32_hyp:
++	lla	a4, _trap_handler_rv32_hyp
++_skip_trap_handler_rv32_hyp:
+ #endif
++	csrw	CSR_MTVEC, a4
+ 
+ 	/* Initialize SBI runtime */
+ 	csrr	a0, CSR_MSCRATCH
+-- 
+2.34.1
+

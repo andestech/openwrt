@@ -1,0 +1,65 @@
+From 8e29766a33fe7aa0bfa168352946d8da3e645c11 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Tue, 27 Aug 2024 15:57:38 +0800
+Subject: [PATCH 23/53] falcon: support booting linux from MMC/Parallel Flash
+ (bug #31377) (#121)
+
+To support booting Linux from MMC, the file name should be
+set up correctly. To support booting Linux from Parallel Flash,
+the SPL_LOAD_FIT_ADDRESS should point to the Parallel Flash.
+
+http://e-andes.andestech.com/bugzilla5/show_bug.cgi?id=31377
+
+Signed-off-by: Randolph <randolph@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/121
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ common/spl/Kconfig                      | 1 +
+ configs/ae350_rv32_falcon_xip_defconfig | 2 +-
+ configs/ae350_rv64_falcon_xip_defconfig | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/common/spl/Kconfig b/common/spl/Kconfig
+index 6405374bcc12..adedb0c06bfe 100644
+--- a/common/spl/Kconfig
++++ b/common/spl/Kconfig
+@@ -719,6 +719,7 @@ config SPL_FS_LOAD_PAYLOAD_NAME
+ 	string "File to load for U-Boot from the filesystem"
+ 	depends on SPL_FS_EXT4 || SPL_FS_FAT || SPL_FS_SQUASHFS || SPL_SEMIHOSTING
+ 	default "tispl.bin" if SYS_K3_SPL_ATF
++	default "linux.itb" if SPL_LOAD_FIT_OPENSBI_OS_BOOT
+ 	default "u-boot.itb" if SPL_LOAD_FIT
+ 	default "u-boot.img"
+ 	help
+diff --git a/configs/ae350_rv32_falcon_xip_defconfig b/configs/ae350_rv32_falcon_xip_defconfig
+index 150863846072..39c0846f7e29 100644
+--- a/configs/ae350_rv32_falcon_xip_defconfig
++++ b/configs/ae350_rv32_falcon_xip_defconfig
+@@ -18,7 +18,7 @@ CONFIG_SPL_XIP=y
+ CONFIG_SPL_LOAD_FIT_OPENSBI_OS_BOOT=y
+ CONFIG_SYS_MONITOR_BASE=0x88000000
+ CONFIG_FIT=y
+-CONFIG_SPL_LOAD_FIT_ADDRESS=0x80040000
++CONFIG_SPL_LOAD_FIT_ADDRESS=0x88600000
+ CONFIG_SYS_BOOTM_LEN=0x4000000
+ CONFIG_DISTRO_DEFAULTS=y
+ CONFIG_BOOTDELAY=3
+diff --git a/configs/ae350_rv64_falcon_xip_defconfig b/configs/ae350_rv64_falcon_xip_defconfig
+index 7f2d1a74594f..b2da60b82f94 100644
+--- a/configs/ae350_rv64_falcon_xip_defconfig
++++ b/configs/ae350_rv64_falcon_xip_defconfig
+@@ -18,7 +18,7 @@ CONFIG_SPL_XIP=y
+ CONFIG_SPL_LOAD_FIT_OPENSBI_OS_BOOT=y
+ CONFIG_SYS_MONITOR_BASE=0x88000000
+ CONFIG_FIT=y
+-CONFIG_SPL_LOAD_FIT_ADDRESS=0x80040000
++CONFIG_SPL_LOAD_FIT_ADDRESS=0x88600000
+ CONFIG_SYS_BOOTM_LEN=0x4000000
+ CONFIG_DISTRO_DEFAULTS=y
+ CONFIG_BOOTDELAY=3
+-- 
+2.34.1
+

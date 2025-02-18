@@ -1,0 +1,255 @@
+From ba2309a7e9cb351848b74d65e67ec96eea1b9e80 Mon Sep 17 00:00:00 2001
+From: Randolph <randolph@andestech.com>
+Date: Wed, 7 Aug 2024 19:48:19 +0800
+Subject: [PATCH 09/53] swdtb: add l2cache cache-line-size and interrupt (#100)
+
+1. swdtb: l2cache: add cache-line-size from d-cache-line-size in CPU
+2. swdtb: l2cache: add interrupt-parent and interrupts to l2cache node
+
+*Add cache-line-size from d-cache-line-size in CPU:
+This fix will read the d-cache-line-size from the CPU node and
+add the cache-line-size property to the l2cache node.
+
+Example: in AX45MP
+    "NONE"
+==>
+    "cache-line-size = <0x40>;"
+
+*Add interrupt-parent and interrupts to l2cache node:
+Add the interrupt-parent and interrupts properties to the l2cache node.
+This involves specifying the parent interrupt controller and defining
+the interrupt source for the L2 cache
+
+Example: in l2cache node
+    "NONE"
+==>
+    interrupts = <0x10 0x04>;
+    interrupt-parent = <0x06>;
+
+Signed-off-by: Randolph randolph@andestech.com
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/100
+Reviewed-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Randolph <randolph@andestech.com>
+Co-committed-by: Randolph <randolph@andestech.com>
+---
+ .../common/swdtb_merger/swdtb_merger.c        |   4 +
+ .../common/swdtb_merger/swdtb_merger_fixup.c  | 158 ++++++++++++++++++
+ .../common/swdtb_merger/swdtb_merger_fixup.h  |   3 +
+ .../common/swdtb_merger/swdtb_tool.h          |   7 +
+ 4 files changed, 172 insertions(+)
+
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger.c b/board/andestech/common/swdtb_merger/swdtb_merger.c
+index 769d8fc92965..6e362667c27b 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger.c
+@@ -33,6 +33,10 @@ struct swdtb_table dtb_merge_table[] = {
+ 	 "change ax25 to ae350",	ae350_fixup},
+ 	{SWDTB_ENABLE,	COUNT_INFINITE,
+ 	 "isa string for Linux 6.6",	riscv_isa_fixup},
++	{SWDTB_ENABLE,	1,
++	 "set l2c cache line",		l2c_cache_line_fixup},
++	{SWDTB_ENABLE,	1,
++	 "l2c interrupt pin",		l2c_interrupt_fixup},
+ };
+ 
+ static void process_string_data(void *blob, int node, char *name, char *value)
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+index 891b34a2b5ca..ac0945f95fb5 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.c
+@@ -312,3 +312,161 @@ int andespmu_node_fixup(void *fdt, int node, char *name, char *value)
+ 
+ 	return ret;
+ }
++
++/**
++ * The l2c_cache_line_fixup() will read the d-cache-line-size from cpu node
++ * and write to L2C node
++ * "NONE" ==> "cache-line-size = <0x40>;"
++ * in 25 bitmap d-cache-line-size is 32
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "l2-cache";
++	const char *target_name = "cache-line-size";
++	const char *refer_node = "/cpus";
++	int cpu_node;
++	const char *cpu_prop = "d-cache-line-size";
++	int fdt_refer_node;
++	const char *full_name;
++	const u32 *target_value;
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		const u32 *value;
++
++		value = fdt_getprop(fdt, node, target_name, NULL);
++		if (!value) {
++			show_rawdtb(target_name, target_node);
++
++			fdt_refer_node = fdt_path_offset(fdt, refer_node);
++			cpu_node = fdt_first_subnode(fdt, fdt_refer_node);
++			dtb_debug("The fdt_refer_node value: %d\n",
++				  fdt_refer_node);
++
++			target_value =
++				fdt_getprop(fdt, cpu_node, cpu_prop, NULL);
++
++			dtb_debug("Reference value in CPU node: %d\n",
++				  fdt32_to_cpu(*target_value));
++
++			ret = fdt_appendprop_cell(fdt, node, target_name,
++						  fdt32_to_cpu(*target_value));
++			if (ret) {
++				dtb_error("Error on fdt_appendprop_cell: %s\n",
++					  fdt_strerror(ret));
++			}
++
++			show_result(fdt, node, target_name, RESULT_NUMERAL);
++
++			return ret;
++		}
++	}
++
++	return !(RETURN_DONE);
++}
++
++/**
++ * The l2c_interrupt_fixup() will add the interrupts and interrupt-parent
++ * into the l2-cache
++ * Example:
++ * interrupts = <0x10 0x04>;
++ * interrupt-parent = <0x06>;
++ *
++ * @return 0 if ok, or FDT_ERR... if not.
++ */
++int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value)
++{
++	const char *target_node = "l2-cache";
++	const char *target = "interrupts";
++	const char *target_parent = "interrupt-parent";
++
++	/* AE350 PLIC Interrupt Source */
++	u32 target_pin = 16;
++	u32 target_trig = IRQ_TYPE_LEVEL_HIGH;
++
++	const char *irq_compat = "riscv,plic0";
++	const char *irq_cell_str = "#interrupt-cells";
++	int irq_node;
++	int irq_phandle;
++	int irq_cells;
++
++	const fdt32_t *irq_prop;
++	const char *full_name;
++	u32 tmp[2];
++	int ret;
++
++	full_name = fdt_get_name(fdt, node, NULL);
++
++	if (strncmp(full_name, target_node, strlen(target_node)) == 0) {
++		const u32 *value;
++
++		value = fdt_getprop(fdt, node, target, NULL);
++		if (value) {
++			/* Find the target in the node skip */
++			return RETURN_DONE;
++		}
++
++		show_rawdtb(target, target_node);
++
++		/* Add interrupt-parent */
++		irq_node = fdt_node_offset_by_compatible(fdt, 0, irq_compat);
++		if (irq_node < 0) {
++			dtb_error("Error on fdt_node_offset_by_compatible: %s\n",
++				  fdt_strerror(irq_node));
++			return irq_node;
++		}
++
++		irq_phandle = fdt_get_phandle(fdt, irq_node);
++		if (!irq_phandle) {
++			dtb_error("Error on fdt_get_phandle: %s\n",
++				  fdt_strerror(irq_phandle));
++		}
++
++		/* Add interrupts */
++		irq_prop = fdt_getprop(fdt, irq_node,
++				       irq_cell_str, NULL);
++
++		if (!irq_prop) {
++			dtb_error("Missing %s in interrupt-parent: %d\n",
++				  irq_cell_str, *irq_prop);
++			return -EINVAL;
++		}
++
++		irq_cells = fdt32_to_cpu(*irq_prop);
++		if (irq_cells != 2) {
++			dtb_error("%s is not equal to 2 (%d)\n",
++				  irq_cell_str, irq_cells);
++			return -EINVAL;
++		}
++
++		/* For cell is 2 */
++		ret = fdt_appendprop_u32(fdt, node,
++					 target_parent, irq_phandle);
++		if (ret < 0) {
++			dtb_error("Error on fdt_appendprop_u32 for %s: %s\n",
++				  target_parent, fdt_strerror(ret));
++			return ret;
++		}
++
++		tmp[0] = cpu_to_fdt32(target_pin);
++		tmp[1] = cpu_to_fdt32(target_trig);
++
++		ret = fdt_appendprop(fdt, node, target,
++				     tmp, sizeof(tmp));
++		if (ret) {
++			dtb_error("Error on fdt_appendprop: %s\n",
++				  fdt_strerror(ret));
++		}
++
++		show_result(fdt, node, target, RESULT_NUMERAL);
++		show_result(fdt, node, target_parent, RESULT_NUMERAL);
++
++		return ret;
++	}
++
++	return !(RETURN_DONE);
++}
+diff --git a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+index 8eb6d61ea422..8a42619b2207 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
++++ b/board/andestech/common/swdtb_merger/swdtb_merger_fixup.h
+@@ -36,4 +36,7 @@ int plmt_fixup(void *fdt, int node, char *name, char *value);
+ 
+ int riscv_isa_fixup(void *fdt, int node, char *name, char *value);
+ int andespmu_node_fixup(void *fdt, int node, char *name, char *value);
++
++int l2c_cache_line_fixup(void *fdt, int node, char *name, char *value);
++int l2c_interrupt_fixup(void *fdt, int node, char *name, char *value);
+ #endif
+diff --git a/board/andestech/common/swdtb_merger/swdtb_tool.h b/board/andestech/common/swdtb_merger/swdtb_tool.h
+index 1f51eb25bc20..db99ed3fc809 100644
+--- a/board/andestech/common/swdtb_merger/swdtb_tool.h
++++ b/board/andestech/common/swdtb_merger/swdtb_tool.h
+@@ -32,6 +32,13 @@ typedef u32 cell_t;
+ #define KCYN  "\x1B[36m"
+ #define KWHT  "\x1B[37m"
+ 
++#define IRQ_TYPE_NONE		0
++#define IRQ_TYPE_EDGE_RISING	1
++#define IRQ_TYPE_EDGE_FALLING	2
++#define IRQ_TYPE_EDGE_BOTH	(IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING)
++#define IRQ_TYPE_LEVEL_HIGH	4
++#define IRQ_TYPE_LEVEL_LOW	8
++
+ bool fdt_data_is_one_string(const char *data, int len);
+ 
+ int compatible_change(void *fdt, int node, char *name, char *value,
+-- 
+2.34.1
+

@@ -1,0 +1,97 @@
+From a2b39f9451af3e5532cefa4664db90b3d502011b Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Mon, 12 Aug 2024 14:31:43 +0800
+Subject: [PATCH 073/168] riscv: dts: andes: rename compatible string
+ "andestech,a[x]25" to "andestech,ae350"
+
+Signed-off-by: charles <dminus@andestech.com>
+---
+ arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts    | 2 +-
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts              | 2 +-
+ arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts  | 2 +-
+ arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts   | 2 +-
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts             | 2 +-
+ arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts | 2 +-
+ 6 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index bdc649ff0214..9cac0ddfa204 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,a25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,a25";
+ 
+ 	aliases {
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index 2e8b571174e4..69554f22faa3 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,a25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,a25";
+ 
+ 	aliases {
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index d5c875b91ffd..8f62087cebeb 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,a25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,a25";
+ 
+ 	aliases {
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index d450a7a982a4..f85f3cbf80e7 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,ax25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,ax25";
+ 
+ 	aliases {
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index 4a92a73ef93a..584745584384 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,ax25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,ax25";
+ 
+ 	aliases {
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index ac3ce5aeda22..7b5fa7b289a8 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -3,7 +3,7 @@
+ / {
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	compatible = "andestech,ax25";
++	compatible = "andestech,ae350";
+ 	model = "andestech,ax25";
+ 
+ 	aliases {
+-- 
+2.34.1
+

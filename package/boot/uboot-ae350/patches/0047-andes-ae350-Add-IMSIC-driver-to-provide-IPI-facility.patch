@@ -1,0 +1,58 @@
+From 716a0022f2f2126ee13d5718d58b564aec260b98 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 2 Jan 2025 16:17:56 +0800
+Subject: [PATCH 47/53] andes: ae350: Add IMSIC driver to provide IPI facility
+ for ae350
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/cpu/andes/Kconfig |  4 +++-
+ arch/riscv/cpu/andes/cpu.c   | 11 +++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/arch/riscv/cpu/andes/Kconfig b/arch/riscv/cpu/andes/Kconfig
+index 120fec5e5409..c25bc3bd5a22 100644
+--- a/arch/riscv/cpu/andes/Kconfig
++++ b/arch/riscv/cpu/andes/Kconfig
+@@ -7,7 +7,9 @@ config RISCV_ANDES
+ 	imply RISCV_TIMER if (RISCV_SMODE || SPL_RISCV_SMODE)
+ 	imply ANDES_PLMT_TIMER
+ 	imply SPL_ANDES_PLMT_TIMER
+-	imply ANDES_PLICSW if (RISCV_MMODE || SPL_RISCV_MMODE)
++	imply ANDES_PLICSW if (!RISCV_ISA_SMAIA && !SPL_RISCV_ISA_SMAIA)
++	imply RISCV_IMSIC if (RISCV_MMODE && RISCV_ISA_SMAIA)
++	imply SPL_RISCV_IMSIC if (SPL_RISCV_MMODE && SPL_RISCV_ISA_SMAIA)
+ 	imply ANDES_L2_CACHE
+ 	imply SPL_CPU
+ 	imply SPL_OPENSBI
+diff --git a/arch/riscv/cpu/andes/cpu.c b/arch/riscv/cpu/andes/cpu.c
+index 79c333dff12f..a65170b2bf00 100644
+--- a/arch/riscv/cpu/andes/cpu.c
++++ b/arch/riscv/cpu/andes/cpu.c
+@@ -10,6 +10,9 @@
+ #include <asm/cache.h>
+ #include <asm/csr.h>
+ #include <asm/arch-andes/csr.h>
++#include <asm/smp.h>
++#include <log.h>
++#include <hang.h>
+ 
+ /*
+  * cleanup_before_linux() is called just before we call linux
+@@ -89,5 +92,13 @@ void harts_early_init(void)
+ #endif
+ 			csr_write(CSR_SSTATEEN0, sstateen0);
+ 		}
++
++		if (CONFIG_IS_ENABLED(RISCV_IMSIC)) {
++			int ret = riscv_init_ipi();
++			if (ret) {
++				printf("Enable IMSIC IPI fail (error %d)\n", ret);
++				hang();
++			}
++		}
+ 	}
+ }
+-- 
+2.34.1
+

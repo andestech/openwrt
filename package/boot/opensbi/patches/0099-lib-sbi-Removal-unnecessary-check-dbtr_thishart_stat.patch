@@ -1,0 +1,31 @@
+From 744f4956534d5fba2f42c1361139099d574347ff Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Fri, 3 May 2024 21:53:34 +0800
+Subject: [PATCH 099/172] lib: sbi: Removal unnecessary check
+ dbtr_thishart_state_ptr
+
+After getting hart_shmem_base, dbtr_thishart_state_ptr cannot be
+empty. So remove check code.
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+---
+ lib/sbi/sbi_dbtr.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 5b072853facb..3cc1ef86baa2 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -684,8 +684,6 @@ int sbi_dbtr_update_trig(unsigned long smode,
+ 
+ 	shmem_base = hart_shmem_base();
+ 	hs = dbtr_thishart_state_ptr();
+-	if (!hs)
+-		return SBI_ERR_FAILED;
+ 
+ 	for_each_set_bit_from(idx, &trig_mask, hs->total_trigs) {
+ 		trig = INDEX_TO_TRIGGER(idx);
+-- 
+2.34.1
+

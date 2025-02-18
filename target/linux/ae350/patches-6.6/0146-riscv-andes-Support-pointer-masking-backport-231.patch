@@ -1,0 +1,1316 @@
+From 944377e5a07d77fae57547676eb81b4e1a53c8a9 Mon Sep 17 00:00:00 2001
+From: Mina Hui-Min Chou <minachou@andestech.com>
+Date: Thu, 19 Dec 2024 11:13:48 +0800
+Subject: [PATCH 146/168] riscv: andes: Support pointer masking [backport]
+ (#231)
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/231
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-committed-by: Mina Hui-Min Chou <minachou@andestech.com>
+---
+ .../devicetree/bindings/riscv/extensions.yaml |  18 +
+ Documentation/riscv/hwprobe.rst               |   3 +
+ Documentation/riscv/uabi.rst                  |  16 +
+ arch/riscv/Kconfig                            |  11 +
+ arch/riscv/include/asm/compat.h               |   8 +
+ arch/riscv/include/asm/csr.h                  |  19 +
+ arch/riscv/include/asm/hwcap.h                |   5 +
+ arch/riscv/include/asm/kvm_host.h             |   2 +
+ arch/riscv/include/asm/mmu.h                  |   8 +
+ arch/riscv/include/asm/mmu_context.h          |  13 +
+ arch/riscv/include/asm/processor.h            |  10 +
+ arch/riscv/include/asm/switch_to.h            |  11 +
+ arch/riscv/include/asm/uaccess.h              |  43 ++-
+ arch/riscv/include/uapi/asm/hwprobe.h         |   1 +
+ arch/riscv/include/uapi/asm/kvm.h             |   3 +
+ arch/riscv/kernel/cpufeature.c                |   3 +
+ arch/riscv/kernel/process.c                   | 154 ++++++++
+ arch/riscv/kernel/ptrace.c                    |  48 ++-
+ arch/riscv/kernel/sys_riscv.c                 |   3 +
+ arch/riscv/kvm/vcpu.c                         |  16 +
+ arch/riscv/kvm/vcpu_onereg.c                  |   4 +
+ include/uapi/linux/elf.h                      |   1 +
+ include/uapi/linux/prctl.h                    |   5 +-
+ .../selftests/kvm/riscv/get-reg-list.c        |   6 +
+ tools/testing/selftests/riscv/Makefile        |   2 +-
+ tools/testing/selftests/riscv/abi/.gitignore  |   1 +
+ tools/testing/selftests/riscv/abi/Makefile    |  10 +
+ .../selftests/riscv/abi/pointer_masking.c     | 332 ++++++++++++++++++
+ 28 files changed, 746 insertions(+), 10 deletions(-)
+ create mode 100644 tools/testing/selftests/riscv/abi/.gitignore
+ create mode 100644 tools/testing/selftests/riscv/abi/Makefile
+ create mode 100644 tools/testing/selftests/riscv/abi/pointer_masking.c
+
+diff --git a/Documentation/devicetree/bindings/riscv/extensions.yaml b/Documentation/devicetree/bindings/riscv/extensions.yaml
+index 3770f8a7553b..bcb9af7be728 100644
+--- a/Documentation/devicetree/bindings/riscv/extensions.yaml
++++ b/Documentation/devicetree/bindings/riscv/extensions.yaml
+@@ -128,6 +128,18 @@ properties:
+             changes to interrupts as frozen at commit ccbddab ("Merge pull
+             request #42 from riscv/jhauser-2023-RC4") of riscv-aia.
+ 
++        - const: smmpm
++          description: |
++            The standard Smmpm extension for M-mode pointer masking as
++            ratified at commit d70011dde6c2 ("Update to ratified state")
++            of riscv-j-extension.
++
++        - const: smnpm
++          description: |
++            The standard Smnpm extension for next-mode pointer masking as
++            ratified at commit d70011dde6c2 ("Update to ratified state")
++            of riscv-j-extension.
++
+         - const: ssaia
+           description: |
+             The standard Ssaia supervisor-level extension for the advanced
+@@ -141,6 +153,12 @@ properties:
+             and mode-based filtering as ratified at commit 01d1df0 ("Add ability
+             to manually trigger workflow. (#2)") of riscv-count-overflow.
+ 
++        - const: ssnpm
++          description: |
++            The standard Ssnpm extension for next-mode pointer masking as
++            ratified at commit d70011dde6c2 ("Update to ratified state")
++            of riscv-j-extension.
++
+         - const: sstc
+           description: |
+             The standard Sstc supervisor-level extension for time compare as
+diff --git a/Documentation/riscv/hwprobe.rst b/Documentation/riscv/hwprobe.rst
+index 3b49d8d5af72..bbbf40140a27 100644
+--- a/Documentation/riscv/hwprobe.rst
++++ b/Documentation/riscv/hwprobe.rst
+@@ -134,6 +134,9 @@ The following keys are defined:
+   * :c:macro:`RISCV_HWPROBE_EXT_ZVKT`: The Zvkt extension is supported as
+        defined in version 1.0 of the RISC-V Cryptography Extensions Volume II.
+ 
++  * :c:macro:`RISCV_HWPROBE_EXT_SUPM`: The Supm extension is supported as
++       defined in version 1.0 of the RISC-V Pointer Masking extensions.
++
+ * :c:macro:`RISCV_HWPROBE_KEY_CPUPERF_0`: A bitmask that contains performance
+   information about the selected set of processors.
+ 
+diff --git a/Documentation/riscv/uabi.rst b/Documentation/riscv/uabi.rst
+index 8960fac42c40..e39ce3d9301a 100644
+--- a/Documentation/riscv/uabi.rst
++++ b/Documentation/riscv/uabi.rst
+@@ -46,3 +46,19 @@ Misaligned accesses
+ -------------------
+ 
+ Misaligned accesses are supported in userspace, but they may perform poorly.
++
++Pointer masking
++---------------
++
++Support for pointer masking in userspace (the Supm extension) is provided via
++the ``PR_SET_TAGGED_ADDR_CTRL`` and ``PR_GET_TAGGED_ADDR_CTRL`` ``prctl()``
++operations. Pointer masking is disabled by default. To enable it, userspace
++must call ``PR_SET_TAGGED_ADDR_CTRL`` with the ``PR_PMLEN`` field set to the
++number of mask/tag bits needed by the application. ``PR_PMLEN`` is interpreted
++as a lower bound; if the kernel is unable to satisfy the request, the
++``PR_SET_TAGGED_ADDR_CTRL`` operation will fail. The actual number of tag bits
++is returned in ``PR_PMLEN`` by the ``PR_GET_TAGGED_ADDR_CTRL`` operation.
++
++Additionally, when pointer masking is enabled (``PR_PMLEN`` is greater than 0),
++a tagged address ABI is supported, with the same interface and behavior as
++documented for AArch64 (Documentation/arch/arm64/tagged-address-abi.rst).
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index b9d66e77ac18..0f90eb6c5225 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -449,6 +449,17 @@ config RISCV_ISA_C
+ 
+ 	  If you don't know what to do here, say Y.
+ 
++config RISCV_ISA_SUPM
++	bool "Supm extension for userspace pointer masking"
++	depends on 64BIT
++	default y
++	help
++	  Add support for pointer masking in userspace (Supm) when the
++	  underlying hardware extension (Smnpm or Ssnpm) is detected at boot.
++
++	  If this option is disabled, userspace will be unable to use
++	  the prctl(PR_{SET,GET}_TAGGED_ADDR_CTRL) API.
++
+ config RISCV_ISA_SVNAPOT
+ 	bool "Svnapot extension support for supervisor mode NAPOT pages"
+ 	depends on 64BIT && MMU
+diff --git a/arch/riscv/include/asm/compat.h b/arch/riscv/include/asm/compat.h
+index 2ac955b51148..bc45e2e84d97 100644
+--- a/arch/riscv/include/asm/compat.h
++++ b/arch/riscv/include/asm/compat.h
+@@ -17,6 +17,14 @@ static inline int is_compat_task(void)
+ 	return test_thread_flag(TIF_32BIT);
+ }
+ 
++static inline int is_compat_thread(struct thread_info *thread)
++{
++	if (!IS_ENABLED(CONFIG_COMPAT))
++		return 0;
++
++	return test_ti_thread_flag(thread, TIF_32BIT);
++}
++
+ struct compat_user_regs_struct {
+ 	compat_ulong_t pc;
+ 	compat_ulong_t ra;
+diff --git a/arch/riscv/include/asm/csr.h b/arch/riscv/include/asm/csr.h
+index 777cb8299551..d70caf0129f0 100644
+--- a/arch/riscv/include/asm/csr.h
++++ b/arch/riscv/include/asm/csr.h
+@@ -119,6 +119,10 @@
+ 
+ /* HSTATUS flags */
+ #ifdef CONFIG_64BIT
++#define HSTATUS_HUPMM		_AC(0x3000000000000, UL)
++#define HSTATUS_HUPMM_PMLEN_0	_AC(0x0000000000000, UL)
++#define HSTATUS_HUPMM_PMLEN_7	_AC(0x2000000000000, UL)
++#define HSTATUS_HUPMM_PMLEN_16	_AC(0x3000000000000, UL)
+ #define HSTATUS_VSXL		_AC(0x300000000, UL)
+ #define HSTATUS_VSXL_SHIFT	32
+ #endif
+@@ -194,6 +198,10 @@
+ /* xENVCFG flags */
+ #define ENVCFG_STCE			(_AC(1, ULL) << 63)
+ #define ENVCFG_PBMTE			(_AC(1, ULL) << 62)
++#define ENVCFG_PMM			(_AC(0x3, ULL) << 32)
++#define ENVCFG_PMM_PMLEN_0		(_AC(0x0, ULL) << 32)
++#define ENVCFG_PMM_PMLEN_7		(_AC(0x2, ULL) << 32)
++#define ENVCFG_PMM_PMLEN_16		(_AC(0x3, ULL) << 32)
+ #define ENVCFG_CBZE			(_AC(1, UL) << 7)
+ #define ENVCFG_CBCFE			(_AC(1, UL) << 6)
+ #define ENVCFG_CBIE_SHIFT		4
+@@ -203,6 +211,12 @@
+ #define ENVCFG_CBIE_INV			_AC(0x3, UL)
+ #define ENVCFG_FIOM			_AC(0x1, UL)
+ 
++/* mseccfg bits */
++#define MSECCFG_PMM			ENVCFG_PMM
++#define MSECCFG_PMM_PMLEN_0		ENVCFG_PMM_PMLEN_0
++#define MSECCFG_PMM_PMLEN_7		ENVCFG_PMM_PMLEN_7
++#define MSECCFG_PMM_PMLEN_16		ENVCFG_PMM_PMLEN_16
++
+ /* symbolic CSR names: */
+ #define CSR_CYCLE		0xc00
+ #define CSR_TIME		0xc01
+@@ -275,6 +289,7 @@
+ #define CSR_SIE			0x104
+ #define CSR_STVEC		0x105
+ #define CSR_SCOUNTEREN		0x106
++#define CSR_SENVCFG		0x10a
+ #define CSR_SSCRATCH		0x140
+ #define CSR_SEPC		0x141
+ #define CSR_SCAUSE		0x142
+@@ -363,6 +378,8 @@
+ #define CSR_MIP			0x344
+ #define CSR_PMPCFG0		0x3a0
+ #define CSR_PMPADDR0		0x3b0
++#define CSR_MSECCFG		0x747
++#define CSR_MSECCFGH		0x757
+ #define CSR_MVENDORID		0xf11
+ #define CSR_MARCHID		0xf12
+ #define CSR_MIMPID		0xf13
+@@ -397,6 +414,7 @@
+ # define CSR_STATUS	CSR_MSTATUS
+ # define CSR_IE		CSR_MIE
+ # define CSR_TVEC	CSR_MTVEC
++# define CSR_ENVCFG	CSR_MENVCFG
+ # define CSR_SCRATCH	CSR_MSCRATCH
+ # define CSR_EPC	CSR_MEPC
+ # define CSR_CAUSE	CSR_MCAUSE
+@@ -421,6 +439,7 @@
+ # define CSR_STATUS	CSR_SSTATUS
+ # define CSR_IE		CSR_SIE
+ # define CSR_TVEC	CSR_STVEC
++# define CSR_ENVCFG	CSR_SENVCFG
+ # define CSR_SCRATCH	CSR_SSCRATCH
+ # define CSR_EPC	CSR_SEPC
+ # define CSR_CAUSE	CSR_SCAUSE
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index 03859424d151..304a340e948b 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -75,6 +75,9 @@
+ #define RISCV_ISA_EXT_ZVKSED		63
+ #define RISCV_ISA_EXT_ZVKSH		64
+ #define RISCV_ISA_EXT_ZVKT		65
++#define RISCV_ISA_EXT_SMMPM		87
++#define RISCV_ISA_EXT_SMNPM		88
++#define RISCV_ISA_EXT_SSNPM		89
+ 
+ #define RISCV_ISA_EXT_XANDESPMU		126
+ #define RISCV_ISA_EXT_XANDESDSP		127
+@@ -84,8 +87,10 @@
+ 
+ #ifdef CONFIG_RISCV_M_MODE
+ #define RISCV_ISA_EXT_SxAIA		RISCV_ISA_EXT_SMAIA
++#define RISCV_ISA_EXT_SUPM		RISCV_ISA_EXT_SMNPM
+ #else
+ #define RISCV_ISA_EXT_SxAIA		RISCV_ISA_EXT_SSAIA
++#define RISCV_ISA_EXT_SUPM		RISCV_ISA_EXT_SSNPM
+ #endif
+ 
+ #endif /* _ASM_RISCV_HWCAP_H */
+diff --git a/arch/riscv/include/asm/kvm_host.h b/arch/riscv/include/asm/kvm_host.h
+index 1ebf20dfbaa6..692da15bb915 100644
+--- a/arch/riscv/include/asm/kvm_host.h
++++ b/arch/riscv/include/asm/kvm_host.h
+@@ -162,6 +162,7 @@ struct kvm_vcpu_csr {
+ 	unsigned long hvip;
+ 	unsigned long vsatp;
+ 	unsigned long scounteren;
++	unsigned long senvcfg;
+ };
+ 
+ struct kvm_vcpu_arch {
+@@ -183,6 +184,7 @@ struct kvm_vcpu_arch {
+ 	unsigned long host_sscratch;
+ 	unsigned long host_stvec;
+ 	unsigned long host_scounteren;
++	unsigned long host_senvcfg;
+ 
+ 	/* CPU context of Host */
+ 	struct kvm_cpu_context host_context;
+diff --git a/arch/riscv/include/asm/mmu.h b/arch/riscv/include/asm/mmu.h
+index 355504b37f8e..4bfe01ef3ded 100644
+--- a/arch/riscv/include/asm/mmu.h
++++ b/arch/riscv/include/asm/mmu.h
+@@ -23,11 +23,19 @@ typedef struct {
+ #ifdef CONFIG_BINFMT_ELF_FDPIC
+ 	unsigned long exec_fdpic_loadmap;
+ 	unsigned long interp_fdpic_loadmap;
++#endif
++	unsigned long flags;
++#ifdef CONFIG_RISCV_ISA_SUPM
++	u8 pmlen;
+ #endif
+ } mm_context_t;
+ 
+ void __init create_pgd_mapping(pgd_t *pgdp, uintptr_t va, phys_addr_t pa,
+ 			       phys_addr_t sz, pgprot_t prot);
++
++/* Lock the pointer masking mode because this mm is multithreaded */
++#define MM_CONTEXT_LOCK_PMLEN	0
++
+ #endif /* __ASSEMBLY__ */
+ 
+ #endif /* _ASM_RISCV_MMU_H */
+diff --git a/arch/riscv/include/asm/mmu_context.h b/arch/riscv/include/asm/mmu_context.h
+index 7030837adc1a..8c4bc49a3a0f 100644
+--- a/arch/riscv/include/asm/mmu_context.h
++++ b/arch/riscv/include/asm/mmu_context.h
+@@ -20,6 +20,9 @@ void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+ static inline void activate_mm(struct mm_struct *prev,
+ 			       struct mm_struct *next)
+ {
++#ifdef CONFIG_RISCV_ISA_SUPM
++	next->context.pmlen = 0;
++#endif
+ 	switch_mm(prev, next, NULL);
+ }
+ 
+@@ -30,11 +33,21 @@ static inline int init_new_context(struct task_struct *tsk,
+ #ifdef CONFIG_MMU
+ 	atomic_long_set(&mm->context.id, 0);
+ #endif
++	if (IS_ENABLED(CONFIG_RISCV_ISA_SUPM))
++		clear_bit(MM_CONTEXT_LOCK_PMLEN, &mm->context.flags);
+ 	return 0;
+ }
+ 
+ DECLARE_STATIC_KEY_FALSE(use_asid_allocator);
+ 
++#ifdef CONFIG_RISCV_ISA_SUPM
++#define mm_untag_mask mm_untag_mask
++static inline unsigned long mm_untag_mask(struct mm_struct *mm)
++{
++	return -1UL >> mm->context.pmlen;
++}
++#endif
++
+ #include <asm-generic/mmu_context.h>
+ 
+ #endif /* _ASM_RISCV_MMU_CONTEXT_H */
+diff --git a/arch/riscv/include/asm/processor.h b/arch/riscv/include/asm/processor.h
+index 736654d4d281..8454557d1aa9 100644
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -8,6 +8,7 @@
+ 
+ #include <linux/const.h>
+ #include <linux/cache.h>
++#include <linux/prctl.h>
+ 
+ #include <vdso/processor.h>
+ 
+@@ -117,6 +118,7 @@ struct thread_struct {
+ 	unsigned long s[12];	/* s[0]: frame pointer */
+ 	struct __riscv_d_ext_state fstate;
+ 	unsigned long bad_cause;
++	unsigned long envcfg;
+ 	u32 riscv_v_flags;
+ 	u32 vstate_ctrl;
+ 	struct __riscv_v_ext_state vstate;
+@@ -174,6 +176,14 @@ extern long riscv_v_vstate_ctrl_set_current(unsigned long arg);
+ extern long riscv_v_vstate_ctrl_get_current(void);
+ #endif /* CONFIG_RISCV_ISA_V */
+ 
++#ifdef CONFIG_RISCV_ISA_SUPM
++/* PR_{SET,GET}_TAGGED_ADDR_CTRL prctl */
++long set_tagged_addr_ctrl(struct task_struct *task, unsigned long arg);
++long get_tagged_addr_ctrl(struct task_struct *task);
++#define SET_TAGGED_ADDR_CTRL(arg)	set_tagged_addr_ctrl(current, arg)
++#define GET_TAGGED_ADDR_CTRL()		get_tagged_addr_ctrl(current)
++#endif
++
+ #endif /* __ASSEMBLY__ */
+ 
+ #endif /* _ASM_RISCV_PROCESSOR_H */
+diff --git a/arch/riscv/include/asm/switch_to.h b/arch/riscv/include/asm/switch_to.h
+index 39d5d94fb1c1..6e822d05e73a 100644
+--- a/arch/riscv/include/asm/switch_to.h
++++ b/arch/riscv/include/asm/switch_to.h
+@@ -70,6 +70,17 @@ static __always_inline bool has_fpu(void) { return false; }
+ #define __switch_to_fpu(__prev, __next) do { } while (0)
+ #endif
+ 
++static inline void envcfg_update_bits(struct task_struct *task,
++				      unsigned long mask, unsigned long val)
++{
++	unsigned long envcfg;
++
++	envcfg = (task->thread.envcfg & ~mask) | val;
++	task->thread.envcfg = envcfg;
++	if (task == current)
++		csr_write(CSR_ENVCFG, envcfg);
++}
++
+ #ifdef CONFIG_ANDES_DSP
+ static inline void andesdsp_state_save(struct task_struct *task)
+ {
+diff --git a/arch/riscv/include/asm/uaccess.h b/arch/riscv/include/asm/uaccess.h
+index ecf6f4bc0cde..3538f96df0f9 100644
+--- a/arch/riscv/include/asm/uaccess.h
++++ b/arch/riscv/include/asm/uaccess.h
+@@ -9,8 +9,41 @@
+ #define _ASM_RISCV_UACCESS_H
+ 
+ #include <asm/asm-extable.h>
++#include <asm/cpufeature.h>
+ #include <asm/pgtable.h>		/* for TASK_SIZE */
+ 
++#ifdef CONFIG_RISCV_ISA_SUPM
++static inline unsigned long __untagged_addr_remote(struct mm_struct *mm, unsigned long addr)
++{
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SUPM)) {
++		u8 pmlen = mm->context.pmlen;
++
++		/* Virtual addresses are sign-extended; physical addresses are zero-extended. */
++		if (IS_ENABLED(CONFIG_MMU))
++			return (long)(addr << pmlen) >> pmlen;
++		else
++			return (addr << pmlen) >> pmlen;
++	}
++
++	return addr;
++}
++
++#define untagged_addr(addr) ({							\
++	unsigned long __addr = (__force unsigned long)(addr);			\
++	(__force __typeof__(addr))__untagged_addr_remote(current->mm, __addr);	\
++})
++
++#define untagged_addr_remote(mm, addr) ({					\
++	unsigned long __addr = (__force unsigned long)(addr);			\
++	mmap_assert_locked(mm);							\
++	(__force __typeof__(addr))__untagged_addr_remote(mm, __addr);		\
++})
++
++#define access_ok(addr, size) likely(__access_ok(untagged_addr(addr), size))
++#else
++#define untagged_addr(addr) (addr)
++#endif
++
+ /*
+  * User space memory access functions
+  */
+@@ -130,7 +163,7 @@ do {								\
+  */
+ #define __get_user(x, ptr)					\
+ ({								\
+-	const __typeof__(*(ptr)) __user *__gu_ptr = (ptr);	\
++	const __typeof__(*(ptr)) __user *__gu_ptr = untagged_addr(ptr); \
+ 	long __gu_err = 0;					\
+ 								\
+ 	__chk_user_ptr(__gu_ptr);				\
+@@ -246,7 +279,7 @@ do {								\
+  */
+ #define __put_user(x, ptr)					\
+ ({								\
+-	__typeof__(*(ptr)) __user *__gu_ptr = (ptr);		\
++	__typeof__(*(ptr)) __user *__gu_ptr = untagged_addr(ptr); \
+ 	__typeof__(*__gu_ptr) __val = (x);			\
+ 	long __pu_err = 0;					\
+ 								\
+@@ -295,13 +328,13 @@ unsigned long __must_check __asm_copy_from_user(void *to,
+ static inline unsigned long
+ raw_copy_from_user(void *to, const void __user *from, unsigned long n)
+ {
+-	return __asm_copy_from_user(to, from, n);
++	return __asm_copy_from_user(to, untagged_addr(from), n);
+ }
+ 
+ static inline unsigned long
+ raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+ {
+-	return __asm_copy_to_user(to, from, n);
++	return __asm_copy_to_user(untagged_addr(to), from, n);
+ }
+ 
+ extern long strncpy_from_user(char *dest, const char __user *src, long count);
+@@ -316,7 +349,7 @@ unsigned long __must_check clear_user(void __user *to, unsigned long n)
+ {
+ 	might_fault();
+ 	return access_ok(to, n) ?
+-		__clear_user(to, n) : n;
++		__clear_user(untagged_addr(to), n) : n;
+ }
+ 
+ #define __get_kernel_nofault(dst, src, type, err_label)			\
+diff --git a/arch/riscv/include/uapi/asm/hwprobe.h b/arch/riscv/include/uapi/asm/hwprobe.h
+index db6d75c5e9fc..9f7c2e185812 100644
+--- a/arch/riscv/include/uapi/asm/hwprobe.h
++++ b/arch/riscv/include/uapi/asm/hwprobe.h
+@@ -48,6 +48,7 @@ struct riscv_hwprobe {
+ #define		RISCV_HWPROBE_EXT_ZVKSED	(1 << 24)
+ #define		RISCV_HWPROBE_EXT_ZVKSH		(1 << 25)
+ #define		RISCV_HWPROBE_EXT_ZVKT		(1 << 26)
++#define		RISCV_HWPROBE_EXT_SUPM		(1ULL << 49)
+ #define RISCV_HWPROBE_KEY_CPUPERF_0	5
+ #define		RISCV_HWPROBE_MISALIGNED_UNKNOWN	(0 << 0)
+ #define		RISCV_HWPROBE_MISALIGNED_EMULATED	(1 << 0)
+diff --git a/arch/riscv/include/uapi/asm/kvm.h b/arch/riscv/include/uapi/asm/kvm.h
+index 992c5e407104..27a37b6468ff 100644
+--- a/arch/riscv/include/uapi/asm/kvm.h
++++ b/arch/riscv/include/uapi/asm/kvm.h
+@@ -80,6 +80,7 @@ struct kvm_riscv_csr {
+ 	unsigned long sip;
+ 	unsigned long satp;
+ 	unsigned long scounteren;
++	unsigned long senvcfg;
+ };
+ 
+ /* AIA CSR registers for KVM_GET_ONE_REG and KVM_SET_ONE_REG */
+@@ -131,6 +132,8 @@ enum KVM_RISCV_ISA_EXT_ID {
+ 	KVM_RISCV_ISA_EXT_ZICSR,
+ 	KVM_RISCV_ISA_EXT_ZIFENCEI,
+ 	KVM_RISCV_ISA_EXT_ZIHPM,
++	KVM_RISCV_ISA_EXT_SMNPM,
++	KVM_RISCV_ISA_EXT_SSNPM,
+ 	KVM_RISCV_ISA_EXT_MAX,
+ };
+ 
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index 12b8e3ec63e7..232f5411e9b3 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -289,8 +289,11 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+ 	__RISCV_ISA_EXT_BUNDLE(zvksg, riscv_zvksg_bundled_exts),
+ 	__RISCV_ISA_EXT_DATA(zvkt, RISCV_ISA_EXT_ZVKT),
+ 	__RISCV_ISA_EXT_DATA(smaia, RISCV_ISA_EXT_SMAIA),
++	__RISCV_ISA_EXT_DATA(smmpm, RISCV_ISA_EXT_SMMPM),
++	__RISCV_ISA_EXT_DATA(smnpm, RISCV_ISA_EXT_SMNPM),
+ 	__RISCV_ISA_EXT_DATA(ssaia, RISCV_ISA_EXT_SSAIA),
+ 	__RISCV_ISA_EXT_DATA(sscofpmf, RISCV_ISA_EXT_SSCOFPMF),
++	__RISCV_ISA_EXT_DATA(ssnpm, RISCV_ISA_EXT_SSNPM),
+ 	__RISCV_ISA_EXT_DATA(sstc, RISCV_ISA_EXT_SSTC),
+ 	__RISCV_ISA_EXT_DATA(svinval, RISCV_ISA_EXT_SVINVAL),
+ 	__RISCV_ISA_EXT_DATA(svnapot, RISCV_ISA_EXT_SVNAPOT),
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index 38be1932b150..9ae2717334d5 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -7,6 +7,7 @@
+  * Copyright (C) 2017 SiFive
+  */
+ 
++#include <linux/bitfield.h>
+ #include <linux/cpu.h>
+ #include <linux/kernel.h>
+ #include <linux/sched.h>
+@@ -165,6 +166,10 @@ void flush_thread(void)
+ 	memset(&current->thread.vstate, 0, sizeof(struct __riscv_v_ext_state));
+ 	clear_tsk_thread_flag(current, TIF_RISCV_V_DEFER_RESTORE);
+ #endif
++#ifdef CONFIG_RISCV_ISA_SUPM
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SUPM))
++		envcfg_update_bits(current, ENVCFG_PMM, ENVCFG_PMM_PMLEN_0);
++#endif
+ }
+ 
+ void arch_release_task_struct(struct task_struct *tsk)
+@@ -194,6 +199,10 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
+ 	unsigned long tls = args->tls;
+ 	struct pt_regs *childregs = task_pt_regs(p);
+ 
++	/* Ensure all threads in this mm have the same pointer masking mode. */
++	if (IS_ENABLED(CONFIG_RISCV_ISA_SUPM) && p->mm && (clone_flags & CLONE_VM))
++		set_bit(MM_CONTEXT_LOCK_PMLEN, &p->mm->context.flags);
++
+ 	memset(&p->thread.s, 0, sizeof(p->thread.s));
+ 
+ 	/* p->thread holds context to be restored by __switch_to() */
+@@ -228,3 +237,148 @@ void __init arch_task_cache_init(void)
+ {
+ 	riscv_v_setup_ctx_cache();
+ }
++
++#ifdef CONFIG_RISCV_ISA_SUPM
++enum {
++	PMLEN_0 = 0,
++	PMLEN_7 = 7,
++	PMLEN_16 = 16,
++};
++
++static bool have_user_pmlen_7;
++static bool have_user_pmlen_16;
++
++/*
++ * Control the relaxed ABI allowing tagged user addresses into the kernel.
++ */
++static unsigned int tagged_addr_disabled;
++
++long set_tagged_addr_ctrl(struct task_struct *task, unsigned long arg)
++{
++	unsigned long valid_mask = PR_PMLEN_MASK | PR_TAGGED_ADDR_ENABLE;
++	struct thread_info *ti = task_thread_info(task);
++	struct mm_struct *mm = task->mm;
++	unsigned long pmm;
++	u8 pmlen;
++
++	if (is_compat_thread(ti))
++		return -EINVAL;
++
++	if (arg & ~valid_mask)
++		return -EINVAL;
++
++	/*
++	 * Prefer the smallest PMLEN that satisfies the user's request,
++	 * in case choosing a larger PMLEN has a performance impact.
++	 */
++	pmlen = FIELD_GET(PR_PMLEN_MASK, arg);
++	if (pmlen == PMLEN_0) {
++		pmm = ENVCFG_PMM_PMLEN_0;
++	} else if (pmlen <= PMLEN_7 && have_user_pmlen_7) {
++		pmlen = PMLEN_7;
++		pmm = ENVCFG_PMM_PMLEN_7;
++	} else if (pmlen <= PMLEN_16 && have_user_pmlen_16) {
++		pmlen = PMLEN_16;
++		pmm = ENVCFG_PMM_PMLEN_16;
++	} else {
++		return -EINVAL;
++	}
++
++	/*
++	 * Do not allow the enabling of the tagged address ABI if globally
++	 * disabled via sysctl abi.tagged_addr_disabled, if pointer masking
++	 * is disabled for userspace.
++	 */
++	if (arg & PR_TAGGED_ADDR_ENABLE && (tagged_addr_disabled || !pmlen))
++		return -EINVAL;
++
++	if (!(arg & PR_TAGGED_ADDR_ENABLE))
++		pmlen = PMLEN_0;
++
++	if (mmap_write_lock_killable(mm))
++		return -EINTR;
++
++	if (test_bit(MM_CONTEXT_LOCK_PMLEN, &mm->context.flags) && mm->context.pmlen != pmlen) {
++		mmap_write_unlock(mm);
++		return -EBUSY;
++	}
++
++	envcfg_update_bits(task, ENVCFG_PMM, pmm);
++	mm->context.pmlen = pmlen;
++
++	mmap_write_unlock(mm);
++
++	return 0;
++}
++
++long get_tagged_addr_ctrl(struct task_struct *task)
++{
++	struct thread_info *ti = task_thread_info(task);
++	long ret = 0;
++
++	if (is_compat_thread(ti))
++		return -EINVAL;
++
++	/*
++	 * The mm context's pmlen is set only when the tagged address ABI is
++	 * enabled, so the effective PMLEN must be extracted from envcfg.PMM.
++	 */
++	switch (task->thread.envcfg & ENVCFG_PMM) {
++	case ENVCFG_PMM_PMLEN_7:
++		ret = FIELD_PREP(PR_PMLEN_MASK, PMLEN_7);
++		break;
++	case ENVCFG_PMM_PMLEN_16:
++		ret = FIELD_PREP(PR_PMLEN_MASK, PMLEN_16);
++		break;
++	}
++
++	if (task->mm->context.pmlen)
++		ret |= PR_TAGGED_ADDR_ENABLE;
++
++	return ret;
++}
++
++static bool try_to_set_pmm(unsigned long value)
++{
++	csr_set(CSR_ENVCFG, value);
++	return (csr_read_clear(CSR_ENVCFG, ENVCFG_PMM) & ENVCFG_PMM) == value;
++}
++
++/*
++ * Global sysctl to disable the tagged user addresses support. This control
++ * only prevents the tagged address ABI enabling via prctl() and does not
++ * disable it for tasks that already opted in to the relaxed ABI.
++ */
++
++static struct ctl_table tagged_addr_sysctl_table[] = {
++	{
++		.procname	= "tagged_addr_disabled",
++		.mode		= 0644,
++		.data		= &tagged_addr_disabled,
++		.maxlen		= sizeof(int),
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
++};
++
++static int __init tagged_addr_init(void)
++{
++	if (!riscv_has_extension_unlikely(RISCV_ISA_EXT_SUPM))
++		return 0;
++
++	/*
++	 * envcfg.PMM is a WARL field. Detect which values are supported.
++	 * Assume the supported PMLEN values are the same on all harts.
++	 */
++	csr_clear(CSR_ENVCFG, ENVCFG_PMM);
++	have_user_pmlen_7 = try_to_set_pmm(ENVCFG_PMM_PMLEN_7);
++	have_user_pmlen_16 = try_to_set_pmm(ENVCFG_PMM_PMLEN_16);
++
++	if (!register_sysctl("abi", tagged_addr_sysctl_table))
++		return -EINVAL;
++
++	return 0;
++}
++core_initcall(tagged_addr_init);
++#endif	/* CONFIG_RISCV_ISA_SUPM */
+diff --git a/arch/riscv/kernel/ptrace.c b/arch/riscv/kernel/ptrace.c
+index e8515aa9d80b..ea67e9fb7a58 100644
+--- a/arch/riscv/kernel/ptrace.c
++++ b/arch/riscv/kernel/ptrace.c
+@@ -28,6 +28,9 @@ enum riscv_regset {
+ #ifdef CONFIG_RISCV_ISA_V
+ 	REGSET_V,
+ #endif
++#ifdef CONFIG_RISCV_ISA_SUPM
++	REGSET_TAGGED_ADDR_CTRL,
++#endif
+ };
+ 
+ static int riscv_gpr_get(struct task_struct *target,
+@@ -152,6 +155,35 @@ static int riscv_vr_set(struct task_struct *target,
+ }
+ #endif
+ 
++#ifdef CONFIG_RISCV_ISA_SUPM
++static int tagged_addr_ctrl_get(struct task_struct *target,
++				const struct user_regset *regset,
++				struct membuf to)
++{
++	long ctrl = get_tagged_addr_ctrl(target);
++
++	if (IS_ERR_VALUE(ctrl))
++		return ctrl;
++
++	return membuf_write(&to, &ctrl, sizeof(ctrl));
++}
++
++static int tagged_addr_ctrl_set(struct task_struct *target,
++				const struct user_regset *regset,
++				unsigned int pos, unsigned int count,
++				const void *kbuf, const void __user *ubuf)
++{
++	int ret;
++	long ctrl;
++
++	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &ctrl, 0, -1);
++	if (ret)
++		return ret;
++
++	return set_tagged_addr_ctrl(target, ctrl);
++}
++#endif
++
+ static const struct user_regset riscv_user_regset[] = {
+ 	[REGSET_X] = {
+ 		.core_note_type = NT_PRSTATUS,
+@@ -182,6 +214,16 @@ static const struct user_regset riscv_user_regset[] = {
+ 		.set = riscv_vr_set,
+ 	},
+ #endif
++#ifdef CONFIG_RISCV_ISA_SUPM
++	[REGSET_TAGGED_ADDR_CTRL] = {
++		.core_note_type = NT_RISCV_TAGGED_ADDR_CTRL,
++		.n = 1,
++		.size = sizeof(long),
++		.align = sizeof(long),
++		.regset_get = tagged_addr_ctrl_get,
++		.set = tagged_addr_ctrl_set,
++	},
++#endif
+ };
+ 
+ static const struct user_regset_view riscv_user_native_view = {
+@@ -377,14 +419,14 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
+ 
+ 	return ret;
+ }
++#else
++static const struct user_regset_view compat_riscv_user_native_view = {};
+ #endif /* CONFIG_COMPAT */
+ 
+ const struct user_regset_view *task_user_regset_view(struct task_struct *task)
+ {
+-#ifdef CONFIG_COMPAT
+-	if (test_tsk_thread_flag(task, TIF_32BIT))
++	if (is_compat_thread(&task->thread_info))
+ 		return &compat_riscv_user_native_view;
+ 	else
+-#endif
+ 		return &riscv_user_native_view;
+ }
+diff --git a/arch/riscv/kernel/sys_riscv.c b/arch/riscv/kernel/sys_riscv.c
+index 09782d2cbb68..d35bc865de30 100644
+--- a/arch/riscv/kernel/sys_riscv.c
++++ b/arch/riscv/kernel/sys_riscv.c
+@@ -184,6 +184,9 @@ static void hwprobe_isa_ext0(struct riscv_hwprobe *pair,
+ 			EXT_KEY(ZVKSH);
+ 			EXT_KEY(ZVKT);
+ 		}
++
++		if (IS_ENABLED(CONFIG_RISCV_ISA_SUPM))
++			EXT_KEY(SUPM);
+ #undef EXT_KEY
+ 	}
+ 
+diff --git a/arch/riscv/kvm/vcpu.c b/arch/riscv/kvm/vcpu.c
+index 82229db1ce73..e30fdc43fd5a 100644
+--- a/arch/riscv/kvm/vcpu.c
++++ b/arch/riscv/kvm/vcpu.c
+@@ -606,6 +606,20 @@ static void kvm_riscv_update_hvip(struct kvm_vcpu *vcpu)
+ 	kvm_riscv_vcpu_aia_update_hvip(vcpu);
+ }
+ 
++static __always_inline void kvm_riscv_vcpu_swap_in_guest_state(struct kvm_vcpu *vcpu)
++{
++	struct kvm_vcpu_csr *csr = &vcpu->arch.guest_csr;
++
++	vcpu->arch.host_senvcfg = csr_swap(CSR_SENVCFG, csr->senvcfg);
++}
++
++static __always_inline void kvm_riscv_vcpu_swap_in_host_state(struct kvm_vcpu *vcpu)
++{
++	struct kvm_vcpu_csr *csr = &vcpu->arch.guest_csr;
++
++	csr->senvcfg = csr_swap(CSR_SENVCFG, vcpu->arch.host_senvcfg);
++}
++
+ /*
+  * Actually run the vCPU, entering an RCU extended quiescent state (EQS) while
+  * the vCPU is running.
+@@ -615,10 +629,12 @@ static void kvm_riscv_update_hvip(struct kvm_vcpu *vcpu)
+  */
+ static void noinstr kvm_riscv_vcpu_enter_exit(struct kvm_vcpu *vcpu)
+ {
++	kvm_riscv_vcpu_swap_in_guest_state(vcpu);
+ 	guest_state_enter_irqoff();
+ 	__kvm_riscv_switch_to(&vcpu->arch);
+ 	vcpu->arch.last_exit_cpu = vcpu->cpu;
+ 	guest_state_exit_irqoff();
++	kvm_riscv_vcpu_swap_in_host_state(vcpu);
+ }
+ 
+ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+diff --git a/arch/riscv/kvm/vcpu_onereg.c b/arch/riscv/kvm/vcpu_onereg.c
+index 9e7e755163a9..3babcbbc5c2f 100644
+--- a/arch/riscv/kvm/vcpu_onereg.c
++++ b/arch/riscv/kvm/vcpu_onereg.c
+@@ -35,6 +35,8 @@ static const unsigned long kvm_isa_ext_arr[] = {
+ 	[KVM_RISCV_ISA_EXT_V] = RISCV_ISA_EXT_v,
+ 	/* Multi letter extensions (alphabetically sorted) */
+ 	KVM_ISA_EXT_ARR(SSAIA),
++	[KVM_RISCV_ISA_EXT_SMNPM] = RISCV_ISA_EXT_SSNPM,
++	KVM_ISA_EXT_ARR(SSNPM),
+ 	KVM_ISA_EXT_ARR(SSTC),
+ 	KVM_ISA_EXT_ARR(SVINVAL),
+ 	KVM_ISA_EXT_ARR(SVNAPOT),
+@@ -85,6 +87,8 @@ static bool kvm_riscv_vcpu_isa_disable_allowed(unsigned long ext)
+ 	case KVM_RISCV_ISA_EXT_I:
+ 	case KVM_RISCV_ISA_EXT_M:
+ 	case KVM_RISCV_ISA_EXT_SSAIA:
++	case KVM_RISCV_ISA_EXT_SMNPM:
++	case KVM_RISCV_ISA_EXT_SSNPM:
+ 	case KVM_RISCV_ISA_EXT_SSTC:
+ 	case KVM_RISCV_ISA_EXT_SVINVAL:
+ 	case KVM_RISCV_ISA_EXT_SVNAPOT:
+diff --git a/include/uapi/linux/elf.h b/include/uapi/linux/elf.h
+index 9b731976ce2f..b049fdbf86fd 100644
+--- a/include/uapi/linux/elf.h
++++ b/include/uapi/linux/elf.h
+@@ -447,6 +447,7 @@ typedef struct elf64_shdr {
+ #define NT_MIPS_MSA	0x802		/* MIPS SIMD registers */
+ #define NT_RISCV_CSR	0x900		/* RISC-V Control and Status Registers */
+ #define NT_RISCV_VECTOR	0x901		/* RISC-V vector registers */
++#define NT_RISCV_TAGGED_ADDR_CTRL 0x902	/* RISC-V tagged address control (prctl()) */
+ #define NT_LOONGARCH_CPUCFG	0xa00	/* LoongArch CPU config registers */
+ #define NT_LOONGARCH_CSR	0xa01	/* LoongArch control and status registers */
+ #define NT_LOONGARCH_LSX	0xa02	/* LoongArch Loongson SIMD Extension registers */
+diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
+index 370ed14b1ae0..c029e5dd21d6 100644
+--- a/include/uapi/linux/prctl.h
++++ b/include/uapi/linux/prctl.h
+@@ -230,7 +230,7 @@ struct prctl_mm_map {
+ # define PR_PAC_APDBKEY			(1UL << 3)
+ # define PR_PAC_APGAKEY			(1UL << 4)
+ 
+-/* Tagged user address controls for arm64 */
++/* Tagged user address controls for arm64 and RISC-V */
+ #define PR_SET_TAGGED_ADDR_CTRL		55
+ #define PR_GET_TAGGED_ADDR_CTRL		56
+ # define PR_TAGGED_ADDR_ENABLE		(1UL << 0)
+@@ -244,6 +244,9 @@ struct prctl_mm_map {
+ # define PR_MTE_TAG_MASK		(0xffffUL << PR_MTE_TAG_SHIFT)
+ /* Unused; kept only for source compatibility */
+ # define PR_MTE_TCF_SHIFT		1
++/* RISC-V pointer masking tag length */
++# define PR_PMLEN_SHIFT			24
++# define PR_PMLEN_MASK			(0x7fUL << PR_PMLEN_SHIFT)
+ 
+ /* Control reclaim behavior when allocating memory */
+ #define PR_SET_IO_FLUSHER		57
+diff --git a/tools/testing/selftests/kvm/riscv/get-reg-list.c b/tools/testing/selftests/kvm/riscv/get-reg-list.c
+index 9f99ea42f45f..e3f6d3fcf280 100644
+--- a/tools/testing/selftests/kvm/riscv/get-reg-list.c
++++ b/tools/testing/selftests/kvm/riscv/get-reg-list.c
+@@ -49,6 +49,8 @@ bool filter_reg(__u64 reg)
+ 	case KVM_REG_RISCV_ISA_EXT | KVM_RISCV_ISA_EXT_ZICSR:
+ 	case KVM_REG_RISCV_ISA_EXT | KVM_RISCV_ISA_EXT_ZIFENCEI:
+ 	case KVM_REG_RISCV_ISA_EXT | KVM_RISCV_ISA_EXT_ZIHPM:
++	case KVM_REG_RISCV_ISA_EXT | KVM_RISCV_ISA_EXT_SMNPM:
++	case KVM_REG_RISCV_ISA_EXT | KVM_RISCV_ISA_EXT_SSNPM:
+ 		return true;
+ 	/* AIA registers are always available when Ssaia can't be disabled */
+ 	case KVM_REG_RISCV_CSR | KVM_REG_RISCV_CSR_AIA | KVM_REG_RISCV_CSR_AIA_REG(siselect):
+@@ -340,6 +342,8 @@ static const char *isa_ext_id_to_str(__u64 id)
+ 		"KVM_RISCV_ISA_EXT_ZICSR",
+ 		"KVM_RISCV_ISA_EXT_ZIFENCEI",
+ 		"KVM_RISCV_ISA_EXT_ZIHPM",
++		"KVM_RISCV_ISA_EXT_SMNPM",
++		"KVM_RISCV_ISA_EXT_SSNPM",
+ 	};
+ 
+ 	if (reg_off >= ARRAY_SIZE(kvm_isa_ext_reg_name)) {
+@@ -894,5 +898,7 @@ struct vcpu_reg_list *vcpu_configs[] = {
+ 	&aia_config,
+ 	&fp_f_config,
+ 	&fp_d_config,
++	&smnpm_config,
++	&ssnpm_config,
+ };
+ int vcpu_configs_n = ARRAY_SIZE(vcpu_configs);
+diff --git a/tools/testing/selftests/riscv/Makefile b/tools/testing/selftests/riscv/Makefile
+index 4a9ff515a3a0..099b8c1f46f8 100644
+--- a/tools/testing/selftests/riscv/Makefile
++++ b/tools/testing/selftests/riscv/Makefile
+@@ -5,7 +5,7 @@
+ ARCH ?= $(shell uname -m 2>/dev/null || echo not)
+ 
+ ifneq (,$(filter $(ARCH),riscv))
+-RISCV_SUBTARGETS ?= hwprobe vector mm
++RISCV_SUBTARGETS ?= abi hwprobe mm sigreturn vector
+ else
+ RISCV_SUBTARGETS :=
+ endif
+diff --git a/tools/testing/selftests/riscv/abi/.gitignore b/tools/testing/selftests/riscv/abi/.gitignore
+new file mode 100644
+index 000000000000..b38358f91c4d
+--- /dev/null
++++ b/tools/testing/selftests/riscv/abi/.gitignore
+@@ -0,0 +1 @@
++pointer_masking
+diff --git a/tools/testing/selftests/riscv/abi/Makefile b/tools/testing/selftests/riscv/abi/Makefile
+new file mode 100644
+index 000000000000..ed82ff9c664e
+--- /dev/null
++++ b/tools/testing/selftests/riscv/abi/Makefile
+@@ -0,0 +1,10 @@
++# SPDX-License-Identifier: GPL-2.0
++
++CFLAGS += -I$(top_srcdir)/tools/include
++
++TEST_GEN_PROGS := pointer_masking
++
++include ../../lib.mk
++
++$(OUTPUT)/pointer_masking: pointer_masking.c
++	$(CC) -static -o$@ $(CFLAGS) $(LDFLAGS) $^
+diff --git a/tools/testing/selftests/riscv/abi/pointer_masking.c b/tools/testing/selftests/riscv/abi/pointer_masking.c
+new file mode 100644
+index 000000000000..dee41b7ee3e3
+--- /dev/null
++++ b/tools/testing/selftests/riscv/abi/pointer_masking.c
+@@ -0,0 +1,332 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include <errno.h>
++#include <fcntl.h>
++#include <setjmp.h>
++#include <signal.h>
++#include <stdbool.h>
++#include <sys/prctl.h>
++#include <sys/wait.h>
++#include <unistd.h>
++
++#include "../../kselftest.h"
++
++#ifndef PR_PMLEN_SHIFT
++#define PR_PMLEN_SHIFT			24
++#endif
++#ifndef PR_PMLEN_MASK
++#define PR_PMLEN_MASK			(0x7fUL << PR_PMLEN_SHIFT)
++#endif
++
++static int dev_zero;
++
++static int pipefd[2];
++
++static sigjmp_buf jmpbuf;
++
++static void sigsegv_handler(int sig)
++{
++	siglongjmp(jmpbuf, 1);
++}
++
++static int min_pmlen;
++static int max_pmlen;
++
++static inline bool valid_pmlen(int pmlen)
++{
++	return pmlen == 0 || pmlen == 7 || pmlen == 16;
++}
++
++static void test_pmlen(void)
++{
++	ksft_print_msg("Testing available PMLEN values\n");
++
++	for (int request = 0; request <= 16; request++) {
++		int pmlen, ret;
++
++		ret = prctl(PR_SET_TAGGED_ADDR_CTRL, request << PR_PMLEN_SHIFT, 0, 0, 0);
++		if (ret)
++			goto pr_set_error;
++
++		ret = prctl(PR_GET_TAGGED_ADDR_CTRL, 0, 0, 0, 0);
++		ksft_test_result(ret >= 0, "PMLEN=%d PR_GET_TAGGED_ADDR_CTRL\n", request);
++		if (ret < 0)
++			goto pr_get_error;
++
++		pmlen = (ret & PR_PMLEN_MASK) >> PR_PMLEN_SHIFT;
++		ksft_test_result(pmlen >= request, "PMLEN=%d constraint\n", request);
++		ksft_test_result(valid_pmlen(pmlen), "PMLEN=%d validity\n", request);
++
++		if (min_pmlen == 0)
++			min_pmlen = pmlen;
++		if (max_pmlen < pmlen)
++			max_pmlen = pmlen;
++
++		continue;
++
++pr_set_error:
++		ksft_test_result_skip("PMLEN=%d PR_GET_TAGGED_ADDR_CTRL\n", request);
++pr_get_error:
++		ksft_test_result_skip("PMLEN=%d constraint\n", request);
++		ksft_test_result_skip("PMLEN=%d validity\n", request);
++	}
++
++	if (max_pmlen == 0)
++		ksft_exit_fail_msg("Failed to enable pointer masking\n");
++}
++
++static int set_tagged_addr_ctrl(int pmlen, bool tagged_addr_abi)
++{
++	int arg, ret;
++
++	arg = pmlen << PR_PMLEN_SHIFT | tagged_addr_abi;
++	ret = prctl(PR_SET_TAGGED_ADDR_CTRL, arg, 0, 0, 0);
++	if (!ret) {
++		ret = prctl(PR_GET_TAGGED_ADDR_CTRL, 0, 0, 0, 0);
++		if (ret == arg)
++			return 0;
++	}
++
++	return ret < 0 ? -errno : -ENODATA;
++}
++
++static void test_dereference_pmlen(int pmlen)
++{
++	static volatile int i;
++	volatile int *p;
++	int ret;
++
++	ret = set_tagged_addr_ctrl(pmlen, false);
++	if (ret)
++		return ksft_test_result_error("PMLEN=%d setup (%d)\n", pmlen, ret);
++
++	i = pmlen;
++
++	if (pmlen) {
++		p = (volatile int *)((uintptr_t)&i | 1UL << (__riscv_xlen - pmlen));
++
++		/* These dereferences should succeed. */
++		if (sigsetjmp(jmpbuf, 1))
++			return ksft_test_result_fail("PMLEN=%d valid tag\n", pmlen);
++		if (*p != pmlen)
++			return ksft_test_result_fail("PMLEN=%d bad value\n", pmlen);
++		++*p;
++	}
++
++	p = (volatile int *)((uintptr_t)&i | 1UL << (__riscv_xlen - pmlen - 1));
++
++	/* These dereferences should raise SIGSEGV. */
++	if (sigsetjmp(jmpbuf, 1))
++		return ksft_test_result_pass("PMLEN=%d dereference\n", pmlen);
++	++*p;
++	ksft_test_result_fail("PMLEN=%d invalid tag\n", pmlen);
++}
++
++static void test_dereference(void)
++{
++	ksft_print_msg("Testing userspace pointer dereference\n");
++
++	signal(SIGSEGV, sigsegv_handler);
++
++	test_dereference_pmlen(0);
++	test_dereference_pmlen(min_pmlen);
++	test_dereference_pmlen(max_pmlen);
++
++	signal(SIGSEGV, SIG_DFL);
++}
++
++static void execve_child_sigsegv_handler(int sig)
++{
++	exit(42);
++}
++
++static int execve_child(void)
++{
++	static volatile int i;
++	volatile int *p = (volatile int *)((uintptr_t)&i | 1UL << (__riscv_xlen - 7));
++
++	signal(SIGSEGV, execve_child_sigsegv_handler);
++
++	/* This dereference should raise SIGSEGV. */
++	return *p;
++}
++
++static void test_fork_exec(void)
++{
++	int ret, status;
++
++	ksft_print_msg("Testing fork/exec behavior\n");
++
++	ret = set_tagged_addr_ctrl(min_pmlen, false);
++	if (ret)
++		return ksft_test_result_error("setup (%d)\n", ret);
++
++	if (fork()) {
++		wait(&status);
++		ksft_test_result(WIFEXITED(status) && WEXITSTATUS(status) == 42,
++				 "dereference after fork\n");
++	} else {
++		static volatile int i = 42;
++		volatile int *p;
++
++		p = (volatile int *)((uintptr_t)&i | 1UL << (__riscv_xlen - min_pmlen));
++
++		/* This dereference should succeed. */
++		exit(*p);
++	}
++
++	if (fork()) {
++		wait(&status);
++		ksft_test_result(WIFEXITED(status) && WEXITSTATUS(status) == 42,
++				 "dereference after fork+exec\n");
++	} else {
++		/* Will call execve_child(). */
++		execve("/proc/self/exe", (char *const []) { "", NULL }, NULL);
++	}
++}
++
++static void test_tagged_addr_abi_sysctl(void)
++{
++	char value;
++	int fd;
++
++	ksft_print_msg("Testing tagged address ABI sysctl\n");
++
++	fd = open("/proc/sys/abi/tagged_addr_disabled", O_WRONLY);
++	if (fd < 0) {
++		ksft_test_result_skip("failed to open sysctl file\n");
++		ksft_test_result_skip("failed to open sysctl file\n");
++		return;
++	}
++
++	value = '1';
++	pwrite(fd, &value, 1, 0);
++	ksft_test_result(set_tagged_addr_ctrl(min_pmlen, true) == -EINVAL,
++			 "sysctl disabled\n");
++
++	value = '0';
++	pwrite(fd, &value, 1, 0);
++	ksft_test_result(set_tagged_addr_ctrl(min_pmlen, true) == 0,
++			 "sysctl enabled\n");
++
++	set_tagged_addr_ctrl(0, false);
++
++	close(fd);
++}
++
++static void test_tagged_addr_abi_pmlen(int pmlen)
++{
++	int i, *p, ret;
++
++	i = ~pmlen;
++
++	if (pmlen) {
++		p = (int *)((uintptr_t)&i | 1UL << (__riscv_xlen - pmlen));
++
++		ret = set_tagged_addr_ctrl(pmlen, false);
++		if (ret)
++			return ksft_test_result_error("PMLEN=%d ABI disabled setup (%d)\n",
++						      pmlen, ret);
++
++		ret = write(pipefd[1], p, sizeof(*p));
++		if (ret >= 0 || errno != EFAULT)
++			return ksft_test_result_fail("PMLEN=%d ABI disabled write\n", pmlen);
++
++		ret = read(dev_zero, p, sizeof(*p));
++		if (ret >= 0 || errno != EFAULT)
++			return ksft_test_result_fail("PMLEN=%d ABI disabled read\n", pmlen);
++
++		if (i != ~pmlen)
++			return ksft_test_result_fail("PMLEN=%d ABI disabled value\n", pmlen);
++
++		ret = set_tagged_addr_ctrl(pmlen, true);
++		if (ret)
++			return ksft_test_result_error("PMLEN=%d ABI enabled setup (%d)\n",
++						      pmlen, ret);
++
++		ret = write(pipefd[1], p, sizeof(*p));
++		if (ret != sizeof(*p))
++			return ksft_test_result_fail("PMLEN=%d ABI enabled write\n", pmlen);
++
++		ret = read(dev_zero, p, sizeof(*p));
++		if (ret != sizeof(*p))
++			return ksft_test_result_fail("PMLEN=%d ABI enabled read\n", pmlen);
++
++		if (i)
++			return ksft_test_result_fail("PMLEN=%d ABI enabled value\n", pmlen);
++
++		i = ~pmlen;
++	} else {
++		/* The tagged address ABI cannot be enabled when PMLEN == 0. */
++		ret = set_tagged_addr_ctrl(pmlen, true);
++		if (ret != -EINVAL)
++			return ksft_test_result_error("PMLEN=%d ABI setup (%d)\n",
++						      pmlen, ret);
++	}
++
++	p = (int *)((uintptr_t)&i | 1UL << (__riscv_xlen - pmlen - 1));
++
++	ret = write(pipefd[1], p, sizeof(*p));
++	if (ret >= 0 || errno != EFAULT)
++		return ksft_test_result_fail("PMLEN=%d invalid tag write (%d)\n", pmlen, errno);
++
++	ret = read(dev_zero, p, sizeof(*p));
++	if (ret >= 0 || errno != EFAULT)
++		return ksft_test_result_fail("PMLEN=%d invalid tag read\n", pmlen);
++
++	if (i != ~pmlen)
++		return ksft_test_result_fail("PMLEN=%d invalid tag value\n", pmlen);
++
++	ksft_test_result_pass("PMLEN=%d tagged address ABI\n", pmlen);
++}
++
++static void test_tagged_addr_abi(void)
++{
++	ksft_print_msg("Testing tagged address ABI\n");
++
++	test_tagged_addr_abi_pmlen(0);
++	test_tagged_addr_abi_pmlen(min_pmlen);
++	test_tagged_addr_abi_pmlen(max_pmlen);
++}
++
++static struct test_info {
++	unsigned int nr_tests;
++	void (*test_fn)(void);
++} tests[] = {
++	{ .nr_tests = 17 * 3, test_pmlen },
++	{ .nr_tests = 3, test_dereference },
++	{ .nr_tests = 2, test_fork_exec },
++	{ .nr_tests = 2, test_tagged_addr_abi_sysctl },
++	{ .nr_tests = 3, test_tagged_addr_abi },
++};
++
++int main(int argc, char **argv)
++{
++	unsigned int plan = 0;
++	int ret;
++
++	/* Check if this is the child process after execve(). */
++	if (!argv[0][0])
++		return execve_child();
++
++	dev_zero = open("/dev/zero", O_RDWR);
++	if (dev_zero < 0)
++		return 1;
++
++	/* Write to a pipe so the kernel must dereference the buffer pointer. */
++	ret = pipe(pipefd);
++	if (ret)
++		return 1;
++
++	ksft_print_header();
++
++	for (int i = 0; i < ARRAY_SIZE(tests); i++)
++		plan += tests[i].nr_tests;
++
++	ksft_set_plan(plan);
++
++	for (int i = 0; i < ARRAY_SIZE(tests); i++)
++		tests[i].test_fn();
++
++	ksft_finished();
++}
+-- 
+2.34.1
+

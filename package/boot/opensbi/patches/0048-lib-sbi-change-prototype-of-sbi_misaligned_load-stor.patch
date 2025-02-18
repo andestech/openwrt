@@ -1,0 +1,208 @@
+From 9221fe58d1e65d0a1b6f62098c814994ce04dd5d Mon Sep 17 00:00:00 2001
+From: Bo Gan <ganboing@gmail.com>
+Date: Tue, 5 Mar 2024 18:35:37 -0800
+Subject: [PATCH 048/172] lib: sbi: change prototype of
+ sbi_misaligned_load/store_handler
+
+This simplifies both handlers such that when the handler needs to
+redirect the original trap, it's readily available.
+
+Signed-off-by: Bo Gan <ganboing@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ include/sbi/sbi_trap_ldst.h |  9 ++++---
+ lib/sbi/sbi_trap.c          | 21 ++++++++--------
+ lib/sbi/sbi_trap_ldst.c     | 50 ++++++++++++++-----------------------
+ 3 files changed, 35 insertions(+), 45 deletions(-)
+
+diff --git a/include/sbi/sbi_trap_ldst.h b/include/sbi/sbi_trap_ldst.h
+index 9bbd2373b890..5f0ed921e485 100644
+--- a/include/sbi/sbi_trap_ldst.h
++++ b/include/sbi/sbi_trap_ldst.h
+@@ -11,13 +11,14 @@
+ #define __SBI_TRAP_LDST_H__
+ 
+ #include <sbi/sbi_types.h>
++#include <sbi/sbi_trap.h>
+ 
+ struct sbi_trap_regs;
+ 
+-int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+-				struct sbi_trap_regs *regs);
++int sbi_misaligned_load_handler(struct sbi_trap_regs *regs,
++				const struct sbi_trap_info *orig_trap);
+ 
+-int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+-				 struct sbi_trap_regs *regs);
++int sbi_misaligned_store_handler(struct sbi_trap_regs *regs,
++				 const struct sbi_trap_info *orig_trap);
+ 
+ #endif
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+index 10249811453b..e3799846587d 100644
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -285,6 +285,13 @@ struct sbi_trap_regs *sbi_trap_handler(struct sbi_trap_regs *regs)
+ 		}
+ 		return regs;
+ 	}
++	/* Original trap_info */
++	trap.epc   = regs->mepc;
++	trap.cause = mcause;
++	trap.tval  = mtval;
++	trap.tval2 = mtval2;
++	trap.tinst = mtinst;
++	trap.gva   = sbi_regs_gva(regs);
+ 
+ 	switch (mcause) {
+ 	case CAUSE_ILLEGAL_INSTRUCTION:
+@@ -292,11 +299,11 @@ struct sbi_trap_regs *sbi_trap_handler(struct sbi_trap_regs *regs)
+ 		msg = "illegal instruction handler failed";
+ 		break;
+ 	case CAUSE_MISALIGNED_LOAD:
+-		rc = sbi_misaligned_load_handler(mtval, mtval2, mtinst, regs);
++		rc  = sbi_misaligned_load_handler(regs, &trap);
+ 		msg = "misaligned load handler failed";
+ 		break;
+ 	case CAUSE_MISALIGNED_STORE:
+-		rc  = sbi_misaligned_store_handler(mtval, mtval2, mtinst, regs);
++		rc  = sbi_misaligned_store_handler(regs, &trap);
+ 		msg = "misaligned store handler failed";
+ 		break;
+ 	case CAUSE_SUPERVISOR_ECALL:
+@@ -311,14 +318,8 @@ struct sbi_trap_regs *sbi_trap_handler(struct sbi_trap_regs *regs)
+ 		/* fallthrough */
+ 	default:
+ 		/* If the trap came from S or U mode, redirect it there */
+-		trap.epc = regs->mepc;
+-		trap.cause = mcause;
+-		trap.tval = mtval;
+-		trap.tval2 = mtval2;
+-		trap.tinst = mtinst;
+-		trap.gva   = sbi_regs_gva(regs);
+-
+-		rc = sbi_trap_redirect(regs, &trap);
++		msg = "trap redirect failed";
++		rc  = sbi_trap_redirect(regs, &trap);
+ 		break;
+ 	}
+ 
+diff --git a/lib/sbi/sbi_trap_ldst.c b/lib/sbi/sbi_trap_ldst.c
+index a9ae96e9ae13..5feef605d2c7 100644
+--- a/lib/sbi/sbi_trap_ldst.c
++++ b/lib/sbi/sbi_trap_ldst.c
+@@ -34,8 +34,8 @@ static ulong sbi_misaligned_tinst_fixup(ulong orig_tinst, ulong new_tinst,
+ 		return orig_tinst | (addr_offset << SH_RS1);
+ }
+ 
+-int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+-				struct sbi_trap_regs *regs)
++int sbi_misaligned_load_handler(struct sbi_trap_regs *regs,
++				const struct sbi_trap_info *orig_trap)
+ {
+ 	ulong insn, insn_len;
+ 	union reg_data val;
+@@ -44,13 +44,13 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+ 
+ 	sbi_pmu_ctr_incr_fw(SBI_PMU_FW_MISALIGNED_LOAD);
+ 
+-	if (tinst & 0x1) {
++	if (orig_trap->tinst & 0x1) {
+ 		/*
+ 		 * Bit[0] == 1 implies trapped instruction value is
+ 		 * transformed instruction or custom instruction.
+ 		 */
+-		insn = tinst | INSN_16BIT_MASK;
+-		insn_len = (tinst & 0x2) ? INSN_LEN(insn) : 2;
++		insn	 = orig_trap->tinst | INSN_16BIT_MASK;
++		insn_len = (orig_trap->tinst & 0x2) ? INSN_LEN(insn) : 2;
+ 	} else {
+ 		/*
+ 		 * Bit[0] == 0 implies trapped instruction value is
+@@ -131,23 +131,17 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+ 		shift = 8 * (sizeof(ulong) - len);
+ 		insn = RVC_RS2S(insn) << SH_RD;
+ 	} else {
+-		uptrap.epc = regs->mepc;
+-		uptrap.cause = CAUSE_MISALIGNED_LOAD;
+-		uptrap.tval = addr;
+-		uptrap.tval2 = tval2;
+-		uptrap.tinst = tinst;
+-		uptrap.gva   = sbi_regs_gva(regs);
+-		return sbi_trap_redirect(regs, &uptrap);
++		return sbi_trap_redirect(regs, orig_trap);
+ 	}
+ 
+ 	val.data_u64 = 0;
+ 	for (i = 0; i < len; i++) {
+-		val.data_bytes[i] = sbi_load_u8((void *)(addr + i),
+-						&uptrap);
++		val.data_bytes[i] =
++			sbi_load_u8((void *)(orig_trap->tval + i), &uptrap);
+ 		if (uptrap.cause) {
+-			uptrap.epc = regs->mepc;
++			uptrap.epc   = regs->mepc;
+ 			uptrap.tinst = sbi_misaligned_tinst_fixup(
+-				tinst, uptrap.tinst, i);
++				orig_trap->tinst, uptrap.tinst, i);
+ 			return sbi_trap_redirect(regs, &uptrap);
+ 		}
+ 	}
+@@ -166,8 +160,8 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+ 	return 0;
+ }
+ 
+-int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+-				 struct sbi_trap_regs *regs)
++int sbi_misaligned_store_handler(struct sbi_trap_regs *regs,
++				 const struct sbi_trap_info *orig_trap)
+ {
+ 	ulong insn, insn_len;
+ 	union reg_data val;
+@@ -176,13 +170,13 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+ 
+ 	sbi_pmu_ctr_incr_fw(SBI_PMU_FW_MISALIGNED_STORE);
+ 
+-	if (tinst & 0x1) {
++	if (orig_trap->tinst & 0x1) {
+ 		/*
+ 		 * Bit[0] == 1 implies trapped instruction value is
+ 		 * transformed instruction or custom instruction.
+ 		 */
+-		insn = tinst | INSN_16BIT_MASK;
+-		insn_len = (tinst & 0x2) ? INSN_LEN(insn) : 2;
++		insn	 = orig_trap->tinst | INSN_16BIT_MASK;
++		insn_len = (orig_trap->tinst & 0x2) ? INSN_LEN(insn) : 2;
+ 	} else {
+ 		/*
+ 		 * Bit[0] == 0 implies trapped instruction value is
+@@ -248,22 +242,16 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+ 		len		= 2;
+ 		val.data_ulong = GET_RS2S(insn, regs);
+ 	} else {
+-		uptrap.epc = regs->mepc;
+-		uptrap.cause = CAUSE_MISALIGNED_STORE;
+-		uptrap.tval = addr;
+-		uptrap.tval2 = tval2;
+-		uptrap.tinst = tinst;
+-		uptrap.gva   = sbi_regs_gva(regs);
+-		return sbi_trap_redirect(regs, &uptrap);
++		return sbi_trap_redirect(regs, orig_trap);
+ 	}
+ 
+ 	for (i = 0; i < len; i++) {
+-		sbi_store_u8((void *)(addr + i), val.data_bytes[i],
++		sbi_store_u8((void *)(orig_trap->tval + i), val.data_bytes[i],
+ 			     &uptrap);
+ 		if (uptrap.cause) {
+-			uptrap.epc = regs->mepc;
++			uptrap.epc   = regs->mepc;
+ 			uptrap.tinst = sbi_misaligned_tinst_fixup(
+-				tinst, uptrap.tinst, i);
++				orig_trap->tinst, uptrap.tinst, i);
+ 			return sbi_trap_redirect(regs, &uptrap);
+ 		}
+ 	}
+-- 
+2.34.1
+

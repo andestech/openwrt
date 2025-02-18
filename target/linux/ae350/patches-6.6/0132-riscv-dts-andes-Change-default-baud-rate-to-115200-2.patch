@@ -1,0 +1,375 @@
+From e78d0d123ae603da1d3c6eb43a57ecd491926f90 Mon Sep 17 00:00:00 2001
+From: Che-Wei Chuang <cnoize@andestech.com>
+Date: Thu, 19 Dec 2024 17:27:16 +0800
+Subject: [PATCH 132/168] riscv: dts: andes: Change default baud rate to 115200
+ (#234)
+
+Update the Device Tree Source (DTS) to change the default baud rate from 38400 to 115200.
+
+Signed-off-by: Che-Wei Chuang cnoize@andestech.com
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/234
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Che-Wei Chuang <cnoize@andestech.com>
+Co-committed-by: Che-Wei Chuang <cnoize@andestech.com>
+---
+ .../riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts | 4 ++--
+ arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts          | 6 +++---
+ .../boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts     | 4 ++--
+ .../riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts | 6 +++---
+ arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts          | 6 +++---
+ .../boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts      | 4 ++--
+ arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts      | 4 ++--
+ arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts         | 6 +++---
+ .../boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts    | 4 ++--
+ .../boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts      | 6 +++---
+ arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts         | 6 +++---
+ arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts               | 6 +++---
+ arch/riscv/boot/dts/andes/ax45mpv_c1_d_hvm_ae350.dts        | 6 +++---
+ arch/riscv/boot/dts/andes/ax45mpv_c2_d_dsp_hvm_ae350.dts    | 6 +++---
+ arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts        | 6 +++---
+ arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts             | 6 +++---
+ 16 files changed, 43 insertions(+), 43 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+index 2f6496a877ff..13b950b73efe 100644
+--- a/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+index bbbc3a697fbd..581421999384 100644
+--- a/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a25mp_c4_d_dsp_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -225,7 +225,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x06>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+index 934b667ddc9f..28358c794b32 100644
+--- a/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+index 2816b5e8e03a..4f33176fc996 100644
+--- a/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -145,7 +145,7 @@ serial@f0300000 {
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			no-loopback-test = <0x01>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-io-width = <0x04>;
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+index 174737e4be18..4ed243b8d2ca 100644
+--- a/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/a45mp_c4_d_dsp_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -225,7 +225,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x06>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+index 9a8a818b2438..ec533e6c6cb7 100644
+--- a/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+index c6a7c34e6350..454538277224 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_amp_c2_64_d_ae350.dts
+@@ -332,7 +332,7 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ };
+diff --git a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+index bb1b071ae03d..a3c1b3b82cc2 100644
+--- a/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax25mp_c4_d_dsp_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -225,7 +225,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x06>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+index ee50d3a1ac35..74b3694ab498 100644
+--- a/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax27l2_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+diff --git a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+index 80a01c3153a3..e783d5099352 100644
+--- a/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45_c1_d_dsp_noncoherent_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -145,7 +145,7 @@ serial@f0300000 {
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			no-loopback-test = <0x01>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-io-width = <0x04>;
+ 		};
+ 
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+index 88a817bbfd63..c3c307cd66ac 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c4_d_dsp_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -225,7 +225,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x06>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+index 6b5773111419..c915a2d415db 100644
+--- a/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mp_c8_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -329,7 +329,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x0a>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c1_d_hvm_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c1_d_hvm_ae350.dts
+index ba3a50b56d3e..48d7222ee2b9 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c1_d_hvm_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c1_d_hvm_ae350.dts
+@@ -11,8 +11,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 	cpus {
+ 		#address-cells = <1>;
+@@ -134,7 +134,7 @@ serial0: serial@f0300000 {
+ 			interrupts = <9 4>;
+ 			interrupt-parent = <&plic0>;
+ 			clock-frequency = <19660800>;
+-			current-speed = <38400>;
++			current-speed = <115200>;
+ 			reg-shift = <2>;
+ 			reg-offset = <32>;
+ 			reg-io-width = <4>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c2_d_dsp_hvm_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c2_d_dsp_hvm_ae350.dts
+index 6623a9e0e91a..703e0a445eae 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c2_d_dsp_hvm_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c2_d_dsp_hvm_ae350.dts
+@@ -11,8 +11,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 	cpus {
+ 		#address-cells = <1>;
+@@ -160,7 +160,7 @@ serial0: serial@f0300000 {
+ 			interrupts = <9 4>;
+ 			interrupt-parent = <&plic0>;
+ 			clock-frequency = <19660800>;
+-			current-speed = <38400>;
++			current-speed = <115200>;
+ 			reg-shift = <2>;
+ 			reg-offset = <32>;
+ 			reg-io-width = <4>;
+diff --git a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+index c220095cdccd..50234d33656e 100644
+--- a/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax45mpv_c4_d_dsp_ae350.dts
+@@ -12,8 +12,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -225,7 +225,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x06>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+diff --git a/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts b/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
+index 45b75ae57ef7..68d913dde85d 100644
+--- a/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
++++ b/arch/riscv/boot/dts/andes/ax65mp_c2_d_ae350.dts
+@@ -13,8 +13,8 @@ aliases {
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,38400n8 debug loglevel=7 earlycon=sbi";
+-		stdout-path = "uart0:38400n8";
++		bootargs = "console=ttyS0,115200n8 debug loglevel=7 earlycon=sbi";
++		stdout-path = "uart0:115200n8";
+ 	};
+ 
+ 	cpus {
+@@ -176,7 +176,7 @@ serial@f0300000 {
+ 			interrupts = <0x09 0x04>;
+ 			interrupt-parent = <0x04>;
+ 			clock-frequency = <0x12c0000>;
+-			current-speed = <0x9600>;
++			current-speed = <115200>;
+ 			reg-shift = <0x02>;
+ 			reg-offset = <0x20>;
+ 			reg-io-width = <0x04>;
+-- 
+2.34.1
+

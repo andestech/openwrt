@@ -1,0 +1,118 @@
+From d5f1ca13c45847e6e1e203a50c0b532575c1197e Mon Sep 17 00:00:00 2001
+From: Hui Min Mina Chou <minachou@andestech.com>
+Date: Fri, 9 Aug 2024 11:04:56 +0800
+Subject: [PATCH 155/172] lib: utils: cache: Add L2C root domain region with
+ R/W permissions for both M/S-mode.
+
+In AST540, the cache is enabled in cleanup_before_linux() during U-boot
+Normal Boot[1], before kernel starts. On AX65 CPU, however, when an SBI
+ecall triggers OpenSBI to enable L2C, it results in a PMP load access
+violation due to SMEPMP restrictions on M-mode permissions across the
+entire address range. To prevent this, the L2C domain region and its
+permissions must be pre-configured during OpenSBI Early Init.
+
+List AX65 OpenSBI domain regions:
+ Domain0 Region00:0x00000000f0300000-0x00000000f0300fff M:(I,R,W) S/U: (R,W)
+ Domain0 Region01:0x00000000e0500000-0x00000000e050ffff M:(I,R,W) S/U: (R,W) <== L2C
+ Domain0 Region02:0x0000000000040000-0x000000000005ffff M:(R,W) S/U: ()
+ Domain0 Region03:0x0000000000000000-0x000000000003ffff M:(R,X) S/U: ()
+ Domain0 Region04:0x00000000e6000000-0x00000000e60fffff M:(I,R,W) S/U: ()
+ Domain0 Region05:0x00000000e6400000-0x00000000e67fffff M:(I,R,W) S/U: ()
+ Domain0 Region06:0x00000000e4000000-0x00000000e5ffffff M:(I,R,W) S/U: (R,W)
+ Domain0 Region07:0x0000000000000000-0xffffffffffffffff M: ()S/U: (R,W,X) <== SMEPMP
+
+[1]: https://gitea.andestech.com/RD-SW/u-boot.official/commit/f0823a753718bd183f151df23095aa7e792890ae
+Signed-off-by: Hui Min Mina Chou <minachou@andestech.com>
+---
+ lib/utils/cache/fdt_cache_andes_l2c.c | 21 +++++++++++++++++++--
+ platform/generic/andes/ae350.c        |  8 +++++++-
+ 2 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/lib/utils/cache/fdt_cache_andes_l2c.c b/lib/utils/cache/fdt_cache_andes_l2c.c
+index a226ec3dcf0d..2bb15ec013ce 100644
+--- a/lib/utils/cache/fdt_cache_andes_l2c.c
++++ b/lib/utils/cache/fdt_cache_andes_l2c.c
+@@ -64,6 +64,7 @@
+ 
+ struct l2c_data {
+ 	unsigned long addr;
++	unsigned long size;
+ 	/* L2C Gen1/Gen2 quirks */
+ 	unsigned int cmd_stride;
+ 	unsigned int status_stride;
+@@ -128,10 +129,10 @@ static struct cache andes_l2c = {
+ static int andes_l2c_init(void *fdt, int nodeoff, const struct fdt_match *match)
+ {
+ 	int rc;
+-	uint64_t addr;
++	uint64_t addr, size;
+ 	ulong mmsc_cfg;
+ 
+-	rc = fdt_get_node_addr_size(fdt, nodeoff, 0, &addr, NULL);
++	rc = fdt_get_node_addr_size(fdt, nodeoff, 0, &addr, &size);
+ 	if (rc)
+ 		return rc;
+ 
+@@ -152,6 +153,7 @@ static int andes_l2c_init(void *fdt, int nodeoff, const struct fdt_match *match)
+ 	}
+ 
+ 	l2c.addr = (unsigned long)addr;
++	l2c.size = (unsigned long)size;
+ 	if (readl((void *)(l2c.addr + L2C_REG_CFG_OFFSET)) & MEM_MAP_MSK) {
+ 		/* v1 memory map (Gen2) */
+ 		l2c.cmd_stride	      = 0x1000;
+@@ -164,6 +166,21 @@ static int andes_l2c_init(void *fdt, int nodeoff, const struct fdt_match *match)
+ 		l2c.status_bit_offset = 0x4;
+ 	}
+ 
++	/*
++	 * In AST540, the cache is enabled in cleanup_before_linux() during
++	 * U-boot Normal Boot, before kernel starts. On AX65 CPU, however,
++	 * when an SBI ecall triggers OpenSBI to enable L2C, it results in a
++	 * PMP load access violation due to SMEPMP restrictions on M-mode
++	 * permissions across the entire address range. To prevent this, the
++	 * L2C domain region and its permissions must be pre-configured during
++	 * OpenSBI platform early init.
++	 */
++	rc = sbi_domain_root_add_memrange(l2c.addr, l2c.size, 0x1000,
++		(SBI_DOMAIN_MEMREGION_MMIO |
++		 SBI_DOMAIN_MEMREGION_SHARED_SURW_MRW));
++	if (rc)
++		return rc;
++
+ 	rc = cache_add(&andes_l2c);
+ 	if (rc)
+ 		return rc;
+diff --git a/platform/generic/andes/ae350.c b/platform/generic/andes/ae350.c
+index e59527b4b474..9a6e771b7d12 100644
+--- a/platform/generic/andes/ae350.c
++++ b/platform/generic/andes/ae350.c
+@@ -114,11 +114,16 @@ static int ae350_final_init(bool cold_boot, const struct fdt_match *match)
+ 	pma_init();
+ 	ae350_hsm_device_init();
+ 	trigger_init();
+-	fdt_cache_init();
+ 
+ 	return 0;
+ }
+ 
++static int ae350_early_init(bool cold_boot, const struct fdt_match *match)
++{
++	fdt_cache_init();
++	return 0;
++}
++
+ static const struct fdt_match andes_ae350_match[] = {
+ 	{ .compatible = "andestech,ae350" },
+ 	{ },
+@@ -126,6 +131,7 @@ static const struct fdt_match andes_ae350_match[] = {
+ 
+ const struct platform_override andes_ae350 = {
+ 	.match_table = andes_ae350_match,
++	.early_init  = ae350_early_init,
+ 	.final_init  = ae350_final_init,
+ 	.extensions_init = andes_pmu_extensions_init,
+ 	.pmu_init = andes_pmu_init,
+-- 
+2.34.1
+

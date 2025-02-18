@@ -1,0 +1,57 @@
+From b5825051426d292767e0863a636d371dc5659fe5 Mon Sep 17 00:00:00 2001
+From: charles <dminus@andestech.com>
+Date: Mon, 2 Sep 2024 16:35:32 +0800
+Subject: [PATCH 080/168] mmc: andes: ftsdc010: Fix MMC_FTSDC Kconfig
+ descriptions and dependency name (#174)
+
+Fix the descriptions of config MMC_FTSDC.
+
+In commit (cd161eb5711b) MMC_FTSDCG was renamed to MMC_FTSDC,
+so the dependency of config MMC_FTSDC_DMA on MMC_FTSDCG should
+also be updated to depend on MMC_FTSDC for ftsdc010 to use DMA mode.
+
+Git issue : https://gitea.andestech.com/RD-SW/linux/issues/162
+
+Signed-off-by: charles <dminus@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/174
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: charles <dminus@andestech.com>
+Co-committed-by: charles <dminus@andestech.com>
+---
+ drivers/mmc/host/Kconfig | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/mmc/host/Kconfig b/drivers/mmc/host/Kconfig
+index cbb41c7ae2d5..1acc3df355db 100644
+--- a/drivers/mmc/host/Kconfig
++++ b/drivers/mmc/host/Kconfig
+@@ -617,20 +617,20 @@ config MMC_DAVINCI
+ 	  say Y or M here.  If unsure, say N.
+ 
+ config MMC_FTSDC
+-	tristate "Andestech SDC Multimedia Card Interface use dmaengine"
++	tristate "Andes SDC Multimedia Card Interface use DMA engine"
+ 	depends on RISCV
+ 	depends on ATCDMAC300
+ 	help
+-	  This selects the TI DAVINCI Multimedia card Interface.
+-	  If you have an DAVINCI board with a Multimedia Card slot,
++	  This selects the Andes SDC multimedia card interface use dmaengine.
++	  If you have an Andes platform with a multimedia card slot,
+ 	  say Y or M here.  If unsure, say N.
+ 
+ config MMC_FTSDC_DMA
+ 	bool "DMA mode"
+-	depends on MMC_FTSDCG
++	depends on MMC_FTSDC
+ 	default y
+ 	help
+-	  This selects the Andestech SDC work in DMA mode.
++	  This selects the Andes SDC work in DMA mode.
+ 
+ config MMC_SPI
+ 	tristate "MMC/SD/SDIO over SPI"
+-- 
+2.34.1
+

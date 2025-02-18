@@ -1,0 +1,45 @@
+From 68bc031a76f09e730b29dbc02d832605b4aab219 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Wed, 20 Mar 2024 15:50:43 +0100
+Subject: [PATCH 078/172] lib: sbi: Add missing sscrind and sscfg extensions in
+ sbi_hart_ext[]
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The sbi_hart_ext[] array is missing these two extensions ids. It is
+expected that this array contains all the extensions declaration at the
+same index of the SBI_HART_EXT_* define. Without this, when adding a new
+extension, there is a mismatch between ids and extension names and it
+can even display corrupted extension names.
+
+Addresses-Coverity-ID: 1584994 Out-of-bounds read
+Fixes: 6bb6b61c27eb ("lib: sbi: Add support for smcsrind and smcdeleg")
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Heinrich Schuchardt <heinrich.schuchardt@canonical.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_hart.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/lib/sbi/sbi_hart.c b/lib/sbi/sbi_hart.c
+index 3d1369441c05..0e7b5d1d7cbe 100644
+--- a/lib/sbi/sbi_hart.c
++++ b/lib/sbi/sbi_hart.c
+@@ -666,8 +666,13 @@ const struct sbi_hart_ext_data sbi_hart_ext[] = {
+ 	__SBI_HART_EXT_DATA(sdtrig, SBI_HART_EXT_SDTRIG),
+ 	__SBI_HART_EXT_DATA(smcsrind, SBI_HART_EXT_SMCSRIND),
+ 	__SBI_HART_EXT_DATA(smcdeleg, SBI_HART_EXT_SMCDELEG),
++	__SBI_HART_EXT_DATA(sscsrind, SBI_HART_EXT_SSCSRIND),
++	__SBI_HART_EXT_DATA(ssccfg, SBI_HART_EXT_SSCCFG),
+ };
+ 
++_Static_assert(SBI_HART_EXT_MAX == array_size(sbi_hart_ext),
++	       "sbi_hart_ext[]: wrong number of entries");
++
+ /**
+  * Get the hart extensions in string format
+  *
+-- 
+2.34.1
+

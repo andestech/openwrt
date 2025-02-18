@@ -1,0 +1,47 @@
+From 4af5e3d7a9fd008102b2a69e36abe9a56cd1fe79 Mon Sep 17 00:00:00 2001
+From: Alvin Chang <alvinga@andestech.com>
+Date: Thu, 18 Jul 2024 10:35:32 +0800
+Subject: [PATCH 41/53] riscv: Wait for external interrupts if IPI device is
+ IMSIC
+
+IMSIC receives IPI from other harts as kind of RISC-V external
+interrupts. Thus we must enable and wait for MIE_MEIE if the IPI device
+is IMSIC.
+
+Signed-off-by: Alvin Chang <alvinga@andestech.com>
+---
+ arch/riscv/cpu/start.S | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/riscv/cpu/start.S b/arch/riscv/cpu/start.S
+index 8e58f641f1b7..89076d00ce27 100644
+--- a/arch/riscv/cpu/start.S
++++ b/arch/riscv/cpu/start.S
+@@ -79,7 +79,11 @@ _start:
+ 
+ 	/* set xSIE bit to receive IPIs */
+ #if CONFIG_IS_ENABLED(RISCV_MMODE)
++#if CONFIG_IS_ENABLED(RISCV_IMSIC)
++	li	t0, MIE_MEIE
++#else
+ 	li	t0, MIE_MSIE
++#endif
+ #else
+ 	li	t0, SIE_SSIE
+ #endif
+@@ -452,7 +456,12 @@ secondary_hart_loop:
+ #if CONFIG_IS_ENABLED(SMP)
+ 	csrr	t0, MODE_PREFIX(ip)
+ #if CONFIG_IS_ENABLED(RISCV_MMODE)
++#if CONFIG_IS_ENABLED(RISCV_IMSIC)
++	srli	t0, t0, IRQ_M_EXT
++	andi	t0, t0, 1
++#else
+ 	andi	t0, t0, MIE_MSIE
++#endif
+ #else
+ 	andi	t0, t0, SIE_SSIE
+ #endif
+-- 
+2.34.1
+

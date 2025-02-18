@@ -1,0 +1,55 @@
+From baf6a75e3f967aa8b65a20963bd9ae21975ba75a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Carlos=20L=C3=B3pez?= <carlos.lopezr4096@gmail.com>
+Date: Thu, 1 Aug 2024 14:27:42 +0200
+Subject: [PATCH 137/172] lib: sbi: dbtr: fix potential NULL pointer
+ dereferences
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In several dbtr functions, we first check that the dbtr trigger is not
+NULL and that its state is what we expect. However, it only makes
+sense to perform the second check if the dbtr trigger is not NULL.
+Othwerwise we will dereference a NULL pointer. Thus, change the
+condition so that it shortcuts to the first check if necessary.
+
+Signed-off-by: Carlos López <carlos.lopezr4096@gmail.com>
+Reviewed-By: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_dbtr.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 6e2083edf7da..27a8b918bff4 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -357,7 +357,7 @@ static void dbtr_trigger_enable(struct sbi_dbtr_trigger *trig)
+ 	unsigned long state;
+ 	unsigned long tdata1;
+ 
+-	if (!trig && !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
++	if (!trig || !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
+ 		return;
+ 
+ 	state = trig->state;
+@@ -403,7 +403,7 @@ static void dbtr_trigger_disable(struct sbi_dbtr_trigger *trig)
+ {
+ 	unsigned long tdata1;
+ 
+-	if (!trig && !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
++	if (!trig || !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
+ 		return;
+ 
+ 	tdata1 = trig->tdata1;
+@@ -429,7 +429,7 @@ static void dbtr_trigger_disable(struct sbi_dbtr_trigger *trig)
+ 
+ static void dbtr_trigger_clear(struct sbi_dbtr_trigger *trig)
+ {
+-	if (!trig && !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
++	if (!trig || !(trig->state & RV_DBTR_BIT_MASK(TS, MAPPED)))
+ 		return;
+ 
+ 	csr_write(CSR_TSELECT, trig->index);
+-- 
+2.34.1
+

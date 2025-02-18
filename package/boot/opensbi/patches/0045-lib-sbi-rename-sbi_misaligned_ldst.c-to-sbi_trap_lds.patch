@@ -1,0 +1,41 @@
+From c0a63205f8bd6029aea59711a449805142614464 Mon Sep 17 00:00:00 2001
+From: Bo Gan <ganboing@gmail.com>
+Date: Tue, 5 Mar 2024 18:35:34 -0800
+Subject: [PATCH 045/172] lib: sbi: rename sbi_misaligned_ldst.c to
+ sbi_trap_ldst.c
+
+Signed-off-by: Bo Gan <ganboing@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/objects.mk                                 | 2 +-
+ lib/sbi/{sbi_misaligned_ldst.c => sbi_trap_ldst.c} | 0
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+ rename lib/sbi/{sbi_misaligned_ldst.c => sbi_trap_ldst.c} (100%)
+
+diff --git a/lib/sbi/objects.mk b/lib/sbi/objects.mk
+index fc4619db89fe..2bed7f38a63d 100644
+--- a/lib/sbi/objects.mk
++++ b/lib/sbi/objects.mk
+@@ -77,7 +77,6 @@ libsbi-objs-y += sbi_illegal_insn.o
+ libsbi-objs-y += sbi_init.o
+ libsbi-objs-y += sbi_ipi.o
+ libsbi-objs-y += sbi_irqchip.o
+-libsbi-objs-y += sbi_misaligned_ldst.o
+ libsbi-objs-y += sbi_platform.o
+ libsbi-objs-y += sbi_pmu.o
+ libsbi-objs-y += sbi_dbtr.o
+@@ -87,6 +86,7 @@ libsbi-objs-y += sbi_system.o
+ libsbi-objs-y += sbi_timer.o
+ libsbi-objs-y += sbi_tlb.o
+ libsbi-objs-y += sbi_trap.o
++libsbi-objs-y += sbi_trap_ldst.o
+ libsbi-objs-y += sbi_unpriv.o
+ libsbi-objs-y += sbi_expected_trap.o
+ libsbi-objs-y += sbi_cppc.o
+diff --git a/lib/sbi/sbi_misaligned_ldst.c b/lib/sbi/sbi_trap_ldst.c
+similarity index 100%
+rename from lib/sbi/sbi_misaligned_ldst.c
+rename to lib/sbi/sbi_trap_ldst.c
+-- 
+2.34.1
+

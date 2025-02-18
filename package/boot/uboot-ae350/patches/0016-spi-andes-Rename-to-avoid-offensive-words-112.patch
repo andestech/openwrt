@@ -1,0 +1,251 @@
+From c6a294b10bc5530582ea17453a305f587081d3ff Mon Sep 17 00:00:00 2001
+From: Locus Wei-Han Chen <locus84@andestech.com>
+Date: Fri, 9 Aug 2024 15:33:36 +0800
+Subject: [PATCH 16/53] spi: andes: Rename to avoid offensive words (#112)
+
+%s/slave/subordinate/
+
+Signed-off-by: Locus Wei-Han Chen <locus84@andestech.com>
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/u-boot.official/pulls/112
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: CL Chin-Long Wang <cl634@andestech.com>
+Reviewed-by: randolph <randolph@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Co-authored-by: Locus Wei-Han Chen <locus84@andestech.com>
+Co-committed-by: Locus Wei-Han Chen <locus84@andestech.com>
+---
+ drivers/spi/atcspi200_spi.c | 58 ++++++++++++++++++-------------------
+ 1 file changed, 29 insertions(+), 29 deletions(-)
+
+diff --git a/drivers/spi/atcspi200_spi.c b/drivers/spi/atcspi200_spi.c
+index b02c33cf75cb..56d3fd8cc5e3 100644
+--- a/drivers/spi/atcspi200_spi.c
++++ b/drivers/spi/atcspi200_spi.c
+@@ -92,7 +92,7 @@ struct atcspi200_spi_regs {
+ 
+ bool pio_enable;
+ 
+-struct nds_spi_slave {
++struct nds_spi_subordinate {
+ 	volatile struct atcspi200_spi_regs *regs;
+ 	int		to;
+ 	unsigned int	freq;
+@@ -127,7 +127,7 @@ struct nds_spi_slave {
+ #define DUAL_MODE		0x02
+ #define QUAD_MODE		0x04
+ 
+-static int __atcspi200_spi_set_speed(struct nds_spi_slave *ns)
++static int __atcspi200_spi_set_speed(struct nds_spi_subordinate *ns)
+ {
+ 	ulong spi_sclk_f;
+ 	u32 tm;
+@@ -158,7 +158,7 @@ static int __atcspi200_spi_set_speed(struct nds_spi_slave *ns)
+ 	return 0;
+ }
+ 
+-static int __atcspi200_spi_claim_bus(struct nds_spi_slave *ns)
++static int __atcspi200_spi_claim_bus(struct nds_spi_subordinate *ns)
+ {
+ 	int ret = 0;
+ 	unsigned int format = 0;
+@@ -176,12 +176,12 @@ static int __atcspi200_spi_claim_bus(struct nds_spi_slave *ns)
+ 	return ret;
+ }
+ 
+-static int __atcspi200_spi_release_bus(struct nds_spi_slave *ns)
++static int __atcspi200_spi_release_bus(struct nds_spi_subordinate *ns)
+ {
+ 	return 0;
+ }
+ 
+-static int __atcspi200_spi_start(struct nds_spi_slave *ns)
++static int __atcspi200_spi_start(struct nds_spi_subordinate *ns)
+ {
+ 	int i;
+ 	int olen;
+@@ -213,7 +213,7 @@ static int __atcspi200_spi_start(struct nds_spi_slave *ns)
+ 	return 0;
+ }
+ 
+-static int __atcspi200_spi_stop(struct nds_spi_slave *ns)
++static int __atcspi200_spi_stop(struct nds_spi_subordinate *ns)
+ {
+ 	while ((ns->regs->status & SPIBSY) && (ns->to--))
+ 		if (!ns->to)
+@@ -222,19 +222,19 @@ static int __atcspi200_spi_stop(struct nds_spi_slave *ns)
+ 	return 0;
+ }
+ 
+-static void __nspi_espi_tx(struct nds_spi_slave *ns, const void *dout)
++static void __nspi_espi_tx(struct nds_spi_subordinate *ns, const void *dout)
+ {
+ 	ns->regs->data = *(u8 *)dout;
+ }
+ 
+-static int __nspi_espi_rx(struct nds_spi_slave *ns, void *din, unsigned int bytes)
++static int __nspi_espi_rx(struct nds_spi_subordinate *ns, void *din, unsigned int bytes)
+ {
+ 	*(u8 *)din = ns->regs->data;
+ 	return bytes;
+ }
+ 
+ 
+-static int __atcspi200_spi_xfer(struct nds_spi_slave *ns, unsigned int bitlen,
++static int __atcspi200_spi_xfer(struct nds_spi_subordinate *ns, unsigned int bitlen,
+ 		const void *data_out, void *data_in, unsigned long flags)
+ {
+ 	unsigned int event, rx_bytes;
+@@ -339,7 +339,7 @@ static int __atcspi200_spi_xfer(struct nds_spi_slave *ns, unsigned int bitlen,
+ 	return ret;
+ }
+ 
+-static void pio_transfer_data(struct nds_spi_slave *ns,
++static void pio_transfer_data(struct nds_spi_subordinate *ns,
+ 			      u8 *data_in, u8 *data_out, int num_blks)
+ {
+ 	u8 *dout = data_out;
+@@ -378,7 +378,7 @@ static void pio_transfer_data(struct nds_spi_slave *ns,
+ 	}
+ }
+ 
+-static void dma_transfer_data(struct nds_spi_slave *ns,
++static void dma_transfer_data(struct nds_spi_subordinate *ns,
+ 			      u8 *data_in, u8 *data_out, int num_blks)
+ {
+ 	/* Not implemented yet */
+@@ -387,7 +387,7 @@ static void dma_transfer_data(struct nds_spi_slave *ns,
+ 
+ static int atcspi200_spi_set_speed(struct udevice *bus, uint max_hz)
+ {
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 
+ 	debug("%s speed %u\n", __func__, max_hz);
+ 
+@@ -399,7 +399,7 @@ static int atcspi200_spi_set_speed(struct udevice *bus, uint max_hz)
+ 
+ static int atcspi200_spi_set_mode(struct udevice *bus, uint mode)
+ {
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 
+ 	debug("%s mode %u\n", __func__, mode);
+ 	ns->mode = mode;
+@@ -409,12 +409,12 @@ static int atcspi200_spi_set_mode(struct udevice *bus, uint mode)
+ 
+ static int atcspi200_spi_claim_bus(struct udevice *dev)
+ {
+-	struct dm_spi_slave_plat *slave_plat;
++	struct dm_spi_slave_plat *subordinate_plat;
+ 	struct udevice *bus = dev->parent;
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 
+-	slave_plat = dev_get_parent_plat(dev);
+-	if (slave_plat->cs >= ns->num_cs) {
++	subordinate_plat = dev_get_parent_plat(dev);
++	if (subordinate_plat->cs >= ns->num_cs) {
+ 		dev_err(dev, "Invalid SPI chipselect\n");
+ 		return -EINVAL;
+ 	}
+@@ -424,7 +424,7 @@ static int atcspi200_spi_claim_bus(struct udevice *dev)
+ 
+ static int atcspi200_spi_release_bus(struct udevice *dev)
+ {
+-	struct nds_spi_slave *ns = dev_get_priv(dev->parent);
++	struct nds_spi_subordinate *ns = dev_get_priv(dev->parent);
+ 
+ 	return __atcspi200_spi_release_bus(ns);
+ }
+@@ -434,14 +434,14 @@ static int atcspi200_spi_xfer(struct udevice *dev, unsigned int bitlen,
+ 			      unsigned long flags)
+ {
+ 	struct udevice *bus = dev->parent;
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 
+ 	return __atcspi200_spi_xfer(ns, bitlen, dout, din, flags);
+ }
+ 
+ static int atcspi200_spi_get_clk(struct udevice *bus)
+ {
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 	struct clk clk;
+ 	int ret;
+ 
+@@ -461,7 +461,7 @@ static int atcspi200_spi_get_clk(struct udevice *bus)
+ 	return 0;
+ }
+ 
+-static void atcspi200_set_transfer_ctl(struct nds_spi_slave *ns,
++static void atcspi200_set_transfer_ctl(struct nds_spi_subordinate *ns,
+ 				       const struct spi_mem_op *op)
+ {
+ 	int tc = 0;
+@@ -509,7 +509,7 @@ static void atcspi200_set_transfer_ctl(struct nds_spi_slave *ns,
+ 	ns->regs->tctrl = tc;
+ }
+ 
+-static int atcspi200_spi_setting(struct nds_spi_slave *ns,
++static int atcspi200_spi_setting(struct nds_spi_subordinate *ns,
+ 				 const struct spi_mem_op *op)
+ {
+ 	atcspi200_set_transfer_ctl(ns, op);
+@@ -521,7 +521,7 @@ static int atcspi200_spi_setting(struct nds_spi_slave *ns,
+ 	return 0;
+ }
+ 
+-static int atcspi200_nor_adjust_op_size(struct spi_slave *slave,
++static int atcspi200_nor_adjust_op_size(struct spi_slave *subordinate,
+ 					struct spi_mem_op *op)
+ {
+ 	unsigned int max_transfer_len = MAX_TRANSFER_LEN;
+@@ -530,14 +530,14 @@ static int atcspi200_nor_adjust_op_size(struct spi_slave *slave,
+ 	return 0;
+ }
+ 
+-static int atcspi200_spi_mem_exec_op(struct spi_slave *slave,
++static int atcspi200_spi_mem_exec_op(struct spi_slave *subordinate,
+ 				     const struct spi_mem_op *op)
+ {
+ 	struct udevice *bus;
+-	struct nds_spi_slave *ns;
++	struct nds_spi_subordinate *ns;
+ 	int ret;
+ 
+-	bus = slave->dev->parent;
++	bus = subordinate->dev->parent;
+ 	ns = dev_get_priv(bus);
+ 	if (op->data.nbytes) {
+ 		if (op->data.dir == SPI_MEM_DATA_IN) {
+@@ -561,7 +561,7 @@ static int atcspi200_spi_mem_exec_op(struct spi_slave *slave,
+ static int atcspi200_spi_probe(struct udevice *bus)
+ {
+ 	int ret = 0;
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 
+ 	ns->to = SPI_TIMEOUT;
+ 	ns->max_transfer_length = MAX_TRANSFER_LEN;
+@@ -572,7 +572,7 @@ static int atcspi200_spi_probe(struct udevice *bus)
+ 
+ static int atcspi200_ofdata_to_platadata(struct udevice *bus)
+ {
+-	struct nds_spi_slave *ns = dev_get_priv(bus);
++	struct nds_spi_subordinate *ns = dev_get_priv(bus);
+ 	const void *blob = gd->fdt_blob;
+ 	int node = dev_of_offset(bus);
+ 
+@@ -613,6 +613,6 @@ U_BOOT_DRIVER(atcspi200_spi) = {
+ 	.of_match	= atcspi200_spi_ids,
+ 	.ops		= &atcspi200_spi_ops,
+ 	.of_to_plat	= atcspi200_ofdata_to_platadata,
+-	.priv_auto	= sizeof(struct nds_spi_slave),
++	.priv_auto	= sizeof(struct nds_spi_subordinate),
+ 	.probe		= atcspi200_spi_probe,
+ };
+-- 
+2.34.1
+

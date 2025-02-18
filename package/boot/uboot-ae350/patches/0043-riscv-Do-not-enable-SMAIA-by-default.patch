@@ -1,0 +1,33 @@
+From 2a777e8dd101c372089f9354f19ac6f015044cd5 Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Thu, 2 Jan 2025 16:01:07 +0800
+Subject: [PATCH 43/53] riscv: Do not enable SMAIA by default
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/Kconfig | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 85e515e3e75f..9a0e9b234d98 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -310,7 +310,6 @@ endmenu
+ config SPL_RISCV_ISA_SMAIA
+ 	bool "Smaia extension support advanced interrupt architecture"
+ 	depends on SPL_RISCV_MMODE
+-	default y
+ 	help
+ 	  The Smaia extension encompasses all added CSRs and all modifications
+ 	  to interrupt response behavior that the AIA specifies for a hart, over
+@@ -319,7 +318,6 @@ config SPL_RISCV_ISA_SMAIA
+ config RISCV_ISA_SMAIA
+ 	bool "Smaia extension support advanced interrupt architecture"
+ 	depends on RISCV_MMODE
+-	default y
+ 	help
+ 	  The Smaia extension encompasses all added CSRs and all modifications
+ 	  to interrupt response behavior that the AIA specifies for a hart, over
+-- 
+2.34.1
+

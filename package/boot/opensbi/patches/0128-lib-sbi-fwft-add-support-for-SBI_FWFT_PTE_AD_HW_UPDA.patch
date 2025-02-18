@@ -1,0 +1,123 @@
+From e9ee9678ba509f42a93c8de518710c225c0499f5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Cl=C3=A9ment=20L=C3=A9ger?= <cleger@rivosinc.com>
+Date: Wed, 19 Jun 2024 11:42:41 +0200
+Subject: [PATCH 128/172] lib: sbi: fwft: add support for
+ SBI_FWFT_PTE_AD_HW_UPDATING
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add support for SBI_FWFT_PTE_AD_HW_UPDATING based on SVADU presence.
+
+Signed-off-by: Clément Léger <cleger@rivosinc.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_fwft.c | 47 ++++++++++++++++++++++++++++++++++++++++++++++
+ lib/sbi/sbi_hsm.c  | 12 ++++++++++++
+ 2 files changed, 59 insertions(+)
+
+diff --git a/lib/sbi/sbi_fwft.c b/lib/sbi/sbi_fwft.c
+index 289a344f97bd..aff087fbc629 100644
+--- a/lib/sbi/sbi_fwft.c
++++ b/lib/sbi/sbi_fwft.c
+@@ -100,6 +100,47 @@ static int fwft_get_misaligned_delegation(struct fwft_config *conf,
+ 	return SBI_OK;
+ }
+ 
++static int fwft_adue_supported(struct fwft_config *conf)
++{
++	if (!sbi_hart_has_extension(sbi_scratch_thishart_ptr(),
++				    SBI_HART_EXT_SVADU))
++		return SBI_ENOTSUPP;
++
++	return SBI_OK;
++}
++
++static int fwft_set_adue(struct fwft_config *conf, unsigned long value)
++{
++	if (value)
++#if __riscv_xlen == 32
++		csr_set(CSR_MENVCFGH, ENVCFG_ADUE >> 32);
++#else
++		csr_set(CSR_MENVCFG, ENVCFG_ADUE);
++#endif
++	else
++#if __riscv_xlen == 32
++		csr_clear(CSR_MENVCFGH, ENVCFG_ADUE >> 32);
++#else
++		csr_clear(CSR_MENVCFG, ENVCFG_ADUE);
++#endif
++
++	return SBI_OK;
++}
++
++static int fwft_get_adue(struct fwft_config *conf, unsigned long *value)
++{
++	unsigned long cfg;
++
++#if __riscv_xlen == 32
++	cfg = csr_read(CSR_MENVCFGH) & (ENVCFG_ADUE >> 32);
++#else
++	cfg = csr_read(CSR_MENVCFG) & ENVCFG_ADUE;
++#endif
++	*value = cfg != 0;
++
++	return SBI_OK;
++}
++
+ static struct fwft_config* get_feature_config(enum sbi_fwft_feature_t feature)
+ {
+ 	int i;
+@@ -185,6 +226,12 @@ static const struct fwft_feature features[] =
+ 		.set = fwft_set_misaligned_delegation,
+ 		.get = fwft_get_misaligned_delegation,
+ 	},
++	{
++		.id = SBI_FWFT_PTE_AD_HW_UPDATING,
++		.supported = fwft_adue_supported,
++		.set = fwft_set_adue,
++		.get = fwft_get_adue,
++	},
+ };
+ 
+ int sbi_fwft_init(struct sbi_scratch *scratch, bool cold_boot)
+diff --git a/lib/sbi/sbi_hsm.c b/lib/sbi/sbi_hsm.c
+index 2b23e1398de5..7e32af371b71 100644
+--- a/lib/sbi/sbi_hsm.c
++++ b/lib/sbi/sbi_hsm.c
+@@ -45,6 +45,10 @@ struct sbi_hsm_data {
+ 	unsigned long saved_mie;
+ 	unsigned long saved_mip;
+ 	unsigned long saved_medeleg;
++	unsigned long saved_menvcfg;
++#if __riscv_xlen == 32
++	unsigned long saved_menvcfgh;
++#endif
+ 	atomic_t start_ticket;
+ };
+ 
+@@ -419,6 +423,10 @@ void __sbi_hsm_suspend_non_ret_save(struct sbi_scratch *scratch)
+ 	hdata->saved_mie = csr_read(CSR_MIE);
+ 	hdata->saved_mip = csr_read(CSR_MIP) & (MIP_SSIP | MIP_STIP);
+ 	hdata->saved_medeleg = csr_read(CSR_MEDELEG);
++#if __riscv_xlen == 32
++	hdata->saved_menvcfgh = csr_read(CSR_MENVCFGH);
++#endif
++	hdata->saved_menvcfg = csr_read(CSR_MENVCFG);
+ }
+ 
+ static void __sbi_hsm_suspend_non_ret_restore(struct sbi_scratch *scratch)
+@@ -426,6 +434,10 @@ static void __sbi_hsm_suspend_non_ret_restore(struct sbi_scratch *scratch)
+ 	struct sbi_hsm_data *hdata = sbi_scratch_offset_ptr(scratch,
+ 							    hart_data_offset);
+ 
++	csr_write(CSR_MENVCFG, hdata->saved_menvcfg);
++#if __riscv_xlen == 32
++	csr_write(CSR_MENVCFGH, hdata->saved_menvcfgh);
++#endif
+ 	csr_write(CSR_MEDELEG, hdata->saved_medeleg);
+ 	csr_write(CSR_MIE, hdata->saved_mie);
+ 	csr_set(CSR_MIP, (hdata->saved_mip & (MIP_SSIP | MIP_STIP)));
+-- 
+2.34.1
+

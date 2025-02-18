@@ -1,0 +1,1414 @@
+From e8631494b5ffa07b96dab0d65385f0aa701f71ed Mon Sep 17 00:00:00 2001
+From: Ben Zong-You Xie <ben717@andestech.com>
+Date: Fri, 11 Oct 2024 17:46:55 +0800
+Subject: [PATCH 126/168] tools: perf: refactor ax[25|45|65]/riscvstd.json
+ (#208)
+
+Since riscvstd.json is the combination of instructions.json, memory.json, and microarch.json,
+the duplicate definitions of the events will cause "perf list" trapped by load page faults.
+Therefore, remove these riscvstd.json files.
+
+Also, add instructions.json, memory.json, and microarch.json to ax25 and ax65 folder.
+
+Test Perf commands(list, stat, record) OK on BigOrca with AX45 bitmap.
+
+Fix: bugzilla #31857 (http://e-andes.andestech.com/bugzilla5/show_bug.cgi?id=31857)
+Signed-off-by: Ben Zong-You Xie <ben717@andestech.com>
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/208
+Reviewed-by: Locus Wei-Han Chen <locus84@andestech.com>
+Reviewed-by: Peter Yu-Chien Lin <peterlin@andestech.com>
+Co-authored-by: Ben Zong-You Xie <ben717@andestech.com>
+Co-committed-by: Ben Zong-You Xie <ben717@andestech.com>
+---
+ .../arch/riscv/andes/ax25/instructions.json   | 123 ++++++++
+ .../arch/riscv/andes/ax25/memory.json         | 117 ++++++++
+ .../arch/riscv/andes/ax25/microarch.json      |  22 ++
+ .../arch/riscv/andes/ax25/riscvstd.json       | 257 -----------------
+ .../arch/riscv/andes/ax45/riscvstd.json       | 267 ------------------
+ .../arch/riscv/andes/ax65/instructions.json   | 117 ++++++++
+ .../arch/riscv/andes/ax65/memory.json         | 127 +++++++++
+ .../arch/riscv/andes/ax65/microarch.json      |  22 ++
+ .../arch/riscv/andes/ax65/riscvstd.json       | 262 -----------------
+ 9 files changed, 528 insertions(+), 786 deletions(-)
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax25/instructions.json
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax25/memory.json
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax25/microarch.json
+ delete mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax25/riscvstd.json
+ delete mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax45/riscvstd.json
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax65/instructions.json
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax65/memory.json
+ create mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax65/microarch.json
+ delete mode 100644 tools/perf/pmu-events/arch/riscv/andes/ax65/riscvstd.json
+
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax25/instructions.json b/tools/perf/pmu-events/arch/riscv/andes/ax25/instructions.json
+new file mode 100644
+index 000000000000..c082504040bc
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax25/instructions.json
+@@ -0,0 +1,123 @@
++[
++	{
++		"EventCode": "0x10",
++		"EventName": "cycle_count",
++		"BriefDescription": "Cycle count"
++	},
++	{
++		"EventCode": "0x20",
++		"EventName": "inst_count",
++		"BriefDescription": "Retired instruction count"
++	},
++	{
++		"EventCode": "0x30",
++		"EventName": "int_load_inst",
++		"BriefDescription": "Integer load instruction count"
++	},
++	{
++		"EventCode": "0x40",
++		"EventName": "int_store_inst",
++		"BriefDescription": "Integer store instruction count"
++	},
++	{
++		"EventCode": "0x50",
++		"EventName": "atomic_inst",
++		"BriefDescription": "Atomic instruction count"
++	},
++	{
++		"EventCode": "0x60",
++		"EventName": "sys_inst",
++		"BriefDescription": "System instruction count"
++	},
++	{
++		"EventCode": "0x70",
++		"EventName": "int_compute_inst",
++		"BriefDescription": "Integer computational instruction count"
++	},
++	{
++		"EventCode": "0x80",
++		"EventName": "condition_br",
++		"BriefDescription": "Conditional branch instruction count"
++	},
++	{
++		"EventCode": "0x90",
++		"EventName": "taken_condition_br",
++		"BriefDescription": "Taken conditional branch instruction count"
++	},
++	{
++		"EventCode": "0xA0",
++		"EventName": "jal_inst",
++		"BriefDescription": "JAL instruction count"
++	},
++	{
++		"EventCode": "0xB0",
++		"EventName": "jalr_inst",
++		"BriefDescription": "JALR instruction count"
++	},
++	{
++		"EventCode": "0xC0",
++		"EventName": "ret_inst",
++		"BriefDescription": "Return instruction count"
++	},
++	{
++		"EventCode": "0xD0",
++		"EventName": "control_trans_inst",
++		"BriefDescription": "Control transfer instruction count"
++	},
++	{
++		"EventCode": "0xE0",
++		"EventName": "ex9_inst",
++		"BriefDescription": "EXEC.IT instruction count"
++	},
++	{
++		"EventCode": "0xF0",
++		"EventName": "int_mul_inst",
++		"BriefDescription": "Integer multiplication instruction count"
++	},
++	{
++		"EventCode": "0x100",
++		"EventName": "int_div_rem_inst",
++		"BriefDescription": "Integer division/remainder instruction count"
++	},
++	{
++		"EventCode": "0x110",
++		"EventName": "float_load_inst",
++		"BriefDescription": "Floating-point load instruction count"
++	},
++	{
++		"EventCode": "0x120",
++		"EventName": "float_store_inst",
++		"BriefDescription": "Floating-point store instruction count"
++	},
++	{
++		"EventCode": "0x130",
++		"EventName": "float_add_sub_inst",
++		"BriefDescription": "Floating-point addition/subtraction instruction count"
++	},
++	{
++		"EventCode": "0x140",
++		"EventName": "float_mul_inst",
++		"BriefDescription": "Floating-point multiplication instruction count"
++	},
++	{
++		"EventCode": "0x150",
++		"EventName": "float_fused_muladd_inst",
++		"BriefDescription": "Floating-point fused multiply-add instruction count"
++	},
++	{
++		"EventCode": "0x160",
++		"EventName": "float_div_sqrt_inst",
++		"BriefDescription": "Floating-point division or square-root instruction count"
++	},
++	{
++		"EventCode": "0x170",
++		"EventName": "other_float_inst",
++		"BriefDescription": "Other floating-point instruction count"
++	},
++	{
++		"EventCode": "0x180",
++		"EventName": "int_mul_add_sub_inst",
++		"BriefDescription": "Integer multiplication and add/sub instruction count"
++	}
++]
++
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax25/memory.json b/tools/perf/pmu-events/arch/riscv/andes/ax25/memory.json
+new file mode 100644
+index 000000000000..13b9aa038b40
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax25/memory.json
+@@ -0,0 +1,117 @@
++[
++	{
++		"EventCode": "0x01",
++		"EventName": "ilm_access",
++		"BriefDescription": "ILM access"
++	},
++	{
++		"EventCode": "0x11",
++		"EventName": "dlm_access",
++		"BriefDescription": "DLM access"
++	},
++	{
++		"EventCode": "0x21",
++		"EventName": "icache_access",
++		"BriefDescription": "ICACHE access"
++	},
++	{
++		"EventCode": "0x31",
++		"EventName": "icache_miss",
++		"BriefDescription": "ICACHE miss"
++	},
++	{
++		"EventCode": "0x41",
++		"EventName": "dcache_access",
++		"BriefDescription": "DCACHE access"
++	},
++	{
++		"EventCode": "0x51",
++		"EventName": "dcache_miss",
++		"BriefDescription": "DCACHE miss"
++	},
++	{
++		"EventCode": "0x61",
++		"EventName": "dcache_load_access",
++		"BriefDescription": "DCACHE load access"
++	},
++	{
++		"EventCode": "0x71",
++		"EventName": "dcache_load_miss",
++		"BriefDescription": "DCACHE load miss"
++	},
++	{
++		"EventCode": "0x81",
++		"EventName": "dcache_store_access",
++		"BriefDescription": "DCACHE store access"
++	},
++	{
++		"EventCode": "0x91",
++		"EventName": "dcache_store_miss",
++		"BriefDescription": "DCACHE store miss"
++	},
++	{
++		"EventCode": "0xA1",
++		"EventName": "dcache_wb",
++		"BriefDescription": "DCACHE writeback"
++	},
++	{
++		"EventCode": "0xB1",
++		"EventName": "cycle_wait_icache_fill",
++		"BriefDescription": "Cycles waiting for ICACHE fill data"
++	},
++	{
++		"EventCode": "0xC1",
++		"EventName": "cycle_wait_dcache_fill",
++		"BriefDescription": "Cycles waiting for DCACHE fill data"
++	},
++	{
++		"EventCode": "0xD1",
++		"EventName": "uncached_ifetch_from_bus",
++		"BriefDescription": "Uncached ifetch data access from bus"
++	},
++	{
++		"EventCode": "0xE1",
++		"EventName": "uncached_load_from_bus",
++		"BriefDescription": "Uncached load data access from bus"
++	},
++	{
++		"EventCode": "0xF1",
++		"EventName": "cycle_wait_uncached_ifetch",
++		"BriefDescription": "Cycles waiting for uncached ifetch data from bus"
++	},
++	{
++		"EventCode": "0x101",
++		"EventName": "cycle_wait_uncached_load",
++		"BriefDescription": "Cycles waiting for uncached load data from bus"
++	},
++	{
++		"EventCode": "0x111",
++		"EventName": "main_itlb_access",
++		"BriefDescription": "Main ITLB access"
++	},
++	{
++		"EventCode": "0x121",
++		"EventName": "main_itlb_miss",
++		"BriefDescription": "Main ITLB miss"
++	},
++	{
++		"EventCode": "0x131",
++		"EventName": "main_dtlb_access",
++		"BriefDescription": "Main DTLB access"
++	},
++	{
++		"EventCode": "0x141",
++		"EventName": "main_dtlb_miss",
++		"BriefDescription": "Main DTLB miss"
++	},
++	{
++		"EventCode": "0x151",
++		"EventName": "cycle_wait_itlb_fill",
++		"BriefDescription": "Cycles waiting for Main ITLB fill data"
++	},
++	{
++		"EventCode": "0x161",
++		"EventName": "pipe_stall_cycle_dtlb_miss",
++		"BriefDescription": "Pipeline stall cycles caused by Main DTLB miss"
++	}
++]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax25/microarch.json b/tools/perf/pmu-events/arch/riscv/andes/ax25/microarch.json
+new file mode 100644
+index 000000000000..b3b421810b16
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax25/microarch.json
+@@ -0,0 +1,22 @@
++[
++	{
++		"EventCode": "0x02",
++		"EventName": "mispredict_condition_br",
++		"BriefDescription": "Misprediction of conditional branches"
++	},
++	{
++		"EventCode": "0x12",
++		"EventName": "mispredict_take_condition_br",
++		"BriefDescription": "Misprediction of taken conditional branches"
++	},
++	{
++		"EventCode": "0x22",
++		"EventName": "mispredict_target_ret_inst",
++		"BriefDescription": "Misprediction of targets of Return instructions"
++	},
++        {
++		"EventCode": "0x32",
++		"EventName": "replay_las_sas",
++		"BriefDescription": "Replay for load-after-store or store-after-store cases"
++	}
++]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax25/riscvstd.json b/tools/perf/pmu-events/arch/riscv/andes/ax25/riscvstd.json
+deleted file mode 100644
+index cafc84b0a787..000000000000
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax25/riscvstd.json
++++ /dev/null
+@@ -1,257 +0,0 @@
+-[
+-	{
+-	"EventCode": "0x10",
+-	"EventName": "cycle_count",
+-	"BriefDescription": "Cycle counts"
+-	},
+-	{
+-	"EventCode": "0x20",
+-	"EventName": "inst_count",
+-	"BriefDescription": "Retired instruction counts"
+-	},
+-	{
+-	"EventCode": "0x30",
+-	"EventName": "int_load_inst",
+-	"BriefDescription": "Integer load instructions"
+-	},
+-	{
+-	"EventCode": "0x40",
+-	"EventName": "int_store_inst",
+-	"BriefDescription": "Integer store instructions"
+-	},
+-	{
+-	"EventCode": "0x50",
+-	"EventName": "atomic_mem_op",
+-	"BriefDescription": "Atomic memory operation"
+-	},
+-	{
+-	"EventCode": "0x60",
+-	"EventName": "sys_inst",
+-	"BriefDescription": "System instructions"
+-	},
+-	{
+-	"EventCode": "0x70",
+-	"EventName": "int_compute_inst",
+-	"BriefDescription": "Integer computational instruction"
+-	},
+-	{
+-	"EventCode": "0x80",
+-	"EventName": "condition_br",
+-	"BriefDescription": "Conditional branch"
+-	},
+-	{
+-	"EventCode": "0x90",
+-	"EventName": "taken_condition_br",
+-	"BriefDescription": "Taken conditional branch"
+-	},
+-	{
+-	"EventCode": "0xA0",
+-	"EventName": "jal_inst",
+-	"BriefDescription": "JAL instruction"
+-	},
+-	{
+-	"EventCode": "0xB0",
+-	"EventName": "jalr_inst",
+-	"BriefDescription": "JALR instruction"
+-	},
+-	{
+-	"EventCode": "0xC0",
+-	"EventName": "ret_inst",
+-	"BriefDescription": "Return instruction"
+-	},
+-	{
+-	"EventCode": "0xD0",
+-	"EventName": "control_trans_inst",
+-	"BriefDescription": "Control transfer instruction"
+-	},
+-	{
+-	"EventCode": "0xE0",
+-	"EventName": "ex9_inst",
+-	"BriefDescription": "EX9 instruction"
+-	},
+-	{
+-	"EventCode": "0xF0",
+-	"EventName": "int_mul_inst",
+-	"BriefDescription": "Integer multiplication instruction"
+-	},
+-	{
+-	"EventCode": "0x100",
+-	"EventName": "int_div_rem_inst",
+-	"BriefDescription": "Integer division/remainder instruction"
+-	},
+-	{
+-	"EventCode": "0x110",
+-	"EventName": "float_load_inst",
+-	"BriefDescription": "Floating-point load instruction"
+-	},
+-	{
+-	"EventCode": "0x120",
+-	"EventName": "float_store_inst",
+-	"BriefDescription": "Floating-point store instruction"
+-	},
+-	{
+-	"EventCode": "0x130",
+-	"EventName": "float_add_sub_inst",
+-	"BriefDescription": "Floating-point addition/subtraction"
+-	},
+-	{
+-	"EventCode": "0x140",
+-	"EventName": "float_mul_inst",
+-	"BriefDescription": "Floating-point multiplication"
+-	},
+-	{
+-	"EventCode": "0x150",
+-	"EventName": "float_fused_muladd_inst",
+-	"BriefDescription": "Floating-point fused multiply-add"
+-	},
+-	{
+-	"EventCode": "0x160",
+-	"EventName": "float_div_sqrt_inst",
+-	"BriefDescription": "Floating-point division or square-root"
+-	},
+-	{
+-	"EventCode": "0x170",
+-	"EventName": "other_float_inst",
+-	"BriefDescription": "Other floating-point instruction"
+-	},
+-	{
+-	"EventCode": "0x180",
+-	"EventName": "integer_mul_and_sub_inst_count",
+-	"BriefDescription": "Integer multiplication and add/sub instruction count"
+-	},
+-	{
+-	"EventCode": "0x01",
+-	"EventName": "ilm_access",
+-	"BriefDescription": "ILM access"
+-	},
+-	{
+-	"EventCode": "0x11",
+-	"EventName": "dlm_access",
+-	"BriefDescription": "DLM access"
+-	},
+-	{
+-	"EventCode": "0x21",
+-	"EventName": "icache_access",
+-	"BriefDescription": "ICACHE access"
+-	},
+-	{
+-	"EventCode": "0x31",
+-	"EventName": "icache_miss",
+-	"BriefDescription": "ICACHE miss"
+-	},
+-	{
+-	"EventCode": "0x41",
+-	"EventName": "dcache_access",
+-	"BriefDescription": "DCACHE access"
+-	},
+-	{
+-	"EventCode": "0x51",
+-	"EventName": "dcache_miss",
+-	"BriefDescription": "DCACHE miss"
+-	},
+-	{
+-	"EventCode": "0x61",
+-	"EventName": "dcache_load_access",
+-	"BriefDescription": "DCACHE load access"
+-	},
+-	{
+-	"EventCode": "0x71",
+-	"EventName": "dcache_load_miss",
+-	"BriefDescription": "DCACHE load miss"
+-	},
+-	{
+-	"EventCode": "0x81",
+-	"EventName": "dcache_store_access",
+-	"BriefDescription": "DCACHE store access"
+-	},
+-	{
+-	"EventCode": "0x91",
+-	"EventName": "dcache_store_miss",
+-	"BriefDescription": "DCACHE store miss"
+-	},
+-	{
+-	"EventCode": "0xA1",
+-	"EventName": "dcache_wb",
+-	"BriefDescription": "DCACHE writeback"
+-	},
+-	{
+-	"EventCode": "0xB1",
+-	"EventName": "cycle_wait_icache_fill",
+-	"BriefDescription": "Cycles waiting for ICACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xC1",
+-	"EventName": "cycle_wait_dcache_fill",
+-	"BriefDescription": "Cycles waiting for DCACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xD1",
+-	"EventName": "uncached_ifetch_from_bus",
+-	"BriefDescription": "Uncached ifetch data access from bus"
+-	},
+-	{
+-	"EventCode": "0xE1",
+-	"EventName": "uncached_load_from_bus",
+-	"BriefDescription": "Uncached load data access from bus"
+-	},
+-	{
+-	"EventCode": "0xF1",
+-	"EventName": "cycle_wait_uncached_ifetch",
+-	"BriefDescription": "Cycles waiting for uncached ifetch data from bus"
+-	},
+-	{
+-	"EventCode": "0x101",
+-	"EventName": "cycle_wait_uncached_load",
+-	"BriefDescription": "Cycles waiting for uncached load data from bus"
+-	},
+-	{
+-	"EventCode": "0x111",
+-	"EventName": "main_itlb_access",
+-	"BriefDescription": "Main ITLB access"
+-	},
+-	{
+-	"EventCode": "0x121",
+-	"EventName": "main_itlb_miss",
+-	"BriefDescription": "Main ITLB miss"
+-	},
+-	{
+-	"EventCode": "0x131",
+-	"EventName": "main_dtlb_access",
+-	"BriefDescription": "Main DTLB access"
+-	},
+-	{
+-	"EventCode": "0x141",
+-	"EventName": "main_dtlb_miss",
+-	"BriefDescription": "Main DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x151",
+-	"EventName": "cycle_wait_itlb_fill",
+-	"BriefDescription": "Cycles waiting for Main ITLB fill data"
+-	},
+-	{
+-	"EventCode": "0x161",
+-	"EventName": "pipe_stall_cycle_dtlb_miss",
+-	"BriefDescription": "Pipeline stall cycles caused by Main DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x02",
+-	"EventName": "mispredict_condition_br",
+-	"BriefDescription": "Misprediction of conditional branches"
+-	},
+-	{
+-	"EventCode": "0x12",
+-	"EventName": "mispredict_take_condition_br",
+-	"BriefDescription": "Misprediction of taken conditional branches"
+-	},
+-	{
+-	"EventCode": "0x22",
+-	"EventName": "mispredict_target_ret_inst",
+-	"BriefDescription": "Misprediction of targets of Return instructions"
+-	},
+-	{
+-	"EventCode": "0x32",
+-	"EventName": "replay_las_sas",
+-	"BriefDescription": "Replay for load-after-store or store-after-store cases"
+-	}
+-]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax45/riscvstd.json b/tools/perf/pmu-events/arch/riscv/andes/ax45/riscvstd.json
+deleted file mode 100644
+index def7e88cfc77..000000000000
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax45/riscvstd.json
++++ /dev/null
+@@ -1,267 +0,0 @@
+-[
+-	{
+-	"EventCode": "0x10",
+-	"EventName": "cycle_count",
+-	"BriefDescription": "Cycle counts"
+-	},
+-	{
+-	"EventCode": "0x20",
+-	"EventName": "inst_count",
+-	"BriefDescription": "Retired instruction counts"
+-	},
+-	{
+-	"EventCode": "0x30",
+-	"EventName": "int_load_inst",
+-	"BriefDescription": "Integer load instructions"
+-	},
+-	{
+-	"EventCode": "0x40",
+-	"EventName": "int_store_inst",
+-	"BriefDescription": "Integer store instructions"
+-	},
+-	{
+-	"EventCode": "0x50",
+-	"EventName": "atomic_mem_op",
+-	"BriefDescription": "Atomic memory operation"
+-	},
+-	{
+-	"EventCode": "0x60",
+-	"EventName": "sys_inst",
+-	"BriefDescription": "System instructions"
+-	},
+-	{
+-	"EventCode": "0x70",
+-	"EventName": "int_compute_inst",
+-	"BriefDescription": "Integer computational instruction"
+-	},
+-	{
+-	"EventCode": "0x80",
+-	"EventName": "condition_br",
+-	"BriefDescription": "Conditional branch"
+-	},
+-	{
+-	"EventCode": "0x90",
+-	"EventName": "taken_condition_br",
+-	"BriefDescription": "Taken conditional branch"
+-	},
+-	{
+-	"EventCode": "0xA0",
+-	"EventName": "jal_inst",
+-	"BriefDescription": "JAL instruction"
+-	},
+-	{
+-	"EventCode": "0xB0",
+-	"EventName": "jalr_inst",
+-	"BriefDescription": "JALR instruction"
+-	},
+-	{
+-	"EventCode": "0xC0",
+-	"EventName": "ret_inst",
+-	"BriefDescription": "Return instruction"
+-	},
+-	{
+-	"EventCode": "0xD0",
+-	"EventName": "control_trans_inst",
+-	"BriefDescription": "Control transfer instruction"
+-	},
+-	{
+-	"EventCode": "0xE0",
+-	"EventName": "ex9_inst",
+-	"BriefDescription": "EX9 instruction"
+-	},
+-	{
+-	"EventCode": "0xF0",
+-	"EventName": "int_mul_inst",
+-	"BriefDescription": "Integer multiplication instruction"
+-	},
+-	{
+-	"EventCode": "0x100",
+-	"EventName": "int_div_rem_inst",
+-	"BriefDescription": "Integer division/remainder instruction"
+-	},
+-	{
+-	"EventCode": "0x110",
+-	"EventName": "float_load_inst",
+-	"BriefDescription": "Floating-point load instruction"
+-	},
+-	{
+-	"EventCode": "0x120",
+-	"EventName": "float_store_inst",
+-	"BriefDescription": "Floating-point store instruction"
+-	},
+-	{
+-	"EventCode": "0x130",
+-	"EventName": "float_add_sub_inst",
+-	"BriefDescription": "Floating-point addition/subtraction"
+-	},
+-	{
+-	"EventCode": "0x140",
+-	"EventName": "float_mul_inst",
+-	"BriefDescription": "Floating-point multiplication"
+-	},
+-	{
+-	"EventCode": "0x150",
+-	"EventName": "float_fused_muladd_inst",
+-	"BriefDescription": "Floating-point fused multiply-add"
+-	},
+-	{
+-	"EventCode": "0x160",
+-	"EventName": "float_div_sqrt_inst",
+-	"BriefDescription": "Floating-point division or square-root"
+-	},
+-	{
+-	"EventCode": "0x170",
+-	"EventName": "other_float_inst",
+-	"BriefDescription": "Other floating-point instruction"
+-	},
+-	{
+-	"EventCode": "0x180",
+-	"EventName": "integer_mul_and_sub_inst_count",
+-	"BriefDescription": "Integer multiplication and add/sub instruction count"
+-	},
+-	{
+-	"EventCode": "0x190",
+-	"EventName": "op_count",
+-	"BriefDescription": "Retired operation count"
+-	},
+-	{
+-	"EventCode": "0x01",
+-	"EventName": "ilm_access",
+-	"BriefDescription": "ILM access"
+-	},
+-	{
+-	"EventCode": "0x11",
+-	"EventName": "dlm_access",
+-	"BriefDescription": "DLM access"
+-	},
+-	{
+-	"EventCode": "0x21",
+-	"EventName": "icache_access",
+-	"BriefDescription": "ICACHE access"
+-	},
+-	{
+-	"EventCode": "0x31",
+-	"EventName": "icache_miss",
+-	"BriefDescription": "ICACHE miss"
+-	},
+-	{
+-	"EventCode": "0x41",
+-	"EventName": "dcache_access",
+-	"BriefDescription": "DCACHE access"
+-	},
+-	{
+-	"EventCode": "0x51",
+-	"EventName": "dcache_miss",
+-	"BriefDescription": "DCACHE miss"
+-	},
+-	{
+-	"EventCode": "0x61",
+-	"EventName": "dcache_load_access",
+-	"BriefDescription": "DCACHE load access"
+-	},
+-	{
+-	"EventCode": "0x71",
+-	"EventName": "dcache_load_miss",
+-	"BriefDescription": "DCACHE load miss"
+-	},
+-	{
+-	"EventCode": "0x81",
+-	"EventName": "dcache_store_access",
+-	"BriefDescription": "DCACHE store access"
+-	},
+-	{
+-	"EventCode": "0x91",
+-	"EventName": "dcache_store_miss",
+-	"BriefDescription": "DCACHE store miss"
+-	},
+-	{
+-	"EventCode": "0xA1",
+-	"EventName": "dcache_wb",
+-	"BriefDescription": "DCACHE writeback"
+-	},
+-	{
+-	"EventCode": "0xB1",
+-	"EventName": "cycle_wait_icache_fill",
+-	"BriefDescription": "Cycles waiting for ICACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xC1",
+-	"EventName": "cycle_wait_dcache_fill",
+-	"BriefDescription": "Cycles waiting for DCACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xD1",
+-	"EventName": "uncached_ifetch_from_bus",
+-	"BriefDescription": "Uncached ifetch data access from bus"
+-	},
+-	{
+-	"EventCode": "0xE1",
+-	"EventName": "uncached_load_from_bus",
+-	"BriefDescription": "Uncached load data access from bus"
+-	},
+-	{
+-	"EventCode": "0xF1",
+-	"EventName": "cycle_wait_uncached_ifetch",
+-	"BriefDescription": "Cycles waiting for uncached ifetch data from bus"
+-	},
+-	{
+-	"EventCode": "0x101",
+-	"EventName": "cycle_wait_uncached_load",
+-	"BriefDescription": "Cycles waiting for uncached load data from bus"
+-	},
+-	{
+-	"EventCode": "0x111",
+-	"EventName": "main_itlb_access",
+-	"BriefDescription": "Main ITLB access"
+-	},
+-	{
+-	"EventCode": "0x121",
+-	"EventName": "main_itlb_miss",
+-	"BriefDescription": "Main ITLB miss"
+-	},
+-	{
+-	"EventCode": "0x131",
+-	"EventName": "main_dtlb_access",
+-	"BriefDescription": "Main DTLB access"
+-	},
+-	{
+-	"EventCode": "0x141",
+-	"EventName": "main_dtlb_miss",
+-	"BriefDescription": "Main DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x151",
+-	"EventName": "cycle_wait_itlb_fill",
+-	"BriefDescription": "Cycles waiting for Main ITLB fill data"
+-	},
+-	{
+-	"EventCode": "0x161",
+-	"EventName": "pipe_stall_cycle_dtlb_miss",
+-	"BriefDescription": "Pipeline stall cycles caused by Main DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x171",
+-	"EventName": "prefetch_bus_access",
+-	"BriefDescription": "Hardware prefetch bus access"
+-	},
+-	{
+-	"EventCode": "0x181",
+-	"EventName": "cycle_wait_for_operand",
+-	"BriefDescription": "Cycles waiting for source operand ready in the integer register file scoreboard"
+-	},
+-	{
+-	"EventCode": "0x02",
+-	"EventName": "mispredict_condition_br",
+-	"BriefDescription": "Misprediction of conditional branches"
+-	},
+-	{
+-	"EventCode": "0x12",
+-	"EventName": "mispredict_take_condition_br",
+-	"BriefDescription": "Misprediction of taken conditional branches"
+-	},
+-	{
+-	"EventCode": "0x22",
+-	"EventName": "mispredict_target_ret_inst",
+-	"BriefDescription": "Misprediction of targets of Return instructions"
+-	}
+-]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax65/instructions.json b/tools/perf/pmu-events/arch/riscv/andes/ax65/instructions.json
+new file mode 100644
+index 000000000000..fe807ffc73d8
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax65/instructions.json
+@@ -0,0 +1,117 @@
++[
++	{
++		"EventCode": "0x10",
++		"EventName": "cycle_count",
++		"BriefDescription": "Cycle count"
++	},
++	{
++		"EventCode": "0x20",
++		"EventName": "inst_count",
++		"BriefDescription": "Retired instruction count"
++	},
++	{
++		"EventCode": "0x30",
++		"EventName": "int_load_inst",
++		"BriefDescription": "Integer load instruction count"
++	},
++	{
++		"EventCode": "0x40",
++		"EventName": "int_store_inst",
++		"BriefDescription": "Integer store instruction count"
++	},
++	{
++		"EventCode": "0x50",
++		"EventName": "atomic_inst",
++		"BriefDescription": "Atomic instruction count"
++	},
++	{
++		"EventCode": "0x60",
++		"EventName": "sys_inst",
++		"BriefDescription": "System instruction count"
++	},
++	{
++		"EventCode": "0x70",
++		"EventName": "int_compute_inst",
++		"BriefDescription": "Integer computational instruction count"
++	},
++	{
++		"EventCode": "0x80",
++		"EventName": "condition_br",
++		"BriefDescription": "Conditional branch instruction count"
++	},
++	{
++		"EventCode": "0x90",
++		"EventName": "taken_condition_br",
++		"BriefDescription": "Taken conditional branch instruction count"
++	},
++	{
++		"EventCode": "0xA0",
++		"EventName": "jal_inst",
++		"BriefDescription": "JAL instruction count"
++	},
++	{
++		"EventCode": "0xB0",
++		"EventName": "jalr_inst",
++		"BriefDescription": "JALR instruction count"
++	},
++	{
++		"EventCode": "0xC0",
++		"EventName": "ret_inst",
++		"BriefDescription": "Return instruction count"
++	},
++	{
++		"EventCode": "0xD0",
++		"EventName": "control_trans_inst",
++		"BriefDescription": "Control transfer instruction count"
++	},
++	{
++		"EventCode": "0xF0",
++		"EventName": "int_mul_inst",
++		"BriefDescription": "Integer multiplication instruction count"
++	},
++	{
++		"EventCode": "0x100",
++		"EventName": "int_div_rem_inst",
++		"BriefDescription": "Integer division/remainder instruction count"
++	},
++	{
++		"EventCode": "0x110",
++		"EventName": "float_load_inst",
++		"BriefDescription": "Floating-point load instruction count"
++	},
++	{
++		"EventCode": "0x120",
++		"EventName": "float_store_inst",
++		"BriefDescription": "Floating-point store instruction count"
++	},
++	{
++		"EventCode": "0x130",
++		"EventName": "float_add_sub_inst",
++		"BriefDescription": "Floating-point addition/subtraction instruction count"
++	},
++	{
++		"EventCode": "0x140",
++		"EventName": "float_mul_inst",
++		"BriefDescription": "Floating-point multiplication instruction count"
++	},
++	{
++		"EventCode": "0x150",
++		"EventName": "float_fused_muladd_inst",
++		"BriefDescription": "Floating-point fused multiply-add instruction count"
++	},
++	{
++		"EventCode": "0x160",
++		"EventName": "float_div_sqrt_inst",
++		"BriefDescription": "Floating-point division or square-root instruction count"
++	},
++	{
++		"EventCode": "0x170",
++		"EventName": "other_float_inst",
++		"BriefDescription": "Other floating-point instruction count"
++	},
++	{
++		"EventCode": "0x190",
++		"EventName": "retired_ops",
++		"BriefDescription": "Retired operation count"
++	}
++]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax65/memory.json b/tools/perf/pmu-events/arch/riscv/andes/ax65/memory.json
+new file mode 100644
+index 000000000000..991a4db17588
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax65/memory.json
+@@ -0,0 +1,127 @@
++[
++	{
++		"EventCode": "0x21",
++		"EventName": "icache_access",
++		"BriefDescription": "ICACHE access"
++	},
++	{
++		"EventCode": "0x31",
++		"EventName": "icache_miss",
++		"BriefDescription": "ICACHE miss"
++	},
++	{
++		"EventCode": "0x41",
++		"EventName": "dcache_access",
++		"BriefDescription": "DCACHE access"
++	},
++	{
++		"EventCode": "0x51",
++		"EventName": "dcache_miss",
++		"BriefDescription": "DCACHE miss"
++	},
++	{
++		"EventCode": "0x61",
++		"EventName": "dcache_load_access",
++		"BriefDescription": "DCACHE load access"
++	},
++	{
++		"EventCode": "0x71",
++		"EventName": "dcache_load_miss",
++		"BriefDescription": "DCACHE load miss"
++	},
++	{
++		"EventCode": "0x81",
++		"EventName": "dcache_store_access",
++		"BriefDescription": "DCACHE store access"
++	},
++	{
++		"EventCode": "0x91",
++		"EventName": "dcache_store_miss",
++		"BriefDescription": "DCACHE store miss"
++	},
++	{
++		"EventCode": "0xA1",
++		"EventName": "dcache_wb",
++		"BriefDescription": "DCACHE writeback"
++	},
++	{
++		"EventCode": "0xB1",
++		"EventName": "cycle_wait_icache_fill",
++		"BriefDescription": "Cycles waiting for ICACHE fill data"
++	},
++	{
++		"EventCode": "0xC1",
++		"EventName": "cycle_wait_dcache_fill",
++		"BriefDescription": "Cycles waiting for DCACHE fill data"
++	},
++	{
++		"EventCode": "0xD1",
++		"EventName": "uncached_ifetch_from_bus",
++		"BriefDescription": "Uncached ifetch data access from bus"
++	},
++	{
++		"EventCode": "0xE1",
++		"EventName": "uncached_load_from_bus",
++		"BriefDescription": "Uncached load data access from bus"
++	},
++	{
++		"EventCode": "0xF1",
++		"EventName": "cycle_wait_uncached_ifetch",
++		"BriefDescription": "Cycles waiting for uncached ifetch data from bus"
++	},
++	{
++		"EventCode": "0x101",
++		"EventName": "cycle_wait_uncached_load",
++		"BriefDescription": "Cycles waiting for uncached load data from bus"
++	},
++	{
++		"EventCode": "0x111",
++		"EventName": "main_itlb_access",
++		"BriefDescription": "Main ITLB access"
++	},
++	{
++		"EventCode": "0x121",
++		"EventName": "main_itlb_miss",
++		"BriefDescription": "Main ITLB miss"
++	},
++	{
++		"EventCode": "0x131",
++		"EventName": "main_dtlb_access",
++		"BriefDescription": "Main DTLB access"
++	},
++	{
++		"EventCode": "0x141",
++		"EventName": "main_dtlb_miss",
++		"BriefDescription": "Main DTLB miss"
++	},
++	{
++		"EventCode": "0x151",
++		"EventName": "cycle_wait_itlb_fill",
++		"BriefDescription": "Cycles waiting for Main ITLB fill data"
++	},
++	{
++		"EventCode": "0x171",
++		"EventName": "hw_prefetch_bus_access",
++		"BriefDescription": "Bus accesses generated by the hardware data prefetcher"
++	},
++	{
++		"EventCode": "0x191",
++		"EventName": "l1_itlb_access",
++		"BriefDescription": "L1 ITLB access"
++	},
++	{
++		"EventCode": "0x1A1",
++		"EventName": "l1_itlb_miss",
++		"BriefDescription": "L1 ITLB miss"
++	},
++	{
++		"EventCode": "0x1B1",
++		"EventName": "l1_dtlb_access",
++		"BriefDescription": "L1 DTLB access"
++	},
++	{
++		"EventCode": "0x1C1",
++		"EventName": "l1_dtlb_miss",
++		"BriefDescription": "L1 DTLB miss"
++	}
++]
+\ No newline at end of file
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax65/microarch.json b/tools/perf/pmu-events/arch/riscv/andes/ax65/microarch.json
+new file mode 100644
+index 000000000000..7e457f9feba4
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/riscv/andes/ax65/microarch.json
+@@ -0,0 +1,22 @@
++[
++	{
++		"EventCode": "0x02",
++		"EventName": "mispredict_condition_br",
++		"BriefDescription": "Misprediction of conditional branches"
++	},
++	{
++		"EventCode": "0x12",
++		"EventName": "mispredict_take_condition_br",
++		"BriefDescription": "Misprediction of taken conditional branches"
++	},
++	{
++		"EventCode": "0x22",
++		"EventName": "mispredict_target_ret_inst",
++		"BriefDescription": "Misprediction of targets of Return instructions"
++	},
++	{
++		"EventCode": "0x32",
++		"EventName": "replay_load_order_ecc_err",
++		"BriefDescription": "Replay for load with memory-order violations or correctable ECC error"
++	}
++]
+diff --git a/tools/perf/pmu-events/arch/riscv/andes/ax65/riscvstd.json b/tools/perf/pmu-events/arch/riscv/andes/ax65/riscvstd.json
+deleted file mode 100644
+index fa2ac3df5a83..000000000000
+--- a/tools/perf/pmu-events/arch/riscv/andes/ax65/riscvstd.json
++++ /dev/null
+@@ -1,262 +0,0 @@
+-[
+-	{
+-	"EventCode": "0x10",
+-	"EventName": "cycle_count",
+-	"BriefDescription": "Cycle counts"
+-	},
+-	{
+-	"EventCode": "0x20",
+-	"EventName": "inst_count",
+-	"BriefDescription": "Retired instruction counts"
+-	},
+-	{
+-	"EventCode": "0x30",
+-	"EventName": "int_load_inst",
+-	"BriefDescription": "Integer load instructions"
+-	},
+-	{
+-	"EventCode": "0x40",
+-	"EventName": "int_store_inst",
+-	"BriefDescription": "Integer store instructions"
+-	},
+-	{
+-	"EventCode": "0x50",
+-	"EventName": "atomic_mem_op",
+-	"BriefDescription": "Atomic memory operation"
+-	},
+-	{
+-	"EventCode": "0x60",
+-	"EventName": "sys_inst",
+-	"BriefDescription": "System instructions"
+-	},
+-	{
+-	"EventCode": "0x70",
+-	"EventName": "int_compute_inst",
+-	"BriefDescription": "Integer computational instruction"
+-	},
+-	{
+-	"EventCode": "0x80",
+-	"EventName": "condition_br",
+-	"BriefDescription": "Conditional branch"
+-	},
+-	{
+-	"EventCode": "0x90",
+-	"EventName": "taken_condition_br",
+-	"BriefDescription": "Taken conditional branch"
+-	},
+-	{
+-	"EventCode": "0xA0",
+-	"EventName": "jal_inst",
+-	"BriefDescription": "JAL instruction"
+-	},
+-	{
+-	"EventCode": "0xB0",
+-	"EventName": "jalr_inst",
+-	"BriefDescription": "JALR instruction"
+-	},
+-	{
+-	"EventCode": "0xC0",
+-	"EventName": "ret_inst",
+-	"BriefDescription": "Return instruction"
+-	},
+-	{
+-	"EventCode": "0xD0",
+-	"EventName": "control_trans_inst",
+-	"BriefDescription": "Control transfer instruction"
+-	},
+-	{
+-	"EventCode": "0xF0",
+-	"EventName": "int_mul_inst",
+-	"BriefDescription": "Integer multiplication instruction"
+-	},
+-	{
+-	"EventCode": "0x100",
+-	"EventName": "int_div_rem_inst",
+-	"BriefDescription": "Integer division/remainder instruction"
+-	},
+-	{
+-	"EventCode": "0x110",
+-	"EventName": "float_load_inst",
+-	"BriefDescription": "Floating-point load instruction"
+-	},
+-	{
+-	"EventCode": "0x120",
+-	"EventName": "float_store_inst",
+-	"BriefDescription": "Floating-point store instruction"
+-	},
+-	{
+-	"EventCode": "0x130",
+-	"EventName": "float_add_sub_inst",
+-	"BriefDescription": "Floating-point addition/subtraction"
+-	},
+-	{
+-	"EventCode": "0x140",
+-	"EventName": "float_mul_inst",
+-	"BriefDescription": "Floating-point multiplication"
+-	},
+-	{
+-	"EventCode": "0x150",
+-	"EventName": "float_fused_muladd_inst",
+-	"BriefDescription": "Floating-point fused multiply-add"
+-	},
+-	{
+-	"EventCode": "0x160",
+-	"EventName": "float_div_sqrt_inst",
+-	"BriefDescription": "Floating-point division or square-root"
+-	},
+-	{
+-	"EventCode": "0x170",
+-	"EventName": "other_float_inst",
+-	"BriefDescription": "Other floating-point instruction"
+-	},
+-	{
+-	"EventCode": "0x190",
+-	"EventName": "op_count",
+-	"BriefDescription": "Retired operation count"
+-	},
+-	{
+-	"EventCode": "0x21",
+-	"EventName": "icache_access",
+-	"BriefDescription": "ICACHE access"
+-	},
+-	{
+-	"EventCode": "0x31",
+-	"EventName": "icache_miss",
+-	"BriefDescription": "ICACHE miss"
+-	},
+-	{
+-	"EventCode": "0x41",
+-	"EventName": "dcache_access",
+-	"BriefDescription": "DCACHE access"
+-	},
+-	{
+-	"EventCode": "0x51",
+-	"EventName": "dcache_miss",
+-	"BriefDescription": "DCACHE miss"
+-	},
+-	{
+-	"EventCode": "0x61",
+-	"EventName": "dcache_load_access",
+-	"BriefDescription": "DCACHE load access"
+-	},
+-	{
+-	"EventCode": "0x71",
+-	"EventName": "dcache_load_miss",
+-	"BriefDescription": "DCACHE load miss"
+-	},
+-	{
+-	"EventCode": "0x81",
+-	"EventName": "dcache_store_access",
+-	"BriefDescription": "DCACHE store access"
+-	},
+-	{
+-	"EventCode": "0x91",
+-	"EventName": "dcache_store_miss",
+-	"BriefDescription": "DCACHE store miss"
+-	},
+-	{
+-	"EventCode": "0xA1",
+-	"EventName": "dcache_wb",
+-	"BriefDescription": "DCACHE writeback"
+-	},
+-	{
+-	"EventCode": "0xB1",
+-	"EventName": "cycle_wait_icache_fill",
+-	"BriefDescription": "Cycles waiting for ICACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xC1",
+-	"EventName": "cycle_wait_dcache_fill",
+-	"BriefDescription": "Cycles waiting for DCACHE fill data"
+-	},
+-	{
+-	"EventCode": "0xD1",
+-	"EventName": "uncached_ifetch_from_bus",
+-	"BriefDescription": "Uncached ifetch data access from bus"
+-	},
+-	{
+-	"EventCode": "0xE1",
+-	"EventName": "uncached_load_from_bus",
+-	"BriefDescription": "Uncached load data access from bus"
+-	},
+-	{
+-	"EventCode": "0xF1",
+-	"EventName": "cycle_wait_uncached_ifetch",
+-	"BriefDescription": "Cycles waiting for uncached ifetch data from bus"
+-	},
+-	{
+-	"EventCode": "0x101",
+-	"EventName": "cycle_wait_uncached_load",
+-	"BriefDescription": "Cycles waiting for uncached load data from bus"
+-	},
+-	{
+-	"EventCode": "0x111",
+-	"EventName": "main_itlb_access",
+-	"BriefDescription": "Main ITLB access"
+-	},
+-	{
+-	"EventCode": "0x121",
+-	"EventName": "main_itlb_miss",
+-	"BriefDescription": "Main ITLB miss"
+-	},
+-	{
+-	"EventCode": "0x131",
+-	"EventName": "main_dtlb_access",
+-	"BriefDescription": "Main DTLB access"
+-	},
+-	{
+-	"EventCode": "0x141",
+-	"EventName": "main_dtlb_miss",
+-	"BriefDescription": "Main DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x151",
+-	"EventName": "cycle_wait_itlb_fill",
+-	"BriefDescription": "Cycles waiting for Main ITLB fill data"
+-	},
+-	{
+-	"EventCode": "0x171",
+-	"EventName": "prefetch_bus_access",
+-	"BriefDescription": "Hardware prefetch bus access"
+-	},
+-	{
+-	"EventCode": "0x191",
+-	"EventName": "l1_itlb_access",
+-	"BriefDescription": "L1 ITLB access"
+-	},
+-	{
+-	"EventCode": "0x1A1",
+-	"EventName": "l1_itlb_miss",
+-	"BriefDescription": "L1 ITLB miss"
+-	},
+-	{
+-	"EventCode": "0x1B1",
+-	"EventName": "l1_dtlb_access",
+-	"BriefDescription": "L1 DTLB access"
+-	},
+-	{
+-	"EventCode": "0x1C1",
+-	"EventName": "l1_dtlb_miss",
+-	"BriefDescription": "L1 DTLB miss"
+-	},
+-	{
+-	"EventCode": "0x02",
+-	"EventName": "mispredict_condition_br",
+-	"BriefDescription": "Misprediction of conditional branches"
+-	},
+-	{
+-	"EventCode": "0x12",
+-	"EventName": "mispredict_take_condition_br",
+-	"BriefDescription": "Misprediction of taken conditional branches"
+-	},
+-	{
+-	"EventCode": "0x22",
+-	"EventName": "mispredict_target_ret_inst",
+-	"BriefDescription": "Misprediction of targets of Return instructions"
+-	},
+-	{
+-	"EventCode": "0x32",
+-	"EventName": "replay_load_order_ecc_err",
+-	"BriefDescription": "Replay for load with memory-order violations or correctable ECC error"
+-	}
+-]
+-- 
+2.34.1
+

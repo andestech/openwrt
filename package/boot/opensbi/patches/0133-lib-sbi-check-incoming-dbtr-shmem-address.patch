@@ -1,0 +1,77 @@
+From 23b7badeee3caa1445784273ba5dc8dbcbba7c34 Mon Sep 17 00:00:00 2001
+From: Sergey Matyukevich <geomatsi@gmail.com>
+Date: Thu, 27 Jun 2024 15:04:09 +0300
+Subject: [PATCH 133/172] lib: sbi: check incoming dbtr shmem address
+
+Current Debug Trigger SBI extension proposal suggests to activate
+shmem area and obtain its physical address from S-mode software
+in the following way:
+
+: If both `shmem_phys_lo` and `shmem_phys_hi` parameters are not
+: all-ones bitwise then `shmem_phys_lo` specifies the lower XLEN
+: bits and `shmem_phys_hi` specifies the upper XLEN bits of the
+: shared memory physical base address. The `shmem_phys_lo` MUST
+: be `(XLEN / 8)` byte aligned and the size of shared memory is
+: assumed to be `trig_max * (XLEN / 2)` bytes.
+
+For more details see the current version of the proposal:
+- https://lists.riscv.org/g/tech-debug/message/1302
+
+On the other hand, on RV32, the M-mode can only access the first 4GB of
+the physical address space because M-mode does not have MMU to access
+full 34-bit physical address space. Similarly, on RV64, the M-mode can
+only access memory addressed by 64 bits.
+
+This commit checks shmem address in function sbi_dbtr_setup_shmem
+to make sure that shmem_phys_hi part of the valid address is zero.
+Besides, the macro DBTR_SHMEM_MAKE_PHYS is updated to take into
+account only low XLEN part.
+
+Signed-off-by: Sergey Matyukevich <geomatsi@gmail.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+---
+ lib/sbi/sbi_dbtr.c | 20 ++++++++++++++------
+ 1 file changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 9c92af6a59f5..6e2083edf7da 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -47,13 +47,7 @@ static unsigned long hart_state_ptr_offset;
+ 	     _idx < _max;						\
+ 	     _idx++, _entry = ((_etype *)_base + _idx))
+ 
+-#if __riscv_xlen == 64
+ #define DBTR_SHMEM_MAKE_PHYS(_p_hi, _p_lo) (_p_lo)
+-#elif __riscv_xlen == 32
+-#define DBTR_SHMEM_MAKE_PHYS(_p_hi, _p_lo) (((u64)(_p_hi) << 32) | (_p_lo))
+-#else
+-#error "Undefined XLEN"
+-#endif
+ 
+ /* must call with hs != NULL */
+ static inline bool sbi_dbtr_shmem_disabled(
+@@ -277,6 +271,20 @@ int sbi_dbtr_setup_shmem(const struct sbi_domain *dom, unsigned long smode,
+ 	if (shmem_phys_lo & SBI_DBTR_SHMEM_ALIGN_MASK)
+ 		return SBI_ERR_INVALID_PARAM;
+ 
++	/*
++	* On RV32, the M-mode can only access the first 4GB of
++	* the physical address space because M-mode does not have
++	* MMU to access full 34-bit physical address space.
++	* So fail if the upper 32 bits of the physical address
++	* is non-zero on RV32.
++	*
++	* On RV64, kernel sets upper 64bit address part to zero.
++	* So fail if the upper 64bit of the physical address
++	* is non-zero on RV64.
++	*/
++	if (shmem_phys_hi)
++		return SBI_EINVALID_ADDR;
++
+ 	if (dom && !sbi_domain_check_addr(dom,
+ 		  DBTR_SHMEM_MAKE_PHYS(shmem_phys_hi, shmem_phys_lo), smode,
+ 		  SBI_DOMAIN_READ | SBI_DOMAIN_WRITE))
+-- 
+2.34.1
+

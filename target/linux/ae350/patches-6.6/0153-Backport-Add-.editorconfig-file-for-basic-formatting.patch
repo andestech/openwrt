@@ -1,0 +1,99 @@
+From 0a21cf7f7533ed32dfdbae17cb463624e66ba15f Mon Sep 17 00:00:00 2001
+From: Mina Hui-Min Chou <minachou@andestech.com>
+Date: Tue, 4 Feb 2025 13:53:32 +0800
+Subject: [PATCH 153/168] [Backport] Add .editorconfig file for basic
+ formatting (#249)
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/249
+Reviewed-by: Tim Shih-Ting OuYang <tim609@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Co-authored-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-committed-by: Mina Hui-Min Chou <minachou@andestech.com>
+---
+ .editorconfig                          | 29 ++++++++++++++++++++++++++
+ .gitignore                             |  1 +
+ Documentation/process/4.Coding.rst     |  4 ++++
+ Documentation/process/coding-style.rst |  4 ++++
+ 4 files changed, 38 insertions(+)
+ create mode 100644 .editorconfig
+
+diff --git a/.editorconfig b/.editorconfig
+new file mode 100644
+index 000000000000..29a30ccfc07b
+--- /dev/null
++++ b/.editorconfig
+@@ -0,0 +1,29 @@
++# SPDX-License-Identifier: GPL-2.0-only
++
++root = true
++
++[{*.{awk,c,dts,dtsi,dtso,h,mk,s,S},Kconfig,Makefile,Makefile.*}]
++charset = utf-8
++end_of_line = lf
++insert_final_newline = true
++indent_style = tab
++indent_size = 8
++
++[*.{json,py,rs}]
++charset = utf-8
++end_of_line = lf
++insert_final_newline = true
++indent_style = space
++indent_size = 4
++
++# this must be below the general *.py to overwrite it
++[tools/{perf,power,rcu,testing/kunit}/**.py,]
++indent_style = tab
++indent_size = 8
++
++[*.yaml]
++charset = utf-8
++end_of_line = lf
++insert_final_newline = true
++indent_style = space
++indent_size = 2
+diff --git a/.gitignore b/.gitignore
+index 0bbae167bf93..f8b9c9b115a8 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -97,6 +97,7 @@ modules.order
+ #
+ !.clang-format
+ !.cocciconfig
++!.editorconfig
+ !.get_maintainer.ignore
+ !.gitattributes
+ !.gitignore
+diff --git a/Documentation/process/4.Coding.rst b/Documentation/process/4.Coding.rst
+index 1f0d81f44e14..c2046dec0c2f 100644
+--- a/Documentation/process/4.Coding.rst
++++ b/Documentation/process/4.Coding.rst
+@@ -66,6 +66,10 @@ for aligning variables/macros, for reflowing text and other similar tasks.
+ See the file :ref:`Documentation/process/clang-format.rst <clangformat>`
+ for more details.
+ 
++Some basic editor settings, such as indentation and line endings, will be
++set automatically if you are using an editor that is compatible with
++EditorConfig. See the official EditorConfig website for more information:
++https://editorconfig.org/
+ 
+ Abstraction layers
+ ******************
+diff --git a/Documentation/process/coding-style.rst b/Documentation/process/coding-style.rst
+index 6db37a46d305..c48382c6b477 100644
+--- a/Documentation/process/coding-style.rst
++++ b/Documentation/process/coding-style.rst
+@@ -735,6 +735,10 @@ for aligning variables/macros, for reflowing text and other similar tasks.
+ See the file :ref:`Documentation/process/clang-format.rst <clangformat>`
+ for more details.
+ 
++Some basic editor settings, such as indentation and line endings, will be
++set automatically if you are using an editor that is compatible with
++EditorConfig. See the official EditorConfig website for more information:
++https://editorconfig.org/
+ 
+ 10) Kconfig configuration files
+ -------------------------------
+-- 
+2.34.1
+

@@ -1,0 +1,102 @@
+From ddb1264d039acaaac40e0e67f7d3123abd422e6a Mon Sep 17 00:00:00 2001
+From: Yu Chien Peter Lin <peterlin@andestech.com>
+Date: Thu, 22 Feb 2024 16:39:37 +0800
+Subject: [PATCH 022/168] riscv: errata: Rename defines for Andes
+
+Use "ANDES" rather than "ANDESTECH" to unify the naming
+convention with directory, file names, Kconfig options
+and other definitions.
+
+Signed-off-by: Yu Chien Peter Lin <peterlin@andestech.com>
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Reviewed-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Link: https://lore.kernel.org/r/20240222083946.3977135-2-peterlin@andestech.com
+Signed-off-by: Palmer Dabbelt <palmer@rivosinc.com>
+---
+ arch/riscv/errata/andes/errata.c       | 10 +++++-----
+ arch/riscv/include/asm/errata_list.h   |  4 ++--
+ arch/riscv/include/asm/vendorid_list.h |  2 +-
+ arch/riscv/kernel/alternative.c        |  2 +-
+ 4 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/arch/riscv/errata/andes/errata.c b/arch/riscv/errata/andes/errata.c
+index 17a904869724..f2708a9494a1 100644
+--- a/arch/riscv/errata/andes/errata.c
++++ b/arch/riscv/errata/andes/errata.c
+@@ -18,9 +18,9 @@
+ #include <asm/sbi.h>
+ #include <asm/vendorid_list.h>
+ 
+-#define ANDESTECH_AX45MP_MARCHID	0x8000000000008a45UL
+-#define ANDESTECH_AX45MP_MIMPID		0x500UL
+-#define ANDESTECH_SBI_EXT_ANDES		0x0900031E
++#define ANDES_AX45MP_MARCHID		0x8000000000008a45UL
++#define ANDES_AX45MP_MIMPID		0x500UL
++#define ANDES_SBI_EXT_ANDES		0x0900031E
+ 
+ #define ANDES_SBI_EXT_IOCP_SW_WORKAROUND	1
+ 
+@@ -32,7 +32,7 @@ static long ax45mp_iocp_sw_workaround(void)
+ 	 * ANDES_SBI_EXT_IOCP_SW_WORKAROUND SBI EXT checks if the IOCP is missing and
+ 	 * cache is controllable only then CMO will be applied to the platform.
+ 	 */
+-	ret = sbi_ecall(ANDESTECH_SBI_EXT_ANDES, ANDES_SBI_EXT_IOCP_SW_WORKAROUND,
++	ret = sbi_ecall(ANDES_SBI_EXT_ANDES, ANDES_SBI_EXT_IOCP_SW_WORKAROUND,
+ 			0, 0, 0, 0, 0, 0);
+ 
+ 	return ret.error ? 0 : ret.value;
+@@ -50,7 +50,7 @@ static void errata_probe_iocp(unsigned int stage, unsigned long arch_id, unsigne
+ 
+ 	done = true;
+ 
+-	if (arch_id != ANDESTECH_AX45MP_MARCHID || impid != ANDESTECH_AX45MP_MIMPID)
++	if (arch_id != ANDES_AX45MP_MARCHID || impid != ANDES_AX45MP_MIMPID)
+ 		return;
+ 
+ 	if (!ax45mp_iocp_sw_workaround())
+diff --git a/arch/riscv/include/asm/errata_list.h b/arch/riscv/include/asm/errata_list.h
+index d3f3c237adad..349e96d0d469 100644
+--- a/arch/riscv/include/asm/errata_list.h
++++ b/arch/riscv/include/asm/errata_list.h
+@@ -12,8 +12,8 @@
+ #include <asm/vendorid_list.h>
+ 
+ #ifdef CONFIG_ERRATA_ANDES
+-#define ERRATA_ANDESTECH_NO_IOCP	0
+-#define ERRATA_ANDESTECH_NUMBER		1
++#define ERRATA_ANDES_NO_IOCP 0
++#define ERRATA_ANDES_NUMBER 1
+ #endif
+ 
+ #ifdef CONFIG_ERRATA_SIFIVE
+diff --git a/arch/riscv/include/asm/vendorid_list.h b/arch/riscv/include/asm/vendorid_list.h
+index e55407ace0c3..2f2bb0c84f9a 100644
+--- a/arch/riscv/include/asm/vendorid_list.h
++++ b/arch/riscv/include/asm/vendorid_list.h
+@@ -5,7 +5,7 @@
+ #ifndef ASM_VENDOR_LIST_H
+ #define ASM_VENDOR_LIST_H
+ 
+-#define ANDESTECH_VENDOR_ID	0x31e
++#define ANDES_VENDOR_ID		0x31e
+ #define SIFIVE_VENDOR_ID	0x489
+ #define THEAD_VENDOR_ID		0x5b7
+ 
+diff --git a/arch/riscv/kernel/alternative.c b/arch/riscv/kernel/alternative.c
+index 319a1da0358b..0128b161bfda 100644
+--- a/arch/riscv/kernel/alternative.c
++++ b/arch/riscv/kernel/alternative.c
+@@ -43,7 +43,7 @@ static void riscv_fill_cpu_mfr_info(struct cpu_manufacturer_info_t *cpu_mfr_info
+ 
+ 	switch (cpu_mfr_info->vendor_id) {
+ #ifdef CONFIG_ERRATA_ANDES
+-	case ANDESTECH_VENDOR_ID:
++	case ANDES_VENDOR_ID:
+ 		cpu_mfr_info->patch_func = andes_errata_patch_func;
+ 		break;
+ #endif
+-- 
+2.34.1
+

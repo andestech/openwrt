@@ -1,0 +1,29 @@
+From 8f5df7ab2693d65e155ffbabf284e522fcbc7ca8 Mon Sep 17 00:00:00 2001
+From: Cynthia Huang <cynthia@andestech.com>
+Date: Thu, 26 Sep 2024 17:17:40 +0800
+Subject: [PATCH 105/168] riscv: andes: ltp.config: add extra configuration to
+ test wqueue (#199)
+
+To test LTP wqueue01~09, the kernel must enable the "KEY_NOTIFICATION" configuration.
+
+Reviewed-on: https://gitea.andestech.com/RD-SW/linux/pulls/199
+Reviewed-by: Charles Ci-Jyun Wu <dminus@andestech.com>
+Reviewed-by: Mina Hui-Min Chou <minachou@andestech.com>
+Co-authored-by: Cynthia Huang <cynthia@andestech.com>
+Co-committed-by: Cynthia Huang <cynthia@andestech.com>
+---
+ arch/riscv/configs/ltp.config | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/riscv/configs/ltp.config b/arch/riscv/configs/ltp.config
+index 5f1f2cb4c743..f0cb3a47ea0d 100644
+--- a/arch/riscv/configs/ltp.config
++++ b/arch/riscv/configs/ltp.config
+@@ -144,3 +144,4 @@ CONFIG_DNS_RESOLVER=m
+ CONFIG_WATCH_QUEUE=y
+ # CONFIG_MEDIA_CEC_SUPPORT is not set
+ CONFIG_VIDEO_VIM2M=y
++CONFIG_KEY_NOTIFICATIONS=y
+-- 
+2.34.1
+

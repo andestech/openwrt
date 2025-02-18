@@ -1,0 +1,35 @@
+From 1ec353d5046c2f58033f9fdbeb45405f00c270fb Mon Sep 17 00:00:00 2001
+From: Himanshu Chauhan <hchauhan@ventanamicro.com>
+Date: Tue, 2 Jan 2024 22:16:24 +0530
+Subject: [PATCH 009/172] lib: sbi: Use mask to check the free bit during
+ trigger allocation
+
+The trigger allocation function uses bit shift instead of mask to check the
+mapped status of the triggers. This causes index 0 to be return always. As a
+result, the older triggers are overwritten.
+
+Use the mask for MAPPED field in state word to check if the trigger is mapped.
+
+Fixes: 97f234f15 ("lib: sbi: Introduce the SBI debug triggers extension support")
+Signed-off-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/sbi/sbi_dbtr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 019e702ca213..7142fedb5a80 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -129,7 +129,7 @@ static inline struct sbi_dbtr_trigger *sbi_alloc_trigger(void)
+ 
+ 	for (i = 0; i < hart_state->total_trigs; i++) {
+ 		f_trig = INDEX_TO_TRIGGER(i);
+-		if (f_trig->state & RV_DBTR_BIT(TS, MAPPED))
++		if (f_trig->state & RV_DBTR_BIT_MASK(TS, MAPPED))
+ 			continue;
+ 		hart_state->available_trigs--;
+ 		break;
+-- 
+2.34.1
+

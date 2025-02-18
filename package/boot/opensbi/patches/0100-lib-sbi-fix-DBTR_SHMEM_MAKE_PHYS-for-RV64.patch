@@ -1,0 +1,30 @@
+From 7f54527029d0b6c52dc22dade9e9de37831b1ef0 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Fri, 3 May 2024 21:53:35 +0800
+Subject: [PATCH 100/172] lib: sbi: fix DBTR_SHMEM_MAKE_PHYS for RV64
+
+Obtaining a 64-bit address under rv64 does not require combining
+32-bit registers
+
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Himanshu Chauhan <hchauhan@ventanamicro.com>
+---
+ lib/sbi/sbi_dbtr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index 3cc1ef86baa2..94fd049004af 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -48,7 +48,7 @@ static unsigned long hart_state_ptr_offset;
+ 	     _idx++, _entry = ((_etype *)_base + _idx))
+ 
+ #if __riscv_xlen == 64
+-#define DBTR_SHMEM_MAKE_PHYS(_p_hi, _p_lo) (((u64)(_p_hi) << 32) | (_p_lo))
++#define DBTR_SHMEM_MAKE_PHYS(_p_hi, _p_lo) (_p_lo)
+ #elif __riscv_xlen == 32
+ #define DBTR_SHMEM_MAKE_PHYS(_p_hi, _p_lo) (((u64)(_p_hi) << 32) | (_p_lo))
+ #else
+-- 
+2.34.1
+

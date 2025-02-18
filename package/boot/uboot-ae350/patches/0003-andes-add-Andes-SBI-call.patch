@@ -1,0 +1,49 @@
+From 391fc38702c70402e27ab27d55c2e1458986108b Mon Sep 17 00:00:00 2001
+From: Leo Yu-Chi Liang <ycliang@andestech.com>
+Date: Mon, 17 Jun 2024 18:35:39 +0800
+Subject: [PATCH 03/53] andes: add Andes SBI call
+
+Signed-off-by: Leo Yu-Chi Liang <ycliang@andestech.com>
+---
+ arch/riscv/include/asm/sbi.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/riscv/include/asm/sbi.h b/arch/riscv/include/asm/sbi.h
+index 80380a23f681..22492cbaaaad 100644
+--- a/arch/riscv/include/asm/sbi.h
++++ b/arch/riscv/include/asm/sbi.h
+@@ -11,6 +11,13 @@
+ 
+ #include <linux/types.h>
+ 
++/*
++ * Set Andes's internal SBI Call FID start at 64 to avoid the impact of
++ * upstream add or remove in sbi_ext_andes_fid{}. If the FID numbers
++ * change, our released OpenSBI will lose backward compatible.
++ */
++#define ANDES_SBI_INTERNAL_FID_START 64
++
+ enum sbi_ext_id {
+ 	SBI_EXT_0_1_SET_TIMER = 0x0,
+ 	SBI_EXT_0_1_CONSOLE_PUTCHAR = 0x1,
+@@ -104,10 +111,17 @@ enum sbi_ext_dbcn_fid {
+ };
+ 
+ enum sbi_ext_andes_fid {
++	SBI_EXT_ANDES_FID0 = 0, /* Reserved for future use */
++	SBI_EXT_ANDES_IOCP_SW_WORKAROUND,
++	SBI_EXT_ANDES_TRIGGER_SET = ANDES_SBI_INTERNAL_FID_START,
++	SBI_EXT_ANDES_POWERBRAKE_READ,
++	SBI_EXT_ANDES_POWERBRAKE_WRITE,
+ 	SBI_EXT_ANDES_PMA_SET,
+ 	SBI_EXT_ANDES_PMA_FREE,
+ 	SBI_EXT_ANDES_PMA_PROBE,
+ 	SBI_EXT_ANDES_DCACHE_EN,
++	SBI_EXT_ANDES_SUSPEND_MODE_SET,
++	SBI_EXT_ANDES_SUSPEND_MODE_ENTER,
+ };
+ 
+ #ifdef CONFIG_SBI_V01
+-- 
+2.34.1
+

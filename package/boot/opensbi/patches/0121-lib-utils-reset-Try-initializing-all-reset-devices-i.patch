@@ -1,0 +1,54 @@
+From 62e178a0a7b989d7cab9b2d4e33b291bc9a58c65 Mon Sep 17 00:00:00 2001
+From: Xiang W <wxjstz@126.com>
+Date: Thu, 13 Jun 2024 23:03:07 +0800
+Subject: [PATCH 121/172] lib: utils/reset: Try initializing all reset devices
+ in dt
+
+In DT, multiple reset devices may use the same driver, and they
+may have different priorities. If rc is returned after the first
+initialization, the highest priority device may be lost.
+
+Fixes: a73ff043e991 (lib: utils/reset: Fix fdt_reset to search for more dt nodes)
+Signed-off-by: Xiang W <wxjstz@126.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+---
+ lib/utils/reset/fdt_reset.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/lib/utils/reset/fdt_reset.c b/lib/utils/reset/fdt_reset.c
+index c41b838708b0..ee4e29a331bc 100644
+--- a/lib/utils/reset/fdt_reset.c
++++ b/lib/utils/reset/fdt_reset.c
+@@ -19,7 +19,7 @@ extern unsigned long fdt_reset_drivers_size;
+ 
+ int fdt_reset_driver_init(void *fdt, struct fdt_reset *drv)
+ {
+-	int noff, rc = SBI_ENODEV;
++	int noff, rc, cnt = 0;
+ 	const struct fdt_match *match;
+ 
+ 	noff = -1;
+@@ -30,16 +30,16 @@ int fdt_reset_driver_init(void *fdt, struct fdt_reset *drv)
+ 
+ 		if (drv->init) {
+ 			rc = drv->init(fdt, noff, match);
+-			if (rc && rc != SBI_ENODEV) {
++			if (!rc)
++				cnt++;
++			else if (rc != SBI_ENODEV) {
+ 				sbi_printf("%s: %s init failed, %d\n",
+ 					__func__, match->compatible, rc);
+ 			}
+ 		}
+-
+-		return rc;
+ 	}
+ 
+-	return SBI_ENODEV;
++	return cnt > 0 ? 0 : SBI_ENODEV;
+ }
+ 
+ void fdt_reset_init(void)
+-- 
+2.34.1
+
